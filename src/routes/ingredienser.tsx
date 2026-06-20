@@ -8,7 +8,7 @@ import { setIngredientAvailable } from "@/lib/admin.functions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useSession } from "@/hooks/use-session";
 import { isAdmin as isAdminFn } from "@/lib/admin.functions";
-import { CATEGORIES } from "@/lib/constants";
+import { listCategories } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/ingredienser")({
@@ -27,10 +27,15 @@ function IngredientsPage() {
   const fetchList = useServerFn(listIngredients);
   const checkAdmin = useServerFn(isAdminFn);
   const setAvail = useServerFn(setIngredientAvailable);
+  const fetchCats = useServerFn(listCategories);
 
   const { data: ingredients } = useQuery({
     queryKey: ["ingredients"],
     queryFn: () => fetchList(),
+  });
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => fetchCats(),
   });
   const { data: admin } = useQuery({
     queryKey: ["isAdmin", session?.user.id ?? null],
@@ -40,13 +45,14 @@ function IngredientsPage() {
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof ingredients>();
-    for (const cat of CATEGORIES) map.set(cat, [] as any);
+    for (const cat of categories ?? []) map.set(cat.name, [] as any);
+    if (!map.has("Andet")) map.set("Andet", [] as any);
     for (const ing of ingredients ?? []) {
       const k = (map.has(ing.category) ? ing.category : "Andet") as string;
       (map.get(k) as any[]).push(ing);
     }
     return Array.from(map.entries()).filter(([, v]) => (v as any[]).length > 0);
-  }, [ingredients]);
+  }, [ingredients, categories]);
 
   const toggle = useMutation({
     mutationFn: (vars: { id: string; available: boolean }) =>

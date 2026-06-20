@@ -28,7 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TAGS, UNITS } from "@/lib/constants";
+import { UNITS } from "@/lib/constants";
+import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 
@@ -52,6 +53,7 @@ export function AdminCocktails() {
   const qc = useQueryClient();
   const fetchCocktails = useServerFn(listCocktails);
   const fetchIngs = useServerFn(listIngredients);
+  const fetchTags = useServerFn(listTags);
   const save = useServerFn(saveCocktail);
   const del = useServerFn(deleteCocktail);
 
@@ -63,6 +65,7 @@ export function AdminCocktails() {
     queryKey: ["ingredients"],
     queryFn: () => fetchIngs(),
   });
+  const { data: tags } = useQuery({ queryKey: ["tags"], queryFn: () => fetchTags() });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -156,6 +159,7 @@ export function AdminCocktails() {
               form={form}
               setForm={setForm}
               ingredientNames={(ingredients ?? []).map((i) => i.name)}
+              tagNames={(tags ?? []).map((t) => t.name)}
             />
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -205,10 +209,12 @@ function CocktailForm({
   form,
   setForm,
   ingredientNames,
+  tagNames,
 }: {
   form: ReturnType<typeof emptyForm>;
   setForm: (f: ReturnType<typeof emptyForm>) => void;
   ingredientNames: string[];
+  tagNames: string[];
 }) {
   function patch<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm({ ...form, [k]: v });
@@ -274,7 +280,7 @@ function CocktailForm({
       <div>
         <Label>Tags</Label>
         <div className="mt-1 flex flex-wrap gap-1">
-          {TAGS.map((t) => {
+          {tagNames.map((t) => {
             const active = form.tags.includes(t);
             return (
               <button key={t} type="button" onClick={() => toggleTag(t)}>
