@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as NaestenRouteImport } from './routes/naesten'
+import { Route as MenukortRouteImport } from './routes/menukort'
 import { Route as IngredienserRouteImport } from './routes/ingredienser'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AlleRouteImport } from './routes/alle'
@@ -20,6 +21,11 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 const NaestenRoute = NaestenRouteImport.update({
   id: '/naesten',
   path: '/naesten',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MenukortRoute = MenukortRouteImport.update({
+  id: '/menukort',
+  path: '/menukort',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngredienserRoute = IngredienserRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/alle': typeof AlleRoute
   '/auth': typeof AuthRoute
   '/ingredienser': typeof IngredienserRoute
+  '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
   '/admin': typeof AuthenticatedAdminRoute
 }
@@ -65,6 +72,7 @@ export interface FileRoutesByTo {
   '/alle': typeof AlleRoute
   '/auth': typeof AuthRoute
   '/ingredienser': typeof IngredienserRoute
+  '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
   '/admin': typeof AuthenticatedAdminRoute
 }
@@ -75,14 +83,29 @@ export interface FileRoutesById {
   '/alle': typeof AlleRoute
   '/auth': typeof AuthRoute
   '/ingredienser': typeof IngredienserRoute
+  '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/alle' | '/auth' | '/ingredienser' | '/naesten' | '/admin'
+  fullPaths:
+    | '/'
+    | '/alle'
+    | '/auth'
+    | '/ingredienser'
+    | '/menukort'
+    | '/naesten'
+    | '/admin'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/alle' | '/auth' | '/ingredienser' | '/naesten' | '/admin'
+  to:
+    | '/'
+    | '/alle'
+    | '/auth'
+    | '/ingredienser'
+    | '/menukort'
+    | '/naesten'
+    | '/admin'
   id:
     | '__root__'
     | '/'
@@ -90,6 +113,7 @@ export interface FileRouteTypes {
     | '/alle'
     | '/auth'
     | '/ingredienser'
+    | '/menukort'
     | '/naesten'
     | '/_authenticated/admin'
   fileRoutesById: FileRoutesById
@@ -100,6 +124,7 @@ export interface RootRouteChildren {
   AlleRoute: typeof AlleRoute
   AuthRoute: typeof AuthRoute
   IngredienserRoute: typeof IngredienserRoute
+  MenukortRoute: typeof MenukortRoute
   NaestenRoute: typeof NaestenRoute
 }
 
@@ -110,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/naesten'
       fullPath: '/naesten'
       preLoaderRoute: typeof NaestenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/menukort': {
+      id: '/menukort'
+      path: '/menukort'
+      fullPath: '/menukort'
+      preLoaderRoute: typeof MenukortRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingredienser': {
@@ -174,6 +206,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlleRoute: AlleRoute,
   AuthRoute: AuthRoute,
   IngredienserRoute: IngredienserRoute,
+  MenukortRoute: MenukortRoute,
   NaestenRoute: NaestenRoute,
 }
 export const routeTree = rootRouteImport
