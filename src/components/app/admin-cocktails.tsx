@@ -7,6 +7,10 @@ import {
   type CocktailWithDetails,
 } from "@/lib/cocktails.functions";
 import { saveCocktail, deleteCocktail } from "@/lib/admin.functions";
+import {
+  fetchCocktailDbImage,
+  backfillCocktailImages,
+} from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +35,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ArrowUp, ArrowDown, Download, ImageDown } from "lucide-react";
 
 type Item = { name: string; amount: string; unit: string };
 
@@ -56,6 +60,7 @@ export function AdminCocktails() {
   const fetchTags = useServerFn(listTags);
   const save = useServerFn(saveCocktail);
   const del = useServerFn(deleteCocktail);
+  const backfill = useServerFn(backfillCocktailImages);
 
   const { data: cocktails } = useQuery({
     queryKey: ["cocktails"],
@@ -86,6 +91,15 @@ export function AdminCocktails() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cocktails"] });
       toast.success("Slettet");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const backfillM = useMutation({
+    mutationFn: () => backfill(),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["cocktails"] });
+      toast.success(`Opdateret ${r.updated} cocktails${r.missing ? ` (${r.missing} ikke fundet)` : ""}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -144,7 +158,15 @@ export function AdminCocktails() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => backfillM.mutate()}
+          disabled={backfillM.isPending}
+        >
+          <ImageDown className="mr-1 h-4 w-4" />
+          {backfillM.isPending ? "Henter…" : "Hent manglende billeder"}
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={openNew}>
