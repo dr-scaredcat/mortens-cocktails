@@ -91,3 +91,42 @@ export const deleteOrder = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const deleteAllOrders = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("cocktail_orders")
+      .delete()
+      .not("id", "is", null);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const getOrderingEnabled = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "ordering_enabled")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const v = data?.value;
+    return { enabled: v === true || v === "true" };
+  });
+
+export const setOrderingEnabled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { enabled: boolean }) =>
+    z.object({ enabled: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "ordering_enabled", value: data.enabled as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

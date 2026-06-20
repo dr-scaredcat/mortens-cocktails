@@ -8,6 +8,7 @@ import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
+import { getOrderingEnabled } from "@/lib/orders.functions";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -25,6 +26,13 @@ function MenukortPage() {
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
   });
+  const fetchOrdering = useServerFn(getOrderingEnabled);
+  const { data: orderingData } = useQuery({
+    queryKey: ["ordering-enabled"],
+    queryFn: () => fetchOrdering(),
+    refetchInterval: 30_000,
+  });
+  const orderingEnabled = !!orderingData?.enabled;
 
   const [tags, setTags] = useState<string[]>([]);
   const [q, setQ] = useState("");
@@ -80,7 +88,9 @@ function MenukortPage() {
             {filtered.map((c) => (
               <div key={c.id} className="flex flex-col gap-2">
                 <CocktailCard cocktail={c} />
-                <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                {orderingEnabled && (
+                  <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                )}
               </div>
             ))}
           </div>
