@@ -1,0 +1,1 @@
+UPDATE public.cocktail_ingredients SET amount = amount * 10, unit = 'ml' WHERE unit = 'cl';

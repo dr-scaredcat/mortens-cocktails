@@ -45,7 +45,7 @@ function emptyForm() {
     garnish: "",
     instructions: "",
     tags: [] as string[],
-    ingredients: [{ name: "", amount: "", unit: "cl" }] as Item[],
+    ingredients: [{ name: "", amount: "", unit: "ml" }] as Item[],
   };
 }
 
@@ -224,7 +224,7 @@ function CocktailForm({
     setForm({ ...form, ingredients: next });
   }
   function addItem() {
-    setForm({ ...form, ingredients: [...form.ingredients, { name: "", amount: "", unit: "cl" }] });
+    setForm({ ...form, ingredients: [...form.ingredients, { name: "", amount: "", unit: "ml" }] });
   }
   function removeItem(idx: number) {
     setForm({ ...form, ingredients: form.ingredients.filter((_, i) => i !== idx) });
