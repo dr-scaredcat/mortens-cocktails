@@ -1,2 +1,2 @@
 export const FALLBACK_CATEGORY = "Andet";
-export const UNITS = ["cl", "ml", "stk", "dash", "tsk", "spsk", "skvæt"] as const;
+export const UNITS = ["ml", "dash", "tsk", "spsk", "stk"] as const;
