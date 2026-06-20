@@ -46,6 +46,31 @@ export const listIngredients = createServerFn({ method: "GET" }).handler(async (
   return (data ?? []) as IngredientRow[];
 });
 
+export type CategoryRow = { id: string; name: string; position: number };
+export type TagRow = { id: string; name: string; position: number };
+
+export const listCategories = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const { data, error } = await sb
+    .from("categories")
+    .select("id, name, position")
+    .order("position")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CategoryRow[];
+});
+
+export const listTags = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const { data, error } = await sb
+    .from("tags")
+    .select("id, name, position")
+    .order("position")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TagRow[];
+});
+
 export const listCocktails = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
   const [cocktailsRes, ciRes, ingRes, tagsRes] = await Promise.all([
