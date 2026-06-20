@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: []
+      }
       cocktail_ingredients: {
         Row: {
           amount: number | null
@@ -133,6 +154,27 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      tags: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
         }
         Relationships: []
       }
