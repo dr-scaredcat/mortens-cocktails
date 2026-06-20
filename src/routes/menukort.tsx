@@ -7,11 +7,12 @@ import { CocktailCard } from "@/components/app/cocktail-card";
 import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
+import { OrderButton } from "@/components/app/order-button";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Menukort — Barskab" },
+      { title: "Cocktail menu — Barskab" },
       { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
@@ -44,14 +45,14 @@ function MenukortPage() {
       <header className="border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif text-lg tracking-tight">
           <Wine className="h-5 w-5 text-primary" />
-          <span>Menukort</span>
+          <span>Cocktail menu</span>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
-          <h1 className="font-serif text-3xl tracking-tight">Aftenens cocktails</h1>
+          <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
           <p className="text-sm text-muted-foreground">
-            Disse cocktails kan laves med de tilgængelige ingredienser.
+            Vælg en cocktail og tryk Bestil — bartenderen får besked.
           </p>
         </div>
         <div className="mb-5 space-y-3">
@@ -77,7 +78,10 @@ function MenukortPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <CocktailCard key={c.id} cocktail={c} />
+              <div key={c.id} className="flex flex-col gap-2">
+                <CocktailCard cocktail={c} />
+                <OrderButton cocktailId={c.id} cocktailName={c.name} />
+              </div>
             ))}
           </div>
         )}

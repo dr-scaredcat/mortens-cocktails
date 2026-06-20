@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, Shield } from "lucide-react";
+import { Wine, LogOut, Shield, ClipboardList } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Klar" },
@@ -23,6 +23,11 @@ export function SiteHeader() {
         <div className="flex items-center gap-1">
           {session ? (
             <>
+              <Button asChild size="sm" variant="ghost">
+                <Link to="/bestillinger">
+                  <ClipboardList className="mr-1 h-4 w-4" /> Bestillinger
+                </Link>
+              </Button>
               <Button asChild size="sm" variant="ghost">
                 <Link to="/admin">
                   <Shield className="mr-1 h-4 w-4" /> Admin
