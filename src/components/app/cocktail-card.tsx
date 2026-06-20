@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CocktailWithDetails } from "@/lib/cocktails.functions";
 import { Wine } from "lucide-react";
+import { RatingStars } from "@/components/app/rating-stars";
 
 function fmt(amount: number | null, unit: string | null) {
   if (amount == null) return unit ?? "";
@@ -42,6 +43,11 @@ export function CocktailCard({ cocktail }: { cocktail: CocktailWithDetails }) {
         {cocktail.description && (
           <p className="text-sm text-muted-foreground">{cocktail.description}</p>
         )}
+        <RatingStars
+          cocktailId={cocktail.id}
+          avg={cocktail.avg_rating}
+          count={cocktail.rating_count}
+        />
         {cocktail.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {cocktail.tags.map((t) => (
