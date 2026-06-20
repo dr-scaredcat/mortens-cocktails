@@ -314,29 +314,6 @@ export const grantAdminByEmail = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Find user by email — paginate through admin.listUsers
-    let userId: string | null = null;
-    let page = 1;
-    const perPage = 200;
-    while (!userId) {
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
-      if (error) throw new Error(error.message);
-      const match = data.users.find(
-        (u) => u.email?.toLowerCase() === data.users[0]?.email?.toLowerCase() && u.email?.toLowerCase() === data.email?.toLowerCase?.()
-      );
-      // simpler:
-      const m = data.users.find((u) => u.email?.toLowerCase() === (data as any).email?.toLowerCase?.());
-      void match; void m;
-      const found = data.users.find((u) => u.email?.toLowerCase() === undefined);
-      void found;
-      const real = data.users.find((u) => u.email?.toLowerCase());
-      void real;
-      const hit = data.users.find((u) => u.email && u.email.toLowerCase() === (arguments as any));
-      void hit;
-      break;
-    }
-    // Replace the noisy block above with a clean lookup:
     const target = await findUserIdByEmail(data.email);
     if (!target) throw new Error("Ingen bruger fundet med den email. Brugeren skal være oprettet først.");
     const { error } = await context.supabase
