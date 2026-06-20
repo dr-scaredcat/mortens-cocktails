@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AlleRouteImport } from './routes/alle'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedBestillingerRouteImport } from './routes/_authenticated/bestillinger'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
 const NaestenRoute = NaestenRouteImport.update({
@@ -52,6 +53,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedBestillingerRoute =
+  AuthenticatedBestillingerRouteImport.update({
+    id: '/bestillinger',
+    path: '/bestillinger',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -66,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/bestillinger': typeof AuthenticatedBestillingerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +83,7 @@ export interface FileRoutesByTo {
   '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/bestillinger': typeof AuthenticatedBestillingerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +95,7 @@ export interface FileRoutesById {
   '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/bestillinger': typeof AuthenticatedBestillingerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/menukort'
     | '/naesten'
     | '/admin'
+    | '/bestillinger'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/menukort'
     | '/naesten'
     | '/admin'
+    | '/bestillinger'
   id:
     | '__root__'
     | '/'
@@ -116,6 +128,7 @@ export interface FileRouteTypes {
     | '/menukort'
     | '/naesten'
     | '/_authenticated/admin'
+    | '/_authenticated/bestillinger'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -179,6 +192,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/bestillinger': {
+      id: '/_authenticated/bestillinger'
+      path: '/bestillinger'
+      fullPath: '/bestillinger'
+      preLoaderRoute: typeof AuthenticatedBestillingerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -191,10 +211,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedBestillingerRoute: typeof AuthenticatedBestillingerRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedBestillingerRoute: AuthenticatedBestillingerRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
