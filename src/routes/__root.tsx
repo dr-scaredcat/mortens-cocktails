@@ -78,16 +78,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cocktail menu" },
+      { title: "Barskab — Hvilke cocktails kan du lave?" },
       { name: "description", content: "Hold styr på dine ingredienser og se hvilke cocktails du kan lave lige nu." },
-      { property: "og:title", content: "Cocktail menu" },
-      { property: "og:description", content: "Hold styr på dine ingredienser og se hvilke cocktails du kan lave lige nu." },
+      { property: "og:title", content: "Barskab" },
+      { property: "og:description", content: "Dit personlige cocktail-bibliotek." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Cocktail menu" },
-      { name: "twitter:description", content: "Hold styr på dine ingredienser og se hvilke cocktails du kan lave lige nu." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9faf1213-8f69-42c1-9ba1-bc8511dff8b9/id-preview-f44fcd7e--340d0170-ad57-4a65-95cf-f779bc0561a8.lovable.app-1781979274864.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/9faf1213-8f69-42c1-9ba1-bc8511dff8b9/id-preview-f44fcd7e--340d0170-ad57-4a65-95cf-f779bc0561a8.lovable.app-1781979274864.png" },
     ],
     links: [
       {
