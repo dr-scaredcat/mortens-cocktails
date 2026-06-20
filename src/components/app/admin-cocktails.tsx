@@ -6,7 +6,12 @@ import {
   listIngredients,
   type CocktailWithDetails,
 } from "@/lib/cocktails.functions";
-import { saveCocktail, deleteCocktail } from "@/lib/admin.functions";
+import {
+  saveCocktail,
+  deleteCocktail,
+  fetchCocktailDbImage,
+  backfillCocktailImages,
+} from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +36,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ArrowUp, ArrowDown, Download, ImageDown } from "lucide-react";
 
 type Item = { name: string; amount: string; unit: string };
 
@@ -56,6 +61,7 @@ export function AdminCocktails() {
   const fetchTags = useServerFn(listTags);
   const save = useServerFn(saveCocktail);
   const del = useServerFn(deleteCocktail);
+  const backfill = useServerFn(backfillCocktailImages);
 
   const { data: cocktails } = useQuery({
     queryKey: ["cocktails"],
@@ -86,6 +92,15 @@ export function AdminCocktails() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cocktails"] });
       toast.success("Slettet");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const backfillM = useMutation({
+    mutationFn: () => backfill(),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["cocktails"] });
+      toast.success(`Opdateret ${r.updated} cocktails${r.missing ? ` (${r.missing} ikke fundet)` : ""}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -144,7 +159,15 @@ export function AdminCocktails() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => backfillM.mutate()}
+          disabled={backfillM.isPending}
+        >
+          <ImageDown className="mr-1 h-4 w-4" />
+          {backfillM.isPending ? "Henter…" : "Hent manglende billeder"}
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={openNew}>
@@ -216,6 +239,31 @@ function CocktailForm({
   ingredientNames: string[];
   tagNames: string[];
 }) {
+  const fetchImg = useServerFn(fetchCocktailDbImage);
+  const [fetchingImg, setFetchingImg] = useState(false);
+
+  async function pullImage() {
+    const name = form.name.trim();
+    if (!name) {
+      toast.error("Indtast et navn først");
+      return;
+    }
+    setFetchingImg(true);
+    try {
+      const r = await fetchImg({ data: { name } });
+      if (!r.image) {
+        toast.error("Intet billede fundet på TheCocktailDB");
+      } else {
+        setForm({ ...form, image_url: r.image });
+        toast.success("Billede hentet");
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setFetchingImg(false);
+    }
+  }
+
   function patch<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm({ ...form, [k]: v });
   }
@@ -260,11 +308,29 @@ function CocktailForm({
       </div>
       <div>
         <Label>Billede-URL</Label>
-        <Input
-          placeholder="https://..."
-          value={form.image_url}
-          onChange={(e) => patch("image_url", e.target.value)}
-        />
+        <div className="flex gap-2">
+          <Input
+            placeholder="https://..."
+            value={form.image_url}
+            onChange={(e) => patch("image_url", e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={pullImage}
+            disabled={fetchingImg}
+          >
+            <Download className="mr-1 h-4 w-4" />
+            {fetchingImg ? "Henter…" : "Hent"}
+          </Button>
+        </div>
+        {form.image_url && (
+          <img
+            src={form.image_url}
+            alt=""
+            className="mt-2 h-24 w-24 rounded object-cover"
+          />
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
