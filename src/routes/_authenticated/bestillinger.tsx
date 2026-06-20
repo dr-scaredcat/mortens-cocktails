@@ -7,7 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Check, Trash2, RotateCcw } from "lucide-react";
-import { deleteOrder, listOrders, setOrderStatus } from "@/lib/orders.functions";
+import {
+  deleteAllOrders,
+  deleteOrder,
+  listOrders,
+  setOrderStatus,
+} from "@/lib/orders.functions";
 
 export const Route = createFileRoute("/_authenticated/bestillinger")({
   head: () => ({ meta: [{ title: "Bestillinger — Barskab" }] }),
@@ -18,6 +23,7 @@ function OrdersPage() {
   const fetchOrders = useServerFn(listOrders);
   const updateStatus = useServerFn(setOrderStatus);
   const removeOrder = useServerFn(deleteOrder);
+  const removeAll = useServerFn(deleteAllOrders);
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders"],
@@ -44,6 +50,17 @@ function OrdersPage() {
     }
   }
 
+  async function clearAll() {
+    if (!confirm("Slet ALLE bestillinger? Dette kan ikke fortrydes.")) return;
+    try {
+      await removeAll();
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Alle bestillinger er slettet");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke slette");
+    }
+  }
+
   const orders = data ?? [];
   const pending = orders.filter((o) => o.status === "pending");
   const done = orders.filter((o) => o.status !== "pending");
@@ -52,10 +69,20 @@ function OrdersPage() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <main className="mx-auto max-w-3xl px-4 py-6">
-        <h1 className="mb-1 font-serif text-3xl">Bestillinger</h1>
-        <p className="mb-5 text-sm text-muted-foreground">
-          Live oversigt over bestillinger fra menukortet.
-        </p>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="mb-1 font-serif text-3xl">Bestillinger</h1>
+            <p className="text-sm text-muted-foreground">
+              Live oversigt over bestillinger fra menukortet.
+            </p>
+          </div>
+          {(data?.length ?? 0) > 0 && (
+            <Button variant="outline" size="sm" onClick={clearAll}>
+              <Trash2 className="mr-1 h-4 w-4" />
+              Slet alle
+            </Button>
+          )}
+        </div>
         {isLoading ? (
           <p className="text-muted-foreground">Indlæser...</p>
         ) : error ? (
