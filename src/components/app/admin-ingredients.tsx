@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listIngredients, type IngredientRow } from "@/lib/cocktails.functions";
@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES } from "@/lib/constants";
+import { listCategories } from "@/lib/cocktails.functions";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Trash2, Pencil, Check, X } from "lucide-react";
@@ -25,17 +25,24 @@ import { Trash2, Pencil, Check, X } from "lucide-react";
 export function AdminIngredients() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listIngredients);
+  const fetchCats = useServerFn(listCategories);
   const upsert = useServerFn(upsertIngredient);
   const del = useServerFn(deleteIngredient);
   const setAvail = useServerFn(setIngredientAvailable);
 
   const { data } = useQuery({ queryKey: ["ingredients"], queryFn: () => fetchList() });
+  const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => fetchCats() });
+  const catNames = (categories ?? []).map((c) => c.name);
 
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<string>("Spiritus");
+  const [category, setCategory] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("");
+
+  useEffect(() => {
+    if (!category && catNames.length > 0) setCategory(catNames[0]);
+  }, [category, catNames]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["ingredients"] });
@@ -80,10 +87,11 @@ export function AdminIngredients() {
 
   const grouped = useMemo(() => {
     const map = new Map<string, IngredientRow[]>();
-    for (const c of CATEGORIES) map.set(c, []);
+    for (const c of catNames) map.set(c, []);
+    if (!map.has("Andet")) map.set("Andet", []);
     for (const i of data ?? []) (map.get(i.category) ?? map.get("Andet")!).push(i);
     return Array.from(map.entries());
-  }, [data]);
+  }, [data, categories]);
 
   return (
     <div className="space-y-6">
@@ -100,7 +108,7 @@ export function AdminIngredients() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CATEGORIES.map((c) => (
+              {catNames.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
                 </SelectItem>
@@ -137,7 +145,7 @@ export function AdminIngredients() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {CATEGORIES.map((c) => (
+                          {catNames.map((c) => (
                             <SelectItem key={c} value={c}>
                               {c}
                             </SelectItem>
