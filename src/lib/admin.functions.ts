@@ -357,3 +357,55 @@ export const revokeAdmin = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// =================== TheCocktailDB image lookup ===================
+
+async function lookupCocktailDbImage(name: string): Promise<string | null> {
+  const url = `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(name)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const json = (await res.json()) as { drinks: Array<{ strDrink: string; strDrinkThumb: string | null }> | null };
+  if (!json.drinks || json.drinks.length === 0) return null;
+  const lower = name.trim().toLowerCase();
+  const exact = json.drinks.find((d) => d.strDrink.toLowerCase() === lower);
+  const pick = exact ?? json.drinks[0];
+  return pick.strDrinkThumb ?? null;
+}
+
+export const fetchCocktailDbImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { name: string }) =>
+    z.object({ name: z.string().min(1).max(120) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const image = await lookupCocktailDbImage(data.name);
+    return { image };
+  });
+
+export const backfillCocktailImages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    const { data: rows, error } = await sb
+      .from("cocktails")
+      .select("id, name, image_url");
+    if (error) throw new Error(error.message);
+    let updated = 0;
+    let missing = 0;
+    for (const c of rows ?? []) {
+      if (c.image_url) continue;
+      const image = await lookupCocktailDbImage(c.name);
+      if (!image) {
+        missing += 1;
+        continue;
+      }
+      const { error: upErr } = await sb
+        .from("cocktails")
+        .update({ image_url: image })
+        .eq("id", c.id);
+      if (!upErr) updated += 1;
+    }
+    return { updated, missing };
+  });
