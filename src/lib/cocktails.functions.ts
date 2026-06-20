@@ -34,6 +34,8 @@ export type CocktailWithDetails = {
     available: boolean;
   }[];
   missing: string[];
+  avg_rating: number | null;
+  rating_count: number;
 };
 
 export const listIngredients = createServerFn({ method: "GET" }).handler(async () => {
@@ -73,16 +75,26 @@ export const listTags = createServerFn({ method: "GET" }).handler(async () => {
 
 export const listCocktails = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
-  const [cocktailsRes, ciRes, ingRes, tagsRes] = await Promise.all([
+  const [cocktailsRes, ciRes, ingRes, tagsRes, ratingsRes] = await Promise.all([
     sb.from("cocktails").select("*").order("name"),
     sb.from("cocktail_ingredients").select("cocktail_id, ingredient_id, amount, unit, position"),
     sb.from("ingredients").select("id, name, available"),
     sb.from("cocktail_tags").select("cocktail_id, tag"),
+    sb.from("cocktail_ratings").select("cocktail_id, rating"),
   ]);
   if (cocktailsRes.error) throw new Error(cocktailsRes.error.message);
   if (ciRes.error) throw new Error(ciRes.error.message);
   if (ingRes.error) throw new Error(ingRes.error.message);
   if (tagsRes.error) throw new Error(tagsRes.error.message);
+  if (ratingsRes.error) throw new Error(ratingsRes.error.message);
+
+  const ratingMap = new Map<string, { sum: number; count: number }>();
+  for (const r of ratingsRes.data ?? []) {
+    const e = ratingMap.get(r.cocktail_id) ?? { sum: 0, count: 0 };
+    e.sum += Number(r.rating);
+    e.count += 1;
+    ratingMap.set(r.cocktail_id, e);
+  }
 
   const ingMap = new Map((ingRes.data ?? []).map((i) => [i.id, i]));
   const result: CocktailWithDetails[] = (cocktailsRes.data ?? []).map((c) => {
@@ -103,6 +115,7 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
     const tags = (tagsRes.data ?? [])
       .filter((t) => t.cocktail_id === c.id)
       .map((t) => t.tag);
+    const agg = ratingMap.get(c.id);
     return {
       id: c.id,
       name: c.name,
@@ -114,7 +127,48 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
       tags,
       ingredients: items,
       missing,
+      avg_rating: agg ? agg.sum / agg.count : null,
+      rating_count: agg ? agg.count : 0,
     };
   });
   return result;
 });
+
+export const rateCocktail = createServerFn({ method: "POST" })
+  .inputValidator((d: { cocktailId: string; raterId: string; rating: number }) => {
+    if (!/^[0-9a-f-]{8,64}$/i.test(d.raterId)) throw new Error("Ugyldigt rater-id");
+    if (!Number.isInteger(d.rating) || d.rating < 1 || d.rating > 5)
+      throw new Error("Rating skal være 1–5");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const sb = publicClient();
+    const { error } = await sb
+      .from("cocktail_ratings")
+      .upsert(
+        {
+          cocktail_id: data.cocktailId,
+          rater_id: data.raterId,
+          rating: data.rating,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "cocktail_id,rater_id" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const getMyRatings = createServerFn({ method: "POST" })
+  .inputValidator((d: { raterId: string }) => {
+    if (!/^[0-9a-f-]{8,64}$/i.test(d.raterId)) throw new Error("Ugyldigt rater-id");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const sb = publicClient();
+    const { data: rows, error } = await sb
+      .from("cocktail_ratings")
+      .select("cocktail_id, rating")
+      .eq("rater_id", data.raterId);
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as { cocktail_id: string; rating: number }[];
+  });
