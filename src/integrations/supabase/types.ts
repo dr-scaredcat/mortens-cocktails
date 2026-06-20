@@ -74,6 +74,47 @@ export type Database = {
           },
         ]
       }
+      cocktail_orders: {
+        Row: {
+          cocktail_id: string | null
+          cocktail_name: string
+          created_at: string
+          customer_name: string
+          id: string
+          note: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cocktail_id?: string | null
+          cocktail_name: string
+          created_at?: string
+          customer_name: string
+          id?: string
+          note?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cocktail_id?: string | null
+          cocktail_name?: string
+          created_at?: string
+          customer_name?: string
+          id?: string
+          note?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cocktail_orders_cocktail_id_fkey"
+            columns: ["cocktail_id"]
+            isOneToOne: false
+            referencedRelation: "cocktails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cocktail_ratings: {
         Row: {
           cocktail_id: string
