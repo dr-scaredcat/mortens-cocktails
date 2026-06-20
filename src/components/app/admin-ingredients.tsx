@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listIngredients, type IngredientRow } from "@/lib/cocktails.functions";
@@ -40,12 +40,9 @@ export function AdminIngredients() {
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("");
 
-  // Sync default selected category with fetched list
-  if (!category && catNames.length > 0) {
-    // setState during render is allowed when stable;
-    // queueMicrotask avoids the warning.
-    queueMicrotask(() => setCategory(catNames[0]));
-  }
+  useEffect(() => {
+    if (!category && catNames.length > 0) setCategory(catNames[0]);
+  }, [category, catNames]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["ingredients"] });
