@@ -6,6 +6,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
+import { AdminCategories } from "@/components/app/admin-categories";
+import { AdminTags } from "@/components/app/admin-tags";
+import { AdminUsers } from "@/components/app/admin-users";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
@@ -32,15 +35,27 @@ function AdminPage() {
           </div>
         ) : (
           <Tabs defaultValue="ingredients">
-            <TabsList>
+            <TabsList className="flex w-full flex-wrap">
               <TabsTrigger value="ingredients">Ingredienser</TabsTrigger>
               <TabsTrigger value="cocktails">Cocktails</TabsTrigger>
+              <TabsTrigger value="categories">Kategorier</TabsTrigger>
+              <TabsTrigger value="tags">Tags</TabsTrigger>
+              <TabsTrigger value="users">Brugere</TabsTrigger>
             </TabsList>
             <TabsContent value="ingredients" className="mt-4">
               <AdminIngredients />
             </TabsContent>
             <TabsContent value="cocktails" className="mt-4">
               <AdminCocktails />
+            </TabsContent>
+            <TabsContent value="categories" className="mt-4">
+              <AdminCategories />
+            </TabsContent>
+            <TabsContent value="tags" className="mt-4">
+              <AdminTags />
+            </TabsContent>
+            <TabsContent value="users" className="mt-4">
+              <AdminUsers />
             </TabsContent>
           </Tabs>
         )}
