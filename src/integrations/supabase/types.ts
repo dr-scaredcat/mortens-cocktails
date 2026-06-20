@@ -74,6 +74,38 @@ export type Database = {
           },
         ]
       }
+      cocktail_ratings: {
+        Row: {
+          cocktail_id: string
+          created_at: string
+          rater_id: string
+          rating: number
+          updated_at: string
+        }
+        Insert: {
+          cocktail_id: string
+          created_at?: string
+          rater_id: string
+          rating: number
+          updated_at?: string
+        }
+        Update: {
+          cocktail_id?: string
+          created_at?: string
+          rater_id?: string
+          rating?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cocktail_ratings_cocktail_id_fkey"
+            columns: ["cocktail_id"]
+            isOneToOne: false
+            referencedRelation: "cocktails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cocktail_tags: {
         Row: {
           cocktail_id: string

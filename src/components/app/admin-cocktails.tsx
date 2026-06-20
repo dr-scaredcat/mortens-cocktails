@@ -31,7 +31,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ArrowUp, ArrowDown } from "lucide-react";
 
 type Item = { name: string; amount: string; unit: string };
 
@@ -229,6 +229,13 @@ function CocktailForm({
   function removeItem(idx: number) {
     setForm({ ...form, ingredients: form.ingredients.filter((_, i) => i !== idx) });
   }
+  function moveItem(idx: number, dir: -1 | 1) {
+    const target = idx + dir;
+    if (target < 0 || target >= form.ingredients.length) return;
+    const next = [...form.ingredients];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setForm({ ...form, ingredients: next });
+  }
   function toggleTag(tag: string) {
     setForm({
       ...form,
@@ -298,6 +305,30 @@ function CocktailForm({
         <div className="space-y-2">
           {form.ingredients.map((it, i) => (
             <div key={i} className="flex gap-2">
+              <div className="flex flex-col">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-5 w-6"
+                  onClick={() => moveItem(i, -1)}
+                  disabled={i === 0}
+                  type="button"
+                  aria-label="Flyt op"
+                >
+                  <ArrowUp className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-5 w-6"
+                  onClick={() => moveItem(i, 1)}
+                  disabled={i === form.ingredients.length - 1}
+                  type="button"
+                  aria-label="Flyt ned"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                </Button>
+              </div>
               <Input
                 list="ingredient-names"
                 placeholder="Ingrediens"
