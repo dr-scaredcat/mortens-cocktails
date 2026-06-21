@@ -56,7 +56,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-type Item = { name: string; amount: string; unit: string };
+type Item = { _id: string; name: string; amount: string; unit: string };
+
+let _itemSeq = 0;
+const newId = () => `it_${++_itemSeq}_${Date.now()}`;
 
 function emptyForm() {
   return {
@@ -68,7 +71,7 @@ function emptyForm() {
     garnish: "",
     instructions: "",
     tags: [] as string[],
-    ingredients: [{ name: "", amount: "", unit: "ml" }] as Item[],
+    ingredients: [{ _id: newId(), name: "", amount: "", unit: "ml" }] as Item[],
   };
 }
 
@@ -139,6 +142,7 @@ export function AdminCocktails() {
       instructions: c.instructions ?? "",
       tags: c.tags,
       ingredients: c.ingredients.map((i) => ({
+        _id: newId(),
         name: i.name,
         amount: i.amount == null ? "" : String(i.amount),
         unit: i.unit ?? "",
