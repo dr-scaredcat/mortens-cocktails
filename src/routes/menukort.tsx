@@ -91,7 +91,7 @@ function MenukortPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
               <div key={c.id} className="flex flex-col gap-2">
-                <CocktailCard cocktail={c} />
+              <CocktailCard cocktail={c} showAvailabilityBadge={false} />
                 {orderingEnabled && (
                   <OrderButton cocktailId={c.id} cocktailName={c.name} />
                 )}
