@@ -11,7 +11,13 @@ function fmt(amount: number | null, unit: string | null) {
   return unit ? `${n} ${unit}` : n;
 }
 
-export function CocktailCard({ cocktail }: { cocktail: CocktailWithDetails }) {
+export function CocktailCard({
+  cocktail,
+  showAvailabilityBadge = true,
+}: {
+  cocktail: CocktailWithDetails;
+  showAvailabilityBadge?: boolean;
+}) {
   const missing = cocktail.missing.length;
   return (
     <Card className="overflow-hidden border-border/70 bg-card">
@@ -32,12 +38,14 @@ export function CocktailCard({ cocktail }: { cocktail: CocktailWithDetails }) {
       <div className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-serif text-xl leading-tight">{cocktail.name}</h3>
-          {missing === 0 ? (
-            <Badge className="bg-primary/20 text-primary hover:bg-primary/20">Klar</Badge>
-          ) : (
-            <Badge variant="secondary">
-              Mangler {missing}
-            </Badge>
+          {showAvailabilityBadge && (
+            missing === 0 ? (
+              <Badge className="bg-primary/20 text-primary hover:bg-primary/20">Klar</Badge>
+            ) : (
+              <Badge variant="secondary">
+                Mangler {missing}
+              </Badge>
+            )
           )}
         </div>
         {cocktail.description && (
