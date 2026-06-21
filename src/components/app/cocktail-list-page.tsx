@@ -35,7 +35,11 @@ export function CocktailListPage({
     if (tags.length > 0) f = f.filter((c) => tags.every((t) => c.tags.includes(t)));
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      f = f.filter((c) => c.name.toLowerCase().includes(s));
+      f = f.filter(
+        (c) =>
+          c.name.toLowerCase().includes(s) ||
+          c.ingredients.some((i) => i.name.toLowerCase().includes(s)),
+      );
     }
     return [...f].sort((a, b) => a.missing.length - b.missing.length || a.name.localeCompare(b.name));
   }, [data, mode, tags, q]);
