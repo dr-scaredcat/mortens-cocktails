@@ -3,6 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
@@ -19,6 +27,15 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const check = useServerFn(isAdmin);
   const { data, isLoading } = useQuery({ queryKey: ["isAdmin"], queryFn: () => check() });
+  const [tab, setTab] = useState("ingredients");
+  const TABS = [
+    { value: "ingredients", label: "Ingredienser" },
+    { value: "cocktails", label: "Cocktails" },
+    { value: "categories", label: "Kategorier" },
+    { value: "tags", label: "Tags" },
+    { value: "users", label: "Brugere" },
+    { value: "settings", label: "Indstillinger" },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -35,15 +52,19 @@ function AdminPage() {
             Din konto har ikke administratorrettigheder.
           </div>
         ) : (
-          <Tabs defaultValue="ingredients">
-            <TabsList className="flex w-full flex-wrap">
-              <TabsTrigger value="ingredients">Ingredienser</TabsTrigger>
-              <TabsTrigger value="cocktails">Cocktails</TabsTrigger>
-              <TabsTrigger value="categories">Kategorier</TabsTrigger>
-              <TabsTrigger value="tags">Tags</TabsTrigger>
-              <TabsTrigger value="users">Brugere</TabsTrigger>
-              <TabsTrigger value="settings">Indstillinger</TabsTrigger>
-            </TabsList>
+          <Tabs value={tab} onValueChange={setTab}>
+            <Select value={tab} onValueChange={setTab}>
+              <SelectTrigger className="w-full sm:max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TABS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <TabsContent value="ingredients" className="mt-4">
               <AdminIngredients />
             </TabsContent>
