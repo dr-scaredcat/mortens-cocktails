@@ -55,7 +55,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useRef } from "react";
 
 type Item = { name: string; amount: string; unit: string };
 
