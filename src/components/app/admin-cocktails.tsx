@@ -299,18 +299,30 @@ function CocktailForm({
     setForm({ ...form, ingredients: next });
   }
   function addItem() {
-    setForm({ ...form, ingredients: [...form.ingredients, { name: "", amount: "", unit: "ml" }] });
+    setForm({
+      ...form,
+      ingredients: [
+        ...form.ingredients,
+        { _id: newId(), name: "", amount: "", unit: "ml" },
+      ],
+    });
   }
   function removeItem(idx: number) {
     setForm({ ...form, ingredients: form.ingredients.filter((_, i) => i !== idx) });
   }
-  function moveItem(idx: number, dir: -1 | 1) {
-    const target = idx + dir;
-    if (target < 0 || target >= form.ingredients.length) return;
-    const next = [...form.ingredients];
-    [next[idx], next[target]] = [next[target], next[idx]];
-    setForm({ ...form, ingredients: next });
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIdx = form.ingredients.findIndex((it) => it._id === active.id);
+    const newIdx = form.ingredients.findIndex((it) => it._id === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    setForm({ ...form, ingredients: arrayMove(form.ingredients, oldIdx, newIdx) });
   }
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   function toggleTag(tag: string) {
     setForm({
       ...form,
@@ -396,64 +408,25 @@ function CocktailForm({
           Skriv navn på ingrediens. Nye navne tilføjes automatisk til biblioteket.
         </p>
         <div className="space-y-2">
-          {form.ingredients.map((it, i) => (
-            <div key={i} className="flex gap-2">
-              <div className="flex flex-col">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-5 w-6"
-                  onClick={() => moveItem(i, -1)}
-                  disabled={i === 0}
-                  type="button"
-                  aria-label="Flyt op"
-                >
-                  <ArrowUp className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-5 w-6"
-                  onClick={() => moveItem(i, 1)}
-                  disabled={i === form.ingredients.length - 1}
-                  type="button"
-                  aria-label="Flyt ned"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                </Button>
-              </div>
-              <Input
-                list="ingredient-names"
-                placeholder="Ingrediens"
-                value={it.name}
-                onChange={(e) => setItem(i, { name: e.target.value })}
-                className="flex-1"
-              />
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="Mængde"
-                value={it.amount}
-                onChange={(e) => setItem(i, { amount: e.target.value })}
-                className="w-24"
-              />
-              <Select value={it.unit} onValueChange={(v) => setItem(i, { unit: v })}>
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UNITS.map((u) => (
-                    <SelectItem key={u} value={u}>
-                      {u}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button size="icon" variant="ghost" onClick={() => removeItem(i)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext
+              items={form.ingredients.map((it) => it._id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {form.ingredients.map((it, i) => (
+                <SortableIngredient
+                  key={it._id}
+                  item={it}
+                  onChange={(p) => setItem(i, p)}
+                  onRemove={() => removeItem(i)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
           <datalist id="ingredient-names">
             {ingredientNames.map((n) => (
               <option key={n} value={n} />
@@ -464,6 +437,71 @@ function CocktailForm({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SortableIngredient({
+  item,
+  onChange,
+  onRemove,
+}: {
+  item: Item;
+  onChange: (p: Partial<Item>) => void;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: item._id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-1 rounded-md bg-background sm:gap-2"
+    >
+      <button
+        type="button"
+        className="touch-none cursor-grab p-1 text-muted-foreground active:cursor-grabbing"
+        aria-label="Træk for at flytte"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <Input
+        list="ingredient-names"
+        placeholder="Ingrediens"
+        value={item.name}
+        onChange={(e) => onChange({ name: e.target.value })}
+        className="min-w-0 flex-1"
+      />
+      <Input
+        type="number"
+        step="0.1"
+        placeholder="Mængde"
+        value={item.amount}
+        onChange={(e) => onChange({ amount: e.target.value })}
+        className="w-16 sm:w-24"
+      />
+      <Select value={item.unit} onValueChange={(v) => onChange({ unit: v })}>
+        <SelectTrigger className="w-20 sm:w-24">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {UNITS.map((u) => (
+            <SelectItem key={u} value={u}>
+              {u}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button size="icon" variant="ghost" onClick={onRemove} type="button">
+        <X className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
