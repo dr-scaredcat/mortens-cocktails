@@ -36,7 +36,26 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ArrowUp, ArrowDown, Download, ImageDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Download, ImageDown, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useRef } from "react";
 
 type Item = { name: string; amount: string; unit: string };
 
@@ -197,30 +216,35 @@ export function AdminCocktails() {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {sorted.map((c) => (
-          <Card key={c.id} className="flex items-center gap-3 p-3">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded bg-muted">
+          <Card
+            key={c.id}
+            className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3"
+          >
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
               {c.image_url && (
                 <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" />
               )}
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <div className="truncate font-medium">{c.name}</div>
               <div className="truncate text-xs text-muted-foreground">
                 {c.ingredients.map((i) => i.name).join(", ")}
               </div>
             </div>
-            <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => {
-                if (confirm(`Slet ${c.name}?`)) delM.mutate(c.id);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex shrink-0 gap-1">
+              <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  if (confirm(`Slet ${c.name}?`)) delM.mutate(c.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </Card>
         ))}
       </div>
