@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
 import { getOrderingEnabled } from "@/lib/orders.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -36,6 +42,7 @@ function MenukortPage() {
 
   const [tags, setTags] = useState<string[]>([]);
   const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const list = (data ?? []) as CocktailWithDetails[];
@@ -90,15 +97,37 @@ function MenukortPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <div key={c.id} className="flex flex-col gap-2">
-              <CocktailCard cocktail={c} showAvailabilityBadge={false} />
-                {orderingEnabled && (
-                  <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                )}
-              </div>
+              <CocktailCard
+                key={c.id}
+                cocktail={c}
+                showAvailabilityBadge={false}
+                compact
+                onClick={() => setOpenId(c.id)}
+                footerSlot={
+                  orderingEnabled ? (
+                    <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                  ) : null
+                }
+              />
             ))}
           </div>
         )}
+        <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-lg sm:max-w-md">
+            {(() => {
+              const c = filtered.find((x) => x.id === openId);
+              if (!c) return null;
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="font-serif text-2xl">{c.name}</DialogTitle>
+                  </DialogHeader>
+                  <CocktailCard cocktail={c} showAvailabilityBadge={false} />
+                </>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
