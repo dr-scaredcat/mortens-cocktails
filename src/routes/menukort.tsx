@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Wine } from "lucide-react";
+import { Wine, Shuffle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { CocktailCard } from "@/components/app/cocktail-card";
 import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,18 @@ function MenukortPage() {
             Vælg en cocktail og tryk Bestil — bartenderen får besked.
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="mb-5 w-full"
+          onClick={() => {
+            if (filtered.length === 0) return;
+            const random = filtered[Math.floor(Math.random() * filtered.length)];
+            setOpenId(random.id);
+          }}
+        >
+          <Shuffle className="h-4 w-4" />
+          Overrask mig
+        </Button>
         <div className="mb-5 space-y-3">
           <Input
             placeholder="Søg efter cocktail..."
