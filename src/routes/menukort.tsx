@@ -75,6 +75,18 @@ function MenukortPage() {
             Vælg en cocktail og tryk Bestil — bartenderen får besked.
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="mb-5 w-full"
+          onClick={() => {
+            if (filtered.length === 0) return;
+            const random = filtered[Math.floor(Math.random() * filtered.length)];
+            setOpenId(random.id);
+          }}
+        >
+          <Shuffle className="h-4 w-4" />
+          Overrask mig
+        </Button>
         <div className="mb-5 space-y-3">
           <Input
             placeholder="Søg efter cocktail..."
