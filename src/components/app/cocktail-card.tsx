@@ -14,11 +14,9 @@ function fmt(amount: number | null, unit: string | null) {
 export function CocktailCard({
   cocktail,
   showAvailabilityBadge = true,
-  compact = false,
 }: {
   cocktail: CocktailWithDetails;
   showAvailabilityBadge?: boolean;
-  compact?: boolean;
 }) {
   const missing = cocktail.missing.length;
   return (
@@ -78,9 +76,7 @@ export function CocktailCard({
               }
             >
               <span>{i.name}</span>
-              {!compact && (
-                <span className="tabular-nums">{fmt(i.amount, i.unit)}</span>
-              )}
+              <span className="tabular-nums">{fmt(i.amount, i.unit)}</span>
             </li>
           ))}
         </ul>
@@ -89,7 +85,7 @@ export function CocktailCard({
             Mangler: {cocktail.missing.join(", ")}
           </p>
         )}
-        {!compact && (cocktail.glass || cocktail.garnish) && (
+        {(cocktail.glass || cocktail.garnish) && (
           <div className="grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
             {cocktail.glass && (
               <div>
@@ -105,7 +101,7 @@ export function CocktailCard({
             )}
           </div>
         )}
-        {!compact && cocktail.instructions && (
+        {cocktail.instructions && (
           <p className="whitespace-pre-line border-t border-border pt-2 text-sm text-foreground/80">
             {cocktail.instructions}
           </p>
