@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
 import { getOrderingEnabled } from "@/lib/orders.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -90,16 +96,43 @@ function MenukortPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <div key={c.id} className="flex flex-col gap-2">
-              <CocktailCard cocktail={c} showAvailabilityBadge={false} />
-                {orderingEnabled && (
-                  <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                )}
-              </div>
+              <CocktailItem key={c.id} cocktail={c} orderingEnabled={orderingEnabled} />
             ))}
           </div>
         )}
       </main>
     </div>
+  );
+}
+
+function CocktailItem({
+  cocktail,
+  orderingEnabled,
+}: {
+  cocktail: CocktailWithDetails;
+  orderingEnabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg text-left transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <CocktailCard cocktail={cocktail} showAvailabilityBadge={false} compact />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">{cocktail.name}</DialogTitle>
+          </DialogHeader>
+          <CocktailCard cocktail={cocktail} showAvailabilityBadge={false} />
+          {orderingEnabled && (
+            <OrderButton cocktailId={cocktail.id} cocktailName={cocktail.name} />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
