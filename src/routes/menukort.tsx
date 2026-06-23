@@ -126,32 +126,34 @@ function MenukortPage() {
             <DialogOverlay />
             <DialogPrimitive.Content
               className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border-0 bg-transparent p-0 shadow-none outline-none sm:max-w-md"
-              aria-label={filtered.find((x) => x.id === openId)?.name}
               onOpenAutoFocus={(e) => e.preventDefault()}
             >
               {(() => {
                 const c = filtered.find((x) => x.id === openId);
                 if (!c) return null;
                 return (
-                  <div
-                    className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest("[data-order-button]")) return;
-                      setOpenId(null);
-                    }}
-                  >
-                    <CocktailCard
-                      cocktail={c}
-                      showAvailabilityBadge={false}
-                      footerSlot={
-                        orderingEnabled ? (
-                          <div data-order-button onClick={(e) => e.stopPropagation()}>
-                            <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                          </div>
-                        ) : null
-                      }
-                    />
-                  </div>
+                  <>
+                    <DialogPrimitive.Title className="sr-only">{c.name}</DialogPrimitive.Title>
+                    <div
+                      className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("[data-order-button]")) return;
+                        setOpenId(null);
+                      }}
+                    >
+                      <CocktailCard
+                        cocktail={c}
+                        showAvailabilityBadge={false}
+                        footerSlot={
+                          orderingEnabled ? (
+                            <div data-order-button onClick={(e) => e.stopPropagation()}>
+                              <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                            </div>
+                          ) : null
+                        }
+                      />
+                    </div>
+                  </>
                 );
               })()}
             </DialogPrimitive.Content>
