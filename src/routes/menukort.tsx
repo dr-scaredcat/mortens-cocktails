@@ -3,19 +3,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Wine, Shuffle } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CocktailCard } from "@/components/app/cocktail-card";
 import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
 import { getOrderingEnabled } from "@/lib/orders.functions";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -126,20 +122,42 @@ function MenukortPage() {
           </div>
         )}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto rounded-lg sm:max-w-md">
-            {(() => {
-              const c = filtered.find((x) => x.id === openId);
-              if (!c) return null;
-              return (
-                <>
-                  <DialogHeader>
-                    <DialogTitle className="font-serif text-2xl">{c.name}</DialogTitle>
-                  </DialogHeader>
-                  <CocktailCard cocktail={c} showAvailabilityBadge={false} />
-                </>
-              );
-            })()}
-          </DialogContent>
+          <DialogPortal>
+            <DialogOverlay />
+            <DialogPrimitive.Content
+              className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border-0 bg-transparent p-0 shadow-none outline-none sm:max-w-md"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              {(() => {
+                const c = filtered.find((x) => x.id === openId);
+                if (!c) return null;
+                return (
+                  <>
+                    <DialogPrimitive.Title className="sr-only">{c.name}</DialogPrimitive.Title>
+                    <div
+                      className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("[data-order-button]")) return;
+                        setOpenId(null);
+                      }}
+                    >
+                      <CocktailCard
+                        cocktail={c}
+                        showAvailabilityBadge={false}
+                        footerSlot={
+                          orderingEnabled ? (
+                            <div data-order-button onClick={(e) => e.stopPropagation()}>
+                              <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                            </div>
+                          ) : null
+                        }
+                      />
+                    </div>
+                  </>
+                );
+              })()}
+            </DialogPrimitive.Content>
+          </DialogPortal>
         </Dialog>
       </main>
     </div>
