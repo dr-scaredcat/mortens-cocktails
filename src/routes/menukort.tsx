@@ -67,9 +67,11 @@ function MenukortPage() {
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
           <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
-          <p className="text-sm text-muted-foreground">
-            Vælg en cocktail og tryk Bestil — bartenderen får besked.
-          </p>
+          {orderingEnabled && (
+            <p className="text-sm text-muted-foreground">
+              Vælg en cocktail og tryk Bestil — bartenderen får besked.
+            </p>
+          )}
         </div>
         <Button
           variant="outline"
