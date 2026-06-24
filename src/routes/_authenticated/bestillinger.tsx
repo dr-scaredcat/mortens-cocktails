@@ -1,11 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { toast } from "sonner";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/app/site-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
+import { CocktailCard } from "@/components/app/cocktail-card";
+import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { Check, Trash2, RotateCcw } from "lucide-react";
 import {
   deleteAllOrders,
@@ -30,6 +35,15 @@ function OrdersPage() {
     queryFn: () => fetchOrders(),
     refetchInterval: 10_000,
   });
+  const fetchCocktails = useServerFn(listCocktails);
+  const { data: cocktailsData } = useQuery({
+    queryKey: ["cocktails"],
+    queryFn: () => fetchCocktails(),
+  });
+  const [openCocktailId, setOpenCocktailId] = useState<string | null>(null);
+  const openCocktail = (cocktailsData ?? []).find(
+    (c: CocktailWithDetails) => c.id === openCocktailId,
+  );
 
   async function mark(id: string, status: "pending" | "done") {
     try {
@@ -106,6 +120,9 @@ function OrdersPage() {
                       order={o}
                       onDone={() => mark(o.id, "done")}
                       onDelete={() => remove(o.id)}
+                      onOpen={
+                        o.cocktail_id ? () => setOpenCocktailId(o.cocktail_id) : undefined
+                      }
                     />
                   ))}
                 </ul>
@@ -122,6 +139,9 @@ function OrdersPage() {
                       done
                       onReopen={() => mark(o.id, "pending")}
                       onDelete={() => remove(o.id)}
+                      onOpen={
+                        o.cocktail_id ? () => setOpenCocktailId(o.cocktail_id) : undefined
+                      }
                     />
                   ))}
                 </ul>
@@ -130,6 +150,32 @@ function OrdersPage() {
           </div>
         )}
       </main>
+      <Dialog
+        open={!!openCocktailId}
+        onOpenChange={(o) => !o && setOpenCocktailId(null)}
+      >
+        <DialogPortal>
+          <DialogOverlay />
+          <DialogPrimitive.Content
+            className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border-0 bg-transparent p-0 shadow-none outline-none sm:max-w-md"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            {openCocktail ? (
+              <>
+                <DialogPrimitive.Title className="sr-only">
+                  {openCocktail.name}
+                </DialogPrimitive.Title>
+                <div
+                  className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                  onClick={() => setOpenCocktailId(null)}
+                >
+                  <CocktailCard cocktail={openCocktail} showAvailabilityBadge={false} />
+                </div>
+              </>
+            ) : null}
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
     </div>
   );
 }
@@ -137,6 +183,7 @@ function OrdersPage() {
 type OrderItemProps = {
   order: {
     id: string;
+    cocktail_id: string | null;
     cocktail_name: string;
     customer_name: string;
     note: string | null;
@@ -146,15 +193,19 @@ type OrderItemProps = {
   onDone?: () => void;
   onReopen?: () => void;
   onDelete: () => void;
+  onOpen?: () => void;
 };
 
-function OrderItem({ order, done, onDone, onReopen, onDelete }: OrderItemProps) {
+function OrderItem({ order, done, onDone, onReopen, onDelete, onOpen }: OrderItemProps) {
   const time = new Date(order.created_at).toLocaleString("da-DK", {
     dateStyle: "short",
     timeStyle: "short",
   });
   return (
-    <Card className={`p-3 ${done ? "opacity-70" : ""}`}>
+    <Card
+      className={`p-3 ${done ? "opacity-70" : ""} ${onOpen ? "cursor-pointer" : ""}`}
+      onClick={onOpen}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
@@ -166,7 +217,7 @@ function OrderItem({ order, done, onDone, onReopen, onDelete }: OrderItemProps) 
           )}
           <p className="mt-1 text-xs text-muted-foreground">{time}</p>
         </div>
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
           {done ? (
             <Button size="sm" variant="ghost" onClick={onReopen} aria-label="Genåbn">
               <RotateCcw className="h-4 w-4" />
