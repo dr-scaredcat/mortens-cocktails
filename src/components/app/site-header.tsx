@@ -9,6 +9,7 @@ const navItems = [
   { to: "/naesten", label: "Næsten" },
   { to: "/alle", label: "Alle" },
   { to: "/ingredienser", label: "Ingredienser" },
+  { to: "/tilfoej-naeste", label: "Tilføj næste" },
 ] as const;
 
 export function SiteHeader() {

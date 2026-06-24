@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TilfoejNaesteRouteImport } from './routes/tilfoej-naeste'
 import { Route as NaestenRouteImport } from './routes/naesten'
 import { Route as MenukortRouteImport } from './routes/menukort'
 import { Route as IngredienserRouteImport } from './routes/ingredienser'
@@ -19,6 +20,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedBestillingerRouteImport } from './routes/_authenticated/bestillinger'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
+const TilfoejNaesteRoute = TilfoejNaesteRouteImport.update({
+  id: '/tilfoej-naeste',
+  path: '/tilfoej-naeste',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NaestenRoute = NaestenRouteImport.update({
   id: '/naesten',
   path: '/naesten',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/ingredienser': typeof IngredienserRoute
   '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
+  '/tilfoej-naeste': typeof TilfoejNaesteRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/bestillinger': typeof AuthenticatedBestillingerRoute
 }
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/ingredienser': typeof IngredienserRoute
   '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
+  '/tilfoej-naeste': typeof TilfoejNaesteRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/bestillinger': typeof AuthenticatedBestillingerRoute
 }
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/ingredienser': typeof IngredienserRoute
   '/menukort': typeof MenukortRoute
   '/naesten': typeof NaestenRoute
+  '/tilfoej-naeste': typeof TilfoejNaesteRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/bestillinger': typeof AuthenticatedBestillingerRoute
 }
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/ingredienser'
     | '/menukort'
     | '/naesten'
+    | '/tilfoej-naeste'
     | '/admin'
     | '/bestillinger'
   fileRoutesByTo: FileRoutesByTo
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/ingredienser'
     | '/menukort'
     | '/naesten'
+    | '/tilfoej-naeste'
     | '/admin'
     | '/bestillinger'
   id:
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/ingredienser'
     | '/menukort'
     | '/naesten'
+    | '/tilfoej-naeste'
     | '/_authenticated/admin'
     | '/_authenticated/bestillinger'
   fileRoutesById: FileRoutesById
@@ -139,10 +151,18 @@ export interface RootRouteChildren {
   IngredienserRoute: typeof IngredienserRoute
   MenukortRoute: typeof MenukortRoute
   NaestenRoute: typeof NaestenRoute
+  TilfoejNaesteRoute: typeof TilfoejNaesteRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tilfoej-naeste': {
+      id: '/tilfoej-naeste'
+      path: '/tilfoej-naeste'
+      fullPath: '/tilfoej-naeste'
+      preLoaderRoute: typeof TilfoejNaesteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/naesten': {
       id: '/naesten'
       path: '/naesten'
@@ -230,6 +250,7 @@ const rootRouteChildren: RootRouteChildren = {
   IngredienserRoute: IngredienserRoute,
   MenukortRoute: MenukortRoute,
   NaestenRoute: NaestenRoute,
+  TilfoejNaesteRoute: TilfoejNaesteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
