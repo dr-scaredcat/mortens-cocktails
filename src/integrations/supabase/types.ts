@@ -199,6 +199,7 @@ export type Database = {
           image_url: string | null
           instructions: string | null
           name: string
+          on_menu: boolean
         }
         Insert: {
           created_at?: string
@@ -210,6 +211,7 @@ export type Database = {
           image_url?: string | null
           instructions?: string | null
           name: string
+          on_menu?: boolean
         }
         Update: {
           created_at?: string
@@ -221,6 +223,7 @@ export type Database = {
           image_url?: string | null
           instructions?: string | null
           name?: string
+          on_menu?: boolean
         }
         Relationships: []
       }
