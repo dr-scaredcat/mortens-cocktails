@@ -18,6 +18,7 @@ import { AdminCategories } from "@/components/app/admin-categories";
 import { AdminTags } from "@/components/app/admin-tags";
 import { AdminUsers } from "@/components/app/admin-users";
 import { AdminSettings } from "@/components/app/admin-settings";
+import { AdminMenukort } from "@/components/app/admin-menukort";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
@@ -31,6 +32,7 @@ function AdminPage() {
   const TABS = [
     { value: "ingredients", label: "Ingredienser" },
     { value: "cocktails", label: "Cocktails" },
+    { value: "menukort", label: "Menukort" },
     { value: "categories", label: "Kategorier" },
     { value: "tags", label: "Tags" },
     { value: "users", label: "Brugere" },
@@ -70,6 +72,9 @@ function AdminPage() {
             </TabsContent>
             <TabsContent value="cocktails" className="mt-4">
               <AdminCocktails />
+            </TabsContent>
+            <TabsContent value="menukort" className="mt-4">
+              <AdminMenukort />
             </TabsContent>
             <TabsContent value="categories" className="mt-4">
               <AdminCategories />
