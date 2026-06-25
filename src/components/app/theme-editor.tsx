@@ -1,4 +1,4 @@
- import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,18 +95,15 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  const handleOpenChange = useCallback(
-    (o: boolean) => {
-      if (o) {
-        setName(initial?.name ?? "Nyt tema");
-        setColors(initial?.colors ?? DEFAULT_COLORS);
-        setGeneratedPalette([]);
-        setGenerateError(null);
-      }
-      onOpenChange(o);
-    },
-    [initial, onOpenChange],
-  );
+  // Reset state whenever the dialog opens — using the current `initial` prop
+  useEffect(() => {
+    if (open) {
+      setName(initial?.name ?? "Nyt tema");
+      setColors(initial?.colors ?? DEFAULT_COLORS);
+      setGeneratedPalette([]);
+      setGenerateError(null);
+    }
+  }, [open, initial]);
 
   function handleColorChange(key: keyof ThemeColors, hex: string) {
     setColors((prev) => ({ ...prev, [key]: hexToOklch(hex) }));
@@ -150,13 +147,12 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
 
   function handleApplyPalette() {
     if (generatedPalette.length === 0) return;
-    const newColors = paletteToThemeColors(generatedPalette);
-    setColors(newColors);
+    setColors(paletteToThemeColors(generatedPalette));
     setGeneratedPalette([]);
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{initial ? "Rediger tema" : "Nyt tema"}</DialogTitle>
@@ -199,15 +195,13 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                   Tilfældig
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  Genererer en AI-baseret UI-palette
+                  Genererer en tilfældig farvepalette
                 </span>
               </div>
 
               {/* From seed color */}
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Fra startfarve
-                </p>
+                <p className="text-xs font-medium text-muted-foreground">Fra startfarve</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="color"
@@ -298,9 +292,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                         title={group.label}
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium leading-none">
-                          {group.label}
-                        </p>
+                        <p className="text-sm font-medium leading-none">{group.label}</p>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {group.description}
                         </p>
@@ -330,4 +322,4 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
       </DialogContent>
     </Dialog>
   );
-            }
+}
