@@ -202,6 +202,19 @@ export const setCocktailsOnMenu = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const resetCocktailRating = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("cocktail_ratings")
+      .delete()
+      .eq("cocktail_id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // =================== Categories ===================
 
 export const upsertCategory = createServerFn({ method: "POST" })
