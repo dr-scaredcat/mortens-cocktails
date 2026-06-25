@@ -3,12 +3,10 @@ import type { ThemeColors } from "@/lib/themes.functions";
 
 export type RgbColor = [number, number, number];
 
-// Convert RGB [r,g,b] to hex string
 function rgbToHex([r, g, b]: RgbColor): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-// Convert hex to RGB
 function hexToRgb(hex: string): RgbColor {
   const clean = hex.replace("#", "");
   return [
@@ -18,7 +16,6 @@ function hexToRgb(hex: string): RgbColor {
   ];
 }
 
-// Calculate relative luminance (0 = dark, 1 = light)
 function luminance([r, g, b]: RgbColor): number {
   const toLinear = (c: number) => {
     const s = c / 255;
@@ -27,7 +24,6 @@ function luminance([r, g, b]: RgbColor): number {
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
 
-// Calculate saturation (0 = grey, 1 = vivid)
 function saturation([r, g, b]: RgbColor): number {
   const max = Math.max(r, g, b) / 255;
   const min = Math.min(r, g, b) / 255;
@@ -36,43 +32,28 @@ function saturation([r, g, b]: RgbColor): number {
   return l > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min);
 }
 
-/**
- * Map 5 palette colors (sorted dark→light by luminance) to 12 theme groups.
- *
- * Index 0 = darkest, index 4 = lightest
- * [dark, dark-mid, mid, light-mid, lightest]
- */
 function mapPaletteToTheme(palette: RgbColor[]): ThemeColors {
-  // Sort by luminance ascending (darkest first)
   const sorted = [...palette].sort((a, b) => luminance(a) - luminance(b));
 
-  // Find the most saturated color to use as primary
   const mostSaturatedIdx = sorted.reduce(
     (bestIdx, color, idx) =>
       saturation(color) > saturation(sorted[bestIdx]) ? idx : bestIdx,
     0,
   );
 
-  // Assign roles based on luminance position
   const darkest = sorted[0];
   const darkMid = sorted[1];
   const mid = sorted[2];
   const lightMid = sorted[3];
   const lightest = sorted[4];
 
-  // Primary: most saturated color
   const primary = sorted[mostSaturatedIdx];
-
-  // Primary foreground: if primary is dark use lightest, else darkest
   const primaryForeground = luminance(primary) < 0.4 ? lightest : darkest;
 
-  // Destructive: pick a warm/reddish tone if available, else use darkMid
   const destructive = sorted.find(([r, , b]) => r > 150 && r > b * 1.3) ?? darkMid;
   const destructiveForeground = luminance(destructive) < 0.4 ? lightest : darkest;
 
-  // Accent: the color most different from primary
-  const accent =
-    sorted.find((c) => c !== primary && saturation(c) > 0.1) ?? mid;
+  const accent = sorted.find((c) => c !== primary && saturation(c) > 0.1) ?? mid;
   const accentForeground = luminance(accent) < 0.4 ? lightest : darkest;
 
   return {
@@ -91,26 +72,30 @@ function mapPaletteToTheme(palette: RgbColor[]): ThemeColors {
   };
 }
 
+const SCHEME_MODES = ["analogic", "complement", "analogic-complement", "triad"] as const;
+
 /**
- * Generate a random UI-optimized palette using Colormind
- * Returns 5 hex colors
+ * Generate a random palette by:
+ * 1. Fetching a random color from The Color API
+ * 2. Using that as seed for a randomly chosen scheme mode
  */
 export async function generateRandomPalette(): Promise<string[]> {
-  const response = await fetch("http://colormind.io/api/", {
-    method: "POST",
-    body: JSON.stringify({ model: "ui" }),
-  });
+  // Step 1: get a random seed color
+  const randomRes = await fetch("https://www.thecolorapi.com/random?format=json");
+  if (!randomRes.ok) throw new Error("Kunne ikke hente tilfældig farve");
 
-  if (!response.ok) throw new Error("Kunne ikke hente palette fra Colormind");
+  const randomData = await randomRes.json() as { hex: { clean: string } };
+  const seedHex = randomData.hex.clean;
 
-  const data = await response.json() as { result: RgbColor[] };
-  return data.result.map(rgbToHex);
+  // Step 2: pick a random scheme mode
+  const mode = SCHEME_MODES[Math.floor(Math.random() * SCHEME_MODES.length)];
+
+  // Step 3: generate a scheme from that seed
+  return generatePaletteFromColor(`#${seedHex}`, mode);
 }
 
 /**
  * Generate a palette from a seed color using The Color API
- * scheme: "analogic" | "complement" | "analogic-complement" | "triad"
- * Returns 5 hex colors
  */
 export async function generatePaletteFromColor(
   hex: string,
@@ -134,7 +119,6 @@ export async function generatePaletteFromColor(
  */
 export function paletteToThemeColors(hexColors: string[]): ThemeColors {
   const rgbColors = hexColors.slice(0, 5).map(hexToRgb);
-  // Pad to 5 if fewer colors
   while (rgbColors.length < 5) rgbColors.push(rgbColors[rgbColors.length - 1]);
   return mapPaletteToTheme(rgbColors);
 }
