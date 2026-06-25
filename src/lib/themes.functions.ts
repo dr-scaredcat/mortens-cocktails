@@ -18,7 +18,7 @@ async function assertAdmin(ctx: { supabase: any; userId: string }) {
     _role: "admin",
   });
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Kun administratorer kan udfoere denne handling");
+  if (!data) throw new Error("Kun administratorer kan udføre denne handling");
 }
 
 export type ThemeColors = {
@@ -40,13 +40,13 @@ export type Theme = {
   id: string;
   name: string;
   colors: ThemeColors;
-  builtIn?: boolean;
+  isBuiltIn?: boolean;
 };
 
-export const LIGHT_THEME: Theme = {
+export const DEFAULT_LIGHT_THEME: Theme = {
   id: "built-in-light",
   name: "Lys",
-  builtIn: true,
+  isBuiltIn: true,
   colors: {
     background: "oklch(0.97 0.025 75)",
     card: "oklch(0.99 0.015 80)",
@@ -63,10 +63,10 @@ export const LIGHT_THEME: Theme = {
   },
 };
 
-export const DARK_THEME: Theme = {
+export const DEFAULT_DARK_THEME: Theme = {
   id: "built-in-dark",
-  name: "Moerk",
-  builtIn: true,
+  name: "Mørk",
+  isBuiltIn: true,
   colors: {
     background: "oklch(0.129 0.042 264.695)",
     card: "oklch(0.208 0.042 265.755)",
@@ -83,7 +83,7 @@ export const DARK_THEME: Theme = {
   },
 };
 
-export const DEFAULT_THEMES: Theme[] = [LIGHT_THEME, DARK_THEME];
+const DEFAULT_THEMES: Theme[] = [DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME];
 
 const themeColorsSchema = z.object({
   background: z.string().min(1),
@@ -104,15 +104,17 @@ const themeSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(60),
   colors: themeColorsSchema,
-  builtIn: z.boolean().optional(),
+  isBuiltIn: z.boolean().optional(),
 });
 
-export type ThemeSettings = {
+export type ThemesData = {
   themes: Theme[];
   activeThemeId: string;
 };
 
-async function getThemeSettingsFromDb(sb: ReturnType<typeof publicClient>): Promise<ThemeSettings> {
+async function getThemeSettingsFromDb(
+  sb: ReturnType<typeof publicClient>,
+): Promise<ThemesData> {
   const { data, error } = await sb
     .from("app_settings")
     .select("key, value")
@@ -138,21 +140,19 @@ async function getThemeSettingsFromDb(sb: ReturnType<typeof publicClient>): Prom
   return { themes, activeThemeId };
 }
 
-export const getThemes = createServerFn({ method: "GET" }).handler(async () => {
+export const getThemesData = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
   return getThemeSettingsFromDb(sb);
 });
 
 export const setActiveTheme = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { themeId: string }) =>
-    z.object({ themeId: z.string().min(1) }).parse(d),
-  )
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
       .from("app_settings")
-      .upsert({ key: "active_theme", value: data.themeId as unknown as never });
+      .upsert({ key: "active_theme", value: data.id as unknown as never });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -182,21 +182,19 @@ export const saveTheme = createServerFn({ method: "POST" })
 
 export const deleteTheme = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { themeId: string }) =>
-    z.object({ themeId: z.string().min(1) }).parse(d),
-  )
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().min(1) }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
     const { themes, activeThemeId } = await getThemeSettingsFromDb(sb);
 
-    const updated = themes.filter((t) => t.id !== data.themeId);
+    const updated = themes.filter((t) => t.id !== data.id);
     const { error } = await sb
       .from("app_settings")
       .upsert({ key: "themes", value: updated as unknown as never });
     if (error) throw new Error(error.message);
 
-    if (activeThemeId === data.themeId && updated.length > 0) {
+    if (activeThemeId === data.id && updated.length > 0) {
       await sb
         .from("app_settings")
         .upsert({ key: "active_theme", value: updated[0].id as unknown as never });
