@@ -19,6 +19,7 @@ import { AdminTags } from "@/components/app/admin-tags";
 import { AdminUsers } from "@/components/app/admin-users";
 import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
+import { AdminThemes } from "@/components/app/admin-themes";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
@@ -37,6 +38,7 @@ function AdminPage() {
     { value: "tags", label: "Tags" },
     { value: "users", label: "Brugere" },
     { value: "settings", label: "Indstillinger" },
+    { value: "themes", label: "Temaer" },
   ];
 
   return (
@@ -87,6 +89,9 @@ function AdminPage() {
             </TabsContent>
             <TabsContent value="settings" className="mt-4">
               <AdminSettings />
+            </TabsContent>
+            <TabsContent value="themes" className="mt-4">
+              <AdminThemes />
             </TabsContent>
           </Tabs>
         )}
