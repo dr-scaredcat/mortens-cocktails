@@ -95,7 +95,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  // Reset state whenever the dialog opens — using the current `initial` prop
+  // Reset state whenever the dialog opens with the correct initial prop
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "Nyt tema");
