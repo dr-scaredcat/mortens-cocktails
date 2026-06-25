@@ -18,6 +18,9 @@ import { ThemePreview } from "@/components/app/theme-preview";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Check } from "lucide-react";
 
+// Single state object ensures theme and open flag always update atomically
+type EditorState = { open: false } | { open: true; theme: Theme | null };
+
 export function AdminThemes() {
   const qc = useQueryClient();
   const fetchThemes = useServerFn(getThemesData);
@@ -30,8 +33,7 @@ export function AdminThemes() {
     queryFn: () => fetchThemes(),
   });
 
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingTheme, setEditingTheme] = useState<Theme | null>(null);
+  const [editor, setEditor] = useState<EditorState>({ open: false });
   const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
 
   const themes = data?.themes ?? [DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME];
@@ -41,7 +43,7 @@ export function AdminThemes() {
     mutationFn: (theme: Theme) => saveFn({ data: theme }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["themes"] });
-      setEditorOpen(false);
+      setEditor({ open: false });
       toast.success("Tema gemt");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -66,19 +68,17 @@ export function AdminThemes() {
   });
 
   function openNew() {
-    setEditingTheme(null);
-    setEditorOpen(true);
+    setEditor({ open: true, theme: null });
   }
 
   function openEdit(theme: Theme) {
-    setEditingTheme(theme);
-    setEditorOpen(true);
+    setEditor({ open: true, theme });
   }
 
   function handleDelete(theme: Theme) {
     if (
       !confirm(
-        `Slet temaet "${theme.name}"?${theme.id === activeThemeId ? " Det aktive tema vil nulstilles til Lys." : ""}`,
+        `Slet temaet "${theme.name}"?${theme.id === activeThemeId ? " Det aktive tema vil nulstilles til det første tilgængelige." : ""}`,
       )
     )
       return;
@@ -115,7 +115,7 @@ export function AdminThemes() {
                   isActive ? "ring-2 ring-primary ring-offset-2" : ""
                 }`}
               >
-                {/* Mini preview */}
+                {/* Mini preview — click to expand */}
                 <button
                   type="button"
                   className="w-full text-left"
@@ -132,17 +132,13 @@ export function AdminThemes() {
                 </button>
 
                 <div className="border-t border-border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-medium truncate">{theme.name}</span>
-                        {isActive && (
-                          <Badge className="bg-primary/15 text-primary hover:bg-primary/15 text-xs">
-                            Aktiv
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-medium truncate">{theme.name}</span>
+                    {isActive && (
+                      <Badge className="bg-primary/15 text-primary hover:bg-primary/15 text-xs">
+                        Aktiv
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="mt-3 flex gap-1.5 flex-wrap">
@@ -201,9 +197,9 @@ export function AdminThemes() {
       )}
 
       <ThemeEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        initial={editingTheme}
+        open={editor.open}
+        onOpenChange={(o) => { if (!o) setEditor({ open: false }); }}
+        initial={editor.open ? editor.theme : null}
         onSave={(theme) => saveMutation.mutate(theme)}
       />
     </div>
