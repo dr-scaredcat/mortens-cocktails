@@ -1,46 +1,40 @@
-## Mål
+# Admin: Menukort-fane
 
-Tilføj en ny fane "Tilføj næste" i topnavigationen, som viser ingredienser rangeret efter hvor meget de udvider menukortet, hvis man tilføjer dem til barskabet.
+Tilføj en ny fane "Menukort" i admin-dropdownen, hvor man styrer hvilke af de aktuelt mulige cocktails der vises for gæsterne på `/menukort`.
 
-## Ny side: `/tilfoej-naeste`
+## Funktionalitet
 
-- Ny route-fil: `src/routes/tilfoej-naeste.tsx`.
-- Tilføjes som ny fane i `src/components/app/site-header.tsx` mellem "Ingredienser" og resten.
-- Genbruger `listCocktails` server-funktionen (allerede leveret med `missing` pr. cocktail).
+- Listen viser kun cocktails der lige nu er mulige at lave (alle ingredienser krydset af).
+- Hver række: navn + checkbox. Ingen billeder, opskrifter eller andre felter.
+- Øverst: knapperne **Vælg alle** og **Fravælg alle**.
+- Standard: nye cocktails er valgt til menukortet. Admin kan fravælge.
+- `/menukort` filtreres så kun mulige cocktails med flueben vises.
 
-## Beregning
+## Teknisk
 
-For hver ingrediens `i` som ikke allerede er tilgængelig:
+**Database (migration)**
+- Tilføj `on_menu boolean not null default true` på `cocktails`.
+- Ingen ændringer i RLS/grants — eksisterende policies dækker kolonnen.
 
-- **Bliver klar**: antal cocktails hvor `missing == [i.name]` (dvs. den eneste manglende ingrediens).
-- **Bruger ingrediensen**: antal cocktails hvor ingrediensen indgår OG er markeret som ikke-tilgængelig i den cocktail (dvs. den ville rykke cocktailen tættere på klar).
+**Backend (`src/lib/cocktails.functions.ts`)**
+- Inkludér `on_menu` i `CocktailWithDetails` og i `listCocktails`-select.
+- Ny server function `setCocktailOnMenu({ id, onMenu })` beskyttet med `requireSupabaseAuth` + admin-tjek (følg mønster fra øvrige admin-functions).
+- Ny `setCocktailsOnMenuBulk({ ids, onMenu })` til Vælg/Fravælg alle.
 
-Tilgængelige ingredienser vises ikke på listen (de tilfører 0).
+**Admin (`src/components/app/admin-cocktails.tsx`-sibling: ny `admin-menukort.tsx`)**
+- `useQuery(["cocktails"])` via `listCocktails`, filtrér til `missing.length === 0`.
+- Render som simpel liste med `Checkbox` pr. række.
+- Knapper "Vælg alle"/"Fravælg alle" kalder bulk-mutation på de viste id'er.
+- `useMutation` med invalidate på `["cocktails"]`.
 
-## UI
+**Admin route (`src/routes/_authenticated/admin.tsx`)**
+- Tilføj tab-værdi `"menukort"` med label "Menukort" i både Tabs og Select.
+- Render `<AdminMenukort />` når aktiv.
 
-```text
-[ Vælg tælle-tilstand ]
-( • Bliver klar )  ( Bruger ingrediensen )
+**Menukort (`src/routes/menukort.tsx`)**
+- I `filtered`-memo: tilføj `c.on_menu !== false` til filteret (ud over eksisterende tilgængeligheds-check).
 
-GIN              ── 7 cocktails
-LIME             ── 4 cocktails
-…
-```
-
-- Skift mellem de to tilstande med en toggle/segmented control øverst.
-- Liste sorteret faldende efter tal; ingredienser med 0 skjules.
-- Hver række er klikbar → åbner en dialog/expander der lister navnene på de cocktails ingrediensen "låser op" eller bidrager til (baseret på valgte tilstand).
-- Cocktail-navnene i dialogen er ren tekst (ingen bestil-knap).
-- Gruppering pr. kategori er ikke nødvendig — flad sorteret liste er mere brugbar her.
-
-## Tekniske detaljer
-
-- Ingen ændringer i databasen eller server-funktioner; al beregning sker client-side ud fra `listCocktails`.
-- `queryKey: ["cocktails"]` genbruges, så data er allerede cachet hvis man har besøgt en anden side.
-- Klik-dialog kan bruge eksisterende shadcn `Dialog`.
-
-## Filer der ændres / oprettes
-
-- **Ny**: `src/routes/tilfoej-naeste.tsx`
-- **Ændret**: `src/components/app/site-header.tsx` (tilføj nav-item)
+## Filer
+- Migration: ny SQL der tilføjer `on_menu`-kolonnen.
+- Edit: `src/lib/cocktails.functions.ts`, `src/routes/_authenticated/admin.tsx`, `src/routes/menukort.tsx`.
+- Ny: `src/components/app/admin-menukort.tsx`.

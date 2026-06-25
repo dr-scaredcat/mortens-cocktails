@@ -1,0 +1,1 @@
+ALTER TABLE public.cocktails ADD COLUMN IF NOT EXISTS on_menu boolean NOT NULL DEFAULT true;

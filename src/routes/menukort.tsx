@@ -43,7 +43,7 @@ function MenukortPage() {
 
   const filtered = useMemo(() => {
     const list = (data ?? []) as CocktailWithDetails[];
-    let f = list.filter((c) => c.missing.length === 0);
+    let f = list.filter((c) => c.missing.length === 0 && c.on_menu !== false);
     if (tags.length > 0) f = f.filter((c) => tags.every((t) => c.tags.includes(t)));
     if (q.trim()) {
       const s = q.trim().toLowerCase();

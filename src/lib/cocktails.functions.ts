@@ -25,6 +25,7 @@ export type CocktailWithDetails = {
   glass: string | null;
   garnish: string | null;
   instructions: string | null;
+  on_menu: boolean;
   tags: string[];
   ingredients: {
     ingredient_id: string;
@@ -124,6 +125,7 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
       glass: c.glass,
       garnish: c.garnish,
       instructions: c.instructions,
+      on_menu: (c as { on_menu?: boolean }).on_menu ?? true,
       tags,
       ingredients: items,
       missing,
