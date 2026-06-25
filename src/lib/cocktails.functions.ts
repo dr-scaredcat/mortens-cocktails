@@ -3,11 +3,17 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 function publicClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_PUBLISHABLE_KEY!,
-    { auth: { storage: undefined, persistSession: false, autoRefreshToken: false } },
-  );
+  const url =
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
+    process.env.SUPABASE_URL ||
+    "https://dkvrwwpbaarfyqyrnhha.supabase.co";
+  const key =
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    "sb_publishable_NsAPFaHuYb2mQbejaLy9WQ_BtLxx8ri";
+  return createClient<Database>(url, key, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export type IngredientRow = {
