@@ -11,6 +11,7 @@ import {
   deleteCocktail,
   fetchCocktailDbImage,
   backfillCocktailImages,
+  resetCocktailRating,
 } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,6 +84,7 @@ export function AdminCocktails() {
   const save = useServerFn(saveCocktail);
   const del = useServerFn(deleteCocktail);
   const backfill = useServerFn(backfillCocktailImages);
+  const resetRating = useServerFn(resetCocktailRating);
 
   const { data: cocktails } = useQuery({
     queryKey: ["cocktails"],
@@ -122,6 +124,16 @@ export function AdminCocktails() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["cocktails"] });
       toast.success(`Opdateret ${r.updated} cocktails${r.missing ? ` (${r.missing} ikke fundet)` : ""}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const resetRatingM = useMutation({
+    mutationFn: (id: string) => resetRating({ data: { id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cocktails"] });
+      qc.invalidateQueries({ queryKey: ["my-ratings"] });
+      toast.success("Rating nulstillet");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -207,6 +219,20 @@ export function AdminCocktails() {
               tagNames={(tags ?? []).map((t) => t.name)}
             />
             <DialogFooter>
+              {form.id && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (confirm(`Nulstil alle vurderinger for ${form.name}?`)) {
+                      resetRatingM.mutate(form.id!);
+                    }
+                  }}
+                  disabled={resetRatingM.isPending}
+                  className="mr-auto"
+                >
+                  Nulstil rating
+                </Button>
+              )}
               <Button variant="ghost" onClick={() => setOpen(false)}>
                 Annullér
               </Button>
