@@ -1,5 +1,7 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { SiteHeader } from "@/components/app/site-header";
 import { useSession } from "@/hooks/use-session";
+import { getSignupEnabled } from "@/lib/orders.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/auth")({
@@ -25,6 +28,18 @@ function AuthPage() {
   const router = useRouter();
   const { session } = useSession();
 
+  const fetchSignup = useServerFn(getSignupEnabled);
+  const { data: signupData } = useQuery({
+    queryKey: ["signup-enabled"],
+    queryFn: () => fetchSignup(),
+  });
+  const signupEnabled = signupData?.enabled ?? true; // default til true mens den loader
+
+  // Hvis signup pludselig slås fra og brugeren er i signup-mode, skift til signin
+  useEffect(() => {
+    if (!signupEnabled && mode === "signup") setMode("signin");
+  }, [signupEnabled, mode]);
+
   useEffect(() => {
     if (session) navigate({ to: "/admin" });
   }, [session, navigate]);
@@ -34,6 +49,10 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
+        if (!signupEnabled) {
+          toast.error("Oprettelse af nye brugere er ikke tilladt.");
+          return;
+        }
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -62,7 +81,9 @@ function AuthPage() {
             {mode === "signin" ? "Log ind" : "Opret konto"}
           </h1>
           <p className="mb-5 text-sm text-muted-foreground">
-            Den første bruger bliver automatisk administrator.
+            {mode === "signin"
+              ? "Log ind med din konto."
+              : "Den første bruger bliver automatisk administrator."}
           </p>
           <form onSubmit={submit} className="space-y-3">
             <div>
@@ -90,13 +111,19 @@ function AuthPage() {
               {mode === "signin" ? "Log ind" : "Opret konto"}
             </Button>
           </form>
-          <button
-            type="button"
-            onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-            className="mt-4 w-full text-center text-sm text-muted-foreground underline-offset-2 hover:underline"
-          >
-            {mode === "signin" ? "Har du ikke en konto? Opret en" : "Har du allerede en konto? Log ind"}
-          </button>
+
+          {/* Skjul skift til signup hvis det er slået fra */}
+          {signupEnabled && (
+            <button
+              type="button"
+              onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+              className="mt-4 w-full text-center text-sm text-muted-foreground underline-offset-2 hover:underline"
+            >
+              {mode === "signin"
+                ? "Har du ikke en konto? Opret en"
+                : "Har du allerede en konto? Log ind"}
+            </button>
+          )}
         </Card>
       </main>
     </div>

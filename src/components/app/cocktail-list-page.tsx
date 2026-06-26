@@ -41,7 +41,10 @@ export function CocktailListPage({
           c.ingredients.some((i) => i.name.toLowerCase().includes(s)),
       );
     }
-    return [...f].sort((a, b) => a.missing.length - b.missing.length || a.name.localeCompare(b.name));
+    // missing.length er primær sortering; admin position bruges som tiebreaker
+    return [...f].sort(
+      (a, b) => a.missing.length - b.missing.length || (a.position ?? 0) - (b.position ?? 0),
+    );
   }, [data, mode, tags, q]);
 
   return (

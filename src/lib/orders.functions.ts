@@ -136,3 +136,33 @@ export const setOrderingEnabled = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// Signup er slået til som default (ingen row i app_settings = tilladt)
+export const getSignupEnabled = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "signup_enabled")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    // Ingen row => default til true
+    if (!data) return { enabled: true };
+    const v = data.value;
+    return { enabled: v !== false && v !== "false" };
+  });
+
+export const setSignupEnabled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { enabled: boolean }) =>
+    z.object({ enabled: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "signup_enabled", value: data.enabled as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

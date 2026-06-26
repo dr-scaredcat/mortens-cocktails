@@ -13,24 +13,24 @@ import { Shuffle, Wand2, Loader2, RotateCcw } from "lucide-react";
 const COLOR_GROUPS: { key: keyof ThemeColors; label: string; description: string }[] = [
   { key: "background", label: "Baggrund", description: "Sidens baggrund" },
   { key: "card", label: "Kort og overflader", description: "Kortbaggrund, dropdowns, tooltips" },
-  { key: "foreground", label: "Tekst", description: "Primaer tekst, korttekst" },
-  { key: "primary", label: "Primaer", description: "Knapper, aktive links, badges, focus-ring" },
-  { key: "primaryForeground", label: "Primaer tekst", description: "Tekst oven paa primaerfarve" },
-  { key: "muted", label: "Daempet", description: "Hover-baggrunde, inputfelter" },
-  { key: "mutedForeground", label: "Daempet tekst", description: "Hjaelpetekst og ikoner" },
-  { key: "accent", label: "Accent", description: "Highlights, sekundaere badges" },
-  { key: "accentForeground", label: "Accent tekst", description: "Tekst oven paa accent-farve" },
+  { key: "foreground", label: "Tekst", description: "Primær tekst, korttekst" },
+  { key: "primary", label: "Primær", description: "Knapper, aktive links, badges, focus-ring" },
+  { key: "primaryForeground", label: "Primær tekst", description: "Tekst oven på primærfarve" },
+  { key: "muted", label: "Dæmpet", description: "Hover-baggrunde, inputfelter" },
+  { key: "mutedForeground", label: "Dæmpet tekst", description: "Hjælpetekst og ikoner" },
+  { key: "accent", label: "Accent", description: "Highlights, sekundære badges" },
+  { key: "accentForeground", label: "Accent tekst", description: "Tekst oven på accent-farve" },
   { key: "border", label: "Kant", description: "Alle kanter og streger" },
   { key: "destructive", label: "Fejl", description: "Slet-knapper og fejlbeskeder" },
-  { key: "destructiveForeground", label: "Fejl tekst", description: "Tekst oven paa fejlfarve" },
+  { key: "destructiveForeground", label: "Fejl tekst", description: "Tekst oven på fejlfarve" },
 ];
 
 type SchemeMode = "analogic" | "complement" | "analogic-complement" | "triad";
 
 const SCHEME_LABELS: Record<SchemeMode, string> = {
   analogic: "Analogt",
-  complement: "Komplementaer",
-  "analogic-complement": "Analogt + komplementaer",
+  complement: "Komplementær",
+  "analogic-complement": "Analogt + komplementær",
   triad: "Triade",
 };
 
@@ -106,7 +106,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
     try {
       setGeneratedPalette(await generateRandomPalette());
     } catch {
-      setGenerateError("Kunne ikke hente tilfaeldig palette. Proev igen.");
+      setGenerateError("Kunne ikke hente tilfældig palette. Prøv igen.");
     } finally {
       setIsGenerating(false);
     }
@@ -118,7 +118,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
     try {
       setGeneratedPalette(await generatePaletteFromColor(seedColor, schemeMode));
     } catch {
-      setGenerateError("Kunne ikke hente palette. Proev igen.");
+      setGenerateError("Kunne ikke hente palette. Prøv igen.");
     } finally {
       setIsGenerating(false);
     }
@@ -165,11 +165,11 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
                   className="shrink-0"
                 >
                   {isGenerating ? spinnerIcon : shuffleIcon}
-                  Tilfaeldig
+                  Tilfældig
                 </Button>
               </div>
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Eller vaelg en farve som udgangspunkt</p>
+                <p className="text-xs text-muted-foreground">Eller vælg en farve som udgangspunkt</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="color"
@@ -245,7 +245,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-medium">Forhaandsvisning</p>
+            <p className="text-sm font-medium">Forhåndsvisning</p>
             <div className="sticky top-4">
               <ThemePreview colors={colors} />
             </div>
@@ -272,4 +272,4 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
       </DialogContent>
     </Dialog>
   );
-} 
+}

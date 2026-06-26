@@ -32,6 +32,7 @@ export type CocktailWithDetails = {
   garnish: string | null;
   instructions: string | null;
   on_menu: boolean;
+  position: number;
   tags: string[];
   ingredients: {
     ingredient_id: string;
@@ -82,18 +83,22 @@ export const listTags = createServerFn({ method: "GET" }).handler(async () => {
 
 export const listCocktails = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
-  const [cocktailsRes, ciRes, ingRes, tagsRes, ratingsRes] = await Promise.all([
-    sb.from("cocktails").select("*").order("name"),
+  const [cocktailsRes, ciRes, ingRes, tagsRes, ratingsRes, tagListRes] = await Promise.all([
+    sb.from("cocktails").select("*").order("position").order("name"),
     sb.from("cocktail_ingredients").select("cocktail_id, ingredient_id, amount, unit, position"),
     sb.from("ingredients").select("id, name, available"),
     sb.from("cocktail_tags").select("cocktail_id, tag"),
     sb.from("cocktail_ratings").select("cocktail_id, rating"),
+    sb.from("tags").select("name, position").order("position"),
   ]);
   if (cocktailsRes.error) throw new Error(cocktailsRes.error.message);
   if (ciRes.error) throw new Error(ciRes.error.message);
   if (ingRes.error) throw new Error(ingRes.error.message);
   if (tagsRes.error) throw new Error(tagsRes.error.message);
   if (ratingsRes.error) throw new Error(ratingsRes.error.message);
+  if (tagListRes.error) throw new Error(tagListRes.error.message);
+
+  const tagOrder = new Map((tagListRes.data ?? []).map((t) => [t.name, t.position]));
 
   const ratingMap = new Map<string, { sum: number; count: number }>();
   for (const r of ratingsRes.data ?? []) {
@@ -121,7 +126,8 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
     const missing = items.filter((i) => !i.available).map((i) => i.name);
     const tags = (tagsRes.data ?? [])
       .filter((t) => t.cocktail_id === c.id)
-      .map((t) => t.tag);
+      .map((t) => t.tag)
+      .sort((a, b) => (tagOrder.get(a) ?? 999) - (tagOrder.get(b) ?? 999));
     const agg = ratingMap.get(c.id);
     return {
       id: c.id,
@@ -131,7 +137,8 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
       glass: c.glass,
       garnish: c.garnish,
       instructions: c.instructions,
-      on_menu: (c as { on_menu?: boolean }).on_menu ?? true,
+      on_menu: (c as any).on_menu ?? true,
+      position: (c as any).position ?? 0,
       tags,
       ingredients: items,
       missing,
@@ -180,3 +187,20 @@ export const getMyRatings = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return (rows ?? []) as { cocktail_id: string; rating: number }[];
   });
+
+export type GlassRow = { id: string; name: string };
+export type GarnishRow = { id: string; name: string };
+
+export const listGlasses = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const { data, error } = await sb.from("glasses").select("id, name").order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GlassRow[];
+});
+
+export const listGarnishes = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const { data, error } = await sb.from("garnishes").select("id, name").order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GarnishRow[];
+});

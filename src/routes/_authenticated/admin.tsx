@@ -14,12 +14,11 @@ import { useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
-import { AdminCategories } from "@/components/app/admin-categories";
 import { AdminTags } from "@/components/app/admin-tags";
-import { AdminUsers } from "@/components/app/admin-users";
 import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
-import { AdminThemes } from "@/components/app/admin-themes";
+import { AdminGlasses } from "@/components/app/admin-glasses";
+import { AdminGarnishes } from "@/components/app/admin-garnishes";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
@@ -29,16 +28,16 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const check = useServerFn(isAdmin);
   const { data, isLoading } = useQuery({ queryKey: ["isAdmin"], queryFn: () => check() });
-  const [tab, setTab] = useState("ingredients");
+  const [tab, setTab] = useState("menukort");
+
   const TABS = [
-    { value: "ingredients", label: "Ingredienser" },
-    { value: "cocktails", label: "Cocktails" },
-    { value: "menukort", label: "Menukort" },
-    { value: "categories", label: "Kategorier" },
-    { value: "tags", label: "Tags" },
-    { value: "users", label: "Brugere" },
-    { value: "settings", label: "Indstillinger" },
-    { value: "themes", label: "Temaer" },
+    { value: "menukort",     label: "Menukort" },
+    { value: "cocktails",    label: "Cocktails" },
+    { value: "ingredients",  label: "Ingredienser" },
+    { value: "tags",         label: "Tags" },
+    { value: "glasses",      label: "Glas" },
+    { value: "garnishes",    label: "Pynt" },
+    { value: "settings",     label: "Indstillinger" },
   ];
 
   return (
@@ -58,7 +57,7 @@ function AdminPage() {
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
             <Select value={tab} onValueChange={setTab}>
-              <SelectTrigger className="w-full sm:max-w-xs">
+              <SelectTrigger className="mb-6 w-52">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -69,29 +68,27 @@ function AdminPage() {
                 ))}
               </SelectContent>
             </Select>
-            <TabsContent value="ingredients" className="mt-4">
-              <AdminIngredients />
-            </TabsContent>
-            <TabsContent value="cocktails" className="mt-4">
-              <AdminCocktails />
-            </TabsContent>
-            <TabsContent value="menukort" className="mt-4">
+
+            <TabsContent value="menukort">
               <AdminMenukort />
             </TabsContent>
-            <TabsContent value="categories" className="mt-4">
-              <AdminCategories />
+            <TabsContent value="cocktails">
+              <AdminCocktails />
             </TabsContent>
-            <TabsContent value="tags" className="mt-4">
+            <TabsContent value="ingredients">
+              <AdminIngredients />
+            </TabsContent>
+            <TabsContent value="tags">
               <AdminTags />
             </TabsContent>
-            <TabsContent value="users" className="mt-4">
-              <AdminUsers />
+            <TabsContent value="glasses">
+              <AdminGlasses />
             </TabsContent>
-            <TabsContent value="settings" className="mt-4">
+            <TabsContent value="garnishes">
+              <AdminGarnishes />
+            </TabsContent>
+            <TabsContent value="settings">
               <AdminSettings />
-            </TabsContent>
-            <TabsContent value="themes" className="mt-4">
-              <AdminThemes />
             </TabsContent>
           </Tabs>
         )}
