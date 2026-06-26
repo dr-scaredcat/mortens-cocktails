@@ -3,6 +3,9 @@ import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Wine, LogOut, Shield, ClipboardList } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getSiteName, DEFAULT_SITE_NAME } from "@/lib/orders.functions";
 
 const navItems = [
   { to: "/", label: "Klar" },
@@ -14,12 +17,20 @@ const navItems = [
 
 export function SiteHeader() {
   const { session } = useSession();
+  const fetchSiteName = useServerFn(getSiteName);
+  const { data: siteNameData } = useQuery({
+    queryKey: ["site-name"],
+    queryFn: () => fetchSiteName(),
+    staleTime: 1000 * 60 * 5, // 5 min cache
+  });
+  const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
+
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
         <Link to="/" className="flex items-center gap-2 font-serif text-lg tracking-tight">
           <Wine className="h-5 w-5 text-primary" />
-          <span>Barskab</span>
+          <span>{siteName}</span>
         </Link>
         <div className="flex items-center gap-1">
           {session ? (
