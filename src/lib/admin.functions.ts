@@ -78,6 +78,30 @@ export const deleteIngredient = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteUnusedIngredients = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    const { data: used, error: usedErr } = await sb
+      .from("cocktail_ingredients")
+      .select("ingredient_id");
+    if (usedErr) throw new Error(usedErr.message);
+    const usedIds: string[] = (used ?? []).map(
+      (r: { ingredient_id: string }) => r.ingredient_id,
+    );
+    if (usedIds.length === 0) {
+      const { error, count } = await (sb.from("ingredients").delete().not("id", "is", null) as any).select("id");
+      if (error) throw new Error(error.message);
+      return { deleted: count ?? 0 };
+    }
+    const { error, count } = await (
+      sb.from("ingredients").delete().not("id", "in", `(${usedIds.join(",")})`) as any
+    ).select("id");
+    if (error) throw new Error(error.message);
+    return { deleted: count ?? 0 };
+  });
+
 const cocktailInput = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1).max(120),
