@@ -87,15 +87,12 @@ function colorToHex(value: string): string {
 export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
   const [name, setName] = useState(initial?.name ?? "Nyt tema");
   const [colors, setColors] = useState<ThemeColors>(initial?.colors ?? DEFAULT_COLORS);
-
-  // Palette generator state
   const [generatedPalette, setGeneratedPalette] = useState<string[]>([]);
   const [seedColor, setSeedColor] = useState("#c94a3a");
   const [schemeMode, setSchemeMode] = useState<SchemeMode>("analogic-complement");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
-  // Reset state whenever the dialog opens with the correct initial prop
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "Nyt tema");
@@ -110,21 +107,19 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
   }
 
   function handleSave() {
-    const theme: Theme = {
-      id: initial?.id ?? `custom-${Date.now()}`,
+    onSave({
+      id: initial?.id ?? "custom-" + Date.now(),
       name: name.trim() || "Nyt tema",
       colors,
       isBuiltIn: initial?.isBuiltIn,
-    };
-    onSave(theme);
+    });
   }
 
   async function handleRandomPalette() {
     setIsGenerating(true);
     setGenerateError(null);
     try {
-      const palette = await generateRandomPalette();
-      setGeneratedPalette(palette);
+      setGeneratedPalette(await generateRandomPalette());
     } catch {
       setGenerateError("Kunne ikke hente tilfældig palette. Prøv igen.");
     } finally {
@@ -136,8 +131,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
     setIsGenerating(true);
     setGenerateError(null);
     try {
-      const palette = await generatePaletteFromColor(seedColor, schemeMode);
-      setGeneratedPalette(palette);
+      setGeneratedPalette(await generatePaletteFromColor(seedColor, schemeMode));
     } catch {
       setGenerateError("Kunne ikke hente palette. Prøv igen.");
     } finally {
@@ -159,9 +153,9 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
         </DialogHeader>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Left: controls */}
           <div className="space-y-5">
-            {/* Theme name */}
+
+            {/* Temanavn */}
             <div>
               <Label htmlFor="theme-name">Temanavn</Label>
               <Input
@@ -177,7 +171,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
             <div className="rounded-lg border border-border p-4 space-y-4">
               <p className="text-sm font-medium">Generer palette</p>
 
-              {/* Random */}
+              {/* Tilfældig */}
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -187,11 +181,9 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                   disabled={isGenerating}
                   className="shrink-0"
                 >
-                  {isGenerating ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Shuffle className="mr-1.5 h-3.5 w-3.5" />
-                  )}
+                  {isGenerating
+                    ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    : <Shuffle className="mr-1.5 h-3.5 w-3.5" />}
                   Tilfældig
                 </Button>
                 <span className="text-xs text-muted-foreground">
@@ -199,7 +191,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                 </span>
               </div>
 
-              {/* From seed color */}
+              {/* Fra startfarve */}
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Fra startfarve</p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -210,21 +202,16 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                     className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
                     title="Vælg startfarve"
                   />
-                  <Select
-                    value={schemeMode}
-                    onValueChange={(v) => setSchemeMode(v as SchemeMode)}
-                  >
+                  <Select value={schemeMode} onValueChange={(v) => setSchemeMode(v as SchemeMode)}>
                     <SelectTrigger className="h-9 w-48 text-xs">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(SCHEME_LABELS) as [SchemeMode, string][]).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value} className="text-xs">
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {(Object.entries(SCHEME_LABELS) as [SchemeMode, string][]).map(([value, label]) => (
+                        <SelectItem key={value} value={value} className="text-xs">
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Button
@@ -235,22 +222,20 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                     disabled={isGenerating}
                     className="shrink-0"
                   >
-                    {isGenerating ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                    )}
+                    {isGenerating
+                      ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
                     Generer
                   </Button>
                 </div>
               </div>
 
-              {/* Error */}
+              {/* Fejlbesked */}
               {generateError && (
                 <p className="text-xs text-destructive">{generateError}</p>
               )}
 
-              {/* Generated palette preview + apply */}
+              {/* Genereret palette preview */}
               {generatedPalette.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">Genereret palette</p>
@@ -264,47 +249,38 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                       />
                     ))}
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleApplyPalette}
-                    className="w-full"
-                  >
+                  <Button type="button" size="sm" onClick={handleApplyPalette} className="w-full">
                     Anvend palette
                   </Button>
                 </div>
               )}
             </div>
 
-            {/* Color pickers */}
+            {/* Farvevælgere */}
             <div className="space-y-3">
               <p className="text-sm font-medium">Farver</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {COLOR_GROUPS.map((group) => {
-                  const hexValue = colorToHex(colors[group.key]);
-                  return (
-                    <div key={group.key} className="flex items-center gap-3">
-                      <input
-                        type="color"
-                        value={hexValue}
-                        onChange={(e) => handleColorChange(group.key, e.target.value)}
-                        className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                        title={group.label}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium leading-none">{group.label}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {group.description}
-                        </p>
-                      </div>
+                {COLOR_GROUPS.map((group) => (
+                  <div key={group.key} className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={colorToHex(colors[group.key])}
+                      onChange={(e) => handleColorChange(group.key, e.target.value)}
+                      className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+                      title={group.label}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-none">{group.label}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{group.description}</p>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
+
           </div>
 
-          {/* Right: live preview */}
+          {/* Live preview */}
           <div className="space-y-2">
             <p className="text-sm font-medium">Forhåndsvisning</p>
             <div className="sticky top-4">
@@ -314,9 +290,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Annullér
-          </Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Annullér</Button>
           <Button onClick={handleSave}>Gem tema</Button>
         </DialogFooter>
       </DialogContent>
