@@ -180,3 +180,29 @@ export const getMyRatings = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return (rows ?? []) as { cocktail_id: string; rating: number }[];
   });
+// ============================================================
+// PATCH: Tilføj disse exports til bunden af cocktails.functions.ts
+// ============================================================
+
+export type GlassRow = { id: string; name: string };
+export type GarnishRow = { id: string; name: string };
+
+export const listGlasses = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const { data, error } = await sb
+    .from("glasses")
+    .select("id, name")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GlassRow[];
+});
+
+export const listGarnishes = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const { data, error } = await sb
+    .from("garnishes")
+    .select("id, name")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GarnishRow[];
+});
