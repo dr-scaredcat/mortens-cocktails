@@ -86,24 +86,30 @@ export function AdminThemes() {
   }
 
   const previewTheme = previewThemeId
-    ? themes.find((t) => t.id === previewThemeId)
+    ? themes.find((t) => t.id === previewThemeId) ?? null
     : null;
 
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Indlæser temaer…</p>;
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Vælg et tema for alle brugere, eller opret dit eget. Ændringer træder i
-          kraft ved næste sideopdatering.
-        </p>
+        <div>
+          <h2 className="text-lg font-semibold">Temaer</h2>
+          <p className="text-sm text-muted-foreground">
+            Tilpas udseendet af din app med farvetemaer.
+          </p>
+        </div>
         <Button onClick={openNew} size="sm">
-          <Plus className="mr-1 h-4 w-4" />
+          <Plus className="mr-1.5 h-4 w-4" />
           Nyt tema
         </Button>
       </div>
 
-      {isLoading ? (
-        <p className="text-muted-foreground">Indlæser...</p>
+      {themes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Ingen temaer endnu.</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {themes.map((theme) => {
@@ -111,7 +117,7 @@ export function AdminThemes() {
             return (
               <Card
                 key={theme.id}
-                className={`overflow-hidden transition ${
+                className={`overflow-hidden transition-shadow hover:shadow-md ${
                   isActive ? "ring-2 ring-primary ring-offset-2" : ""
                 }`}
               >
@@ -161,14 +167,16 @@ export function AdminThemes() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(theme)}
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {!theme.isBuiltIn && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDelete(theme)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -201,6 +209,17 @@ export function AdminThemes() {
         onOpenChange={(o) => { if (!o) setEditor({ open: false }); }}
         initial={editor.open ? editor.theme : null}
         onSave={(theme) => saveMutation.mutate(theme)}
+        onReset={
+          editor.open && editor.theme?.isBuiltIn
+            ? () => {
+                const defaultTheme =
+                  editor.theme?.id === "built-in-light"
+                    ? DEFAULT_LIGHT_THEME
+                    : DEFAULT_DARK_THEME;
+                saveMutation.mutate(defaultTheme);
+              }
+            : undefined
+        }
       />
     </div>
   );
