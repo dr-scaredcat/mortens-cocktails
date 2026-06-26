@@ -32,6 +32,7 @@ export type CocktailWithDetails = {
   garnish: string | null;
   instructions: string | null;
   on_menu: boolean;
+  position: number;
   tags: string[];
   ingredients: {
     ingredient_id: string;
@@ -83,7 +84,7 @@ export const listTags = createServerFn({ method: "GET" }).handler(async () => {
 export const listCocktails = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
   const [cocktailsRes, ciRes, ingRes, tagsRes, ratingsRes, tagListRes] = await Promise.all([
-    sb.from("cocktails").select("*").order("name"),
+    sb.from("cocktails").select("*").order("position").order("name"),
     sb.from("cocktail_ingredients").select("cocktail_id, ingredient_id, amount, unit, position"),
     sb.from("ingredients").select("id, name, available"),
     sb.from("cocktail_tags").select("cocktail_id, tag"),
@@ -136,7 +137,8 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
       glass: c.glass,
       garnish: c.garnish,
       instructions: c.instructions,
-      on_menu: (c as { on_menu?: boolean }).on_menu ?? true,
+      on_menu: (c as any).on_menu ?? true,
+      position: (c as any).position ?? 0,
       tags,
       ingredients: items,
       missing,
@@ -191,20 +193,14 @@ export type GarnishRow = { id: string; name: string };
 
 export const listGlasses = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
-  const { data, error } = await sb
-    .from("glasses")
-    .select("id, name")
-    .order("name");
+  const { data, error } = await sb.from("glasses").select("id, name").order("name");
   if (error) throw new Error(error.message);
   return (data ?? []) as GlassRow[];
 });
 
 export const listGarnishes = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
-  const { data, error } = await sb
-    .from("garnishes")
-    .select("id, name")
-    .order("name");
+  const { data, error } = await sb.from("garnishes").select("id, name").order("name");
   if (error) throw new Error(error.message);
   return (data ?? []) as GarnishRow[];
 });
