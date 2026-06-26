@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Wine, Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
+import { Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CocktailCard } from "@/components/app/cocktail-card";
 import { TagFilter } from "@/components/app/tag-filter";
+import { SiteHeader } from "@/components/app/site-header";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
@@ -32,7 +33,6 @@ function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
   const [copied, setCopied] = useState(false);
 
   async function handleShare() {
-    // Byg en tekstlig opskrift til deling
     const ingLines = cocktail.ingredients
       .map((i) => {
         const amt = i.amount != null ? `${i.amount}${i.unit ? ` ${i.unit}` : ""}` : i.unit ?? "";
@@ -50,17 +50,15 @@ function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
     const text = parts.join("\n");
     const url = window.location.href;
 
-    // Forsøg Web Share API (mobil/understøttede browsere)
     if (navigator.share) {
       try {
         await navigator.share({ title: cocktail.name, text, url });
         return;
       } catch {
-        // Bruger afviste eller API fejlede — fald tilbage til clipboard
+        // fald tilbage til clipboard
       }
     }
 
-    // Fallback: kopier URL til clipboard
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -129,18 +127,12 @@ function MenukortPage() {
     if (sortMode === "rating") {
       return [...f].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
     }
-    // alpha (default)
     return [...f].sort((a, b) => a.name.localeCompare(b.name, "da"));
   }, [data, tags, q, sortMode]);
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif text-lg tracking-tight">
-          <Wine className="h-5 w-5 text-primary" />
-          <span>Cocktail menu</span>
-        </div>
-      </header>
+      <SiteHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
           <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
@@ -178,7 +170,6 @@ function MenukortPage() {
             onClear={() => setTags([])}
           />
 
-          {/* Sorterings-toggle */}
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -226,7 +217,6 @@ function MenukortPage() {
           </div>
         )}
 
-        {/* Detaljeret kortvisning */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
