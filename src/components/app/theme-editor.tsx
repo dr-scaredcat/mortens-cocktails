@@ -8,7 +8,7 @@ import { ThemePreview } from "@/components/app/theme-preview";
 import type { Theme, ThemeColors } from "@/lib/themes.functions";
 import { oklchToHex, hexToOklch, isOklchString } from "@/lib/color-utils";
 import { generateRandomPalette, generatePaletteFromColor, paletteToThemeColors } from "@/lib/palette-api";
-import { Shuffle, Wand2, Loader2 } from "lucide-react";
+import { Shuffle, Wand2, Loader2, RotateCcw } from "lucide-react";
 
 const COLOR_GROUPS: { key: keyof ThemeColors; label: string; description: string }[] = [
   { key: "background", label: "Baggrund", description: "Sidens baggrund" },
@@ -60,9 +60,10 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   initial: Theme | null;
   onSave: (theme: Theme) => void;
+  onReset?: () => void;
 };
 
-export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
+export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Props) {
   const [name, setName] = useState(initial?.name ?? "Nyt tema");
   const [colors, setColors] = useState<ThemeColors>(initial?.colors ?? DEFAULT_COLORS);
   const [generatedPalette, setGeneratedPalette] = useState<string[]>([]);
@@ -91,6 +92,12 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
       colors,
       isBuiltIn: initial?.isBuiltIn,
     });
+  }
+
+  function handleReset() {
+    if (confirm(`Nulstil "${initial?.name}" til standardfarverne?`)) {
+      onReset?.();
+    }
   }
 
   async function handleRandomPalette() {
@@ -143,6 +150,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="fx Mit tema"
                 className="mt-1"
+                disabled={!!initial?.isBuiltIn}
               />
             </div>
             <div className="rounded-lg border border-border p-4 space-y-4">
@@ -159,28 +167,24 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                   {isGenerating ? spinnerIcon : shuffleIcon}
                   Tilfaeldig
                 </Button>
-                <span className="text-xs text-muted-foreground">
-                  Genererer en tilfaeldig farvepalette
-                </span>
               </div>
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">Fra startfarve</p>
-                <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs text-muted-foreground">Eller vaelg en farve som udgangspunkt</p>
+                <div className="flex items-center gap-2 flex-wrap">
                   <input
                     type="color"
                     value={seedColor}
                     onChange={(e) => setSeedColor(e.target.value)}
                     className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                    title="Vaelg startfarve"
                   />
                   <Select value={schemeMode} onValueChange={(v) => setSchemeMode(v as SchemeMode)}>
-                    <SelectTrigger className="h-9 w-48 text-xs">
+                    <SelectTrigger className="w-48">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(SCHEME_LABELS) as [SchemeMode, string][]).map(([value, label]) => (
-                        <SelectItem key={value} value={value} className="text-xs">
-                          {label}
+                      {(Object.keys(SCHEME_LABELS) as SchemeMode[]).map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {SCHEME_LABELS[m]}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -191,7 +195,6 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                     size="sm"
                     onClick={handleColorPalette}
                     disabled={isGenerating}
-                    className="shrink-0"
                   >
                     {isGenerating ? spinnerIcon : wandIcon}
                     Generer
@@ -248,11 +251,25 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Annuller</Button>
-          <Button onClick={handleSave}>Gem tema</Button>
+        <DialogFooter className="sm:justify-between">
+          <div>
+            {onReset && (
+              <Button type="button" variant="outline" onClick={handleReset}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Nulstil til standard
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Annuller
+            </Button>
+            <Button type="button" onClick={handleSave}>
+              Gem tema
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-}
+} 
