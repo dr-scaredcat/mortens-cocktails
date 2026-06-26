@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Shuffle, ArrowDownAZ, Star, Share2, Check, Wine } from "lucide-react";
+import { Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
@@ -11,7 +11,16 @@ import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
-import { getOrderingEnabled, getSiteName, DEFAULT_SITE_NAME } from "@/lib/orders.functions";
+import {
+  getOrderingEnabled,
+  getSiteName,
+  DEFAULT_SITE_NAME,
+  getLogoSize,
+  DEFAULT_LOGO_SIZE,
+  getLogoType,
+  DEFAULT_LOGO_TYPE,
+} from "@/lib/orders.functions";
+import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -30,18 +39,37 @@ type SortMode = "alpha" | "rating";
 // ── Minimal header kun til gæster — ingen navigation ────────────────────────
 function MenukortHeader() {
   const fetchSiteName = useServerFn(getSiteName);
+  const fetchLogoSize = useServerFn(getLogoSize);
+  const fetchLogoType = useServerFn(getLogoType);
+
   const { data: siteNameData } = useQuery({
     queryKey: ["site-name"],
     queryFn: () => fetchSiteName(),
     staleTime: 1000 * 60 * 5,
   });
+  const { data: logoSizeData } = useQuery({
+    queryKey: ["logo-size"],
+    queryFn: () => fetchLogoSize(),
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: logoTypeData } = useQuery({
+    queryKey: ["logo-type"],
+    queryFn: () => fetchLogoType(),
+    staleTime: 1000 * 60 * 5,
+  });
+
   const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
+  const logoSize = logoSizeData?.size ?? DEFAULT_LOGO_SIZE;
+  const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
+  const textSize = Math.round(logoSize / 2);
 
   return (
     <header className="border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif text-lg tracking-tight">
-        <Wine className="h-5 w-5 text-primary" />
-        <span>{siteName}</span>
+      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif tracking-tight">
+        <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
+        <span className="leading-none" style={{ fontSize: textSize }}>
+          {siteName}
+        </span>
       </div>
     </header>
   );
