@@ -40,7 +40,7 @@ import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
 
 const LOGO_OPTIONS: { type: LogoType; label: string }[] = [
-  { type: "barskab", label: "Barskab" },
+  { type: "barskab", label: "Aston" },
   { type: "martini", label: "Martini" },
   { type: "wine", label: "Vinglas" },
 ];
