@@ -31,7 +31,7 @@ export function CocktailCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden border-border/70 bg-card",
+        "flex flex-col overflow-hidden border-border/70 bg-card",
         clickable && "cursor-pointer transition hover:border-primary/50",
       )}
     >
@@ -53,7 +53,7 @@ export function CocktailCard({
           </div>
         )}
       </div>
-      <div className="space-y-3 p-4">
+      <div className="flex flex-1 flex-col gap-3 p-4">
         <div
           className={cn("flex items-start justify-between gap-2", clickable && "cursor-pointer")}
           onClick={onClick}
@@ -63,9 +63,7 @@ export function CocktailCard({
             missing === 0 ? (
               <Badge className="bg-primary/20 text-primary hover:bg-primary/20">Klar</Badge>
             ) : (
-              <Badge variant="secondary">
-                Mangler {missing}
-              </Badge>
+              <Badge variant="secondary">Mangler {missing}</Badge>
             )
           )}
         </div>
@@ -133,7 +131,7 @@ export function CocktailCard({
             {cocktail.instructions}
           </p>
         )}
-        {footerSlot && <div className="pt-1">{footerSlot}</div>}
+        {footerSlot && <div className="mt-auto pt-1">{footerSlot}</div>}
       </div>
     </Card>
   );

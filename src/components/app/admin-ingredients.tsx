@@ -5,6 +5,7 @@ import { listIngredients, type IngredientRow } from "@/lib/cocktails.functions";
 import {
   upsertIngredient,
   deleteIngredient,
+  deleteUnusedIngredients,
   setIngredientAvailable,
 } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export function AdminIngredients() {
   const fetchCats = useServerFn(listCategories);
   const upsert = useServerFn(upsertIngredient);
   const del = useServerFn(deleteIngredient);
+  const delUnused = useServerFn(deleteUnusedIngredients);
   const setAvail = useServerFn(setIngredientAvailable);
 
   const { data } = useQuery({ queryKey: ["ingredients"], queryFn: () => fetchList() });
@@ -79,6 +81,19 @@ export function AdminIngredients() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const delUnusedM = useMutation({
+    mutationFn: () => delUnused(),
+    onSuccess: (res) => {
+      invalidate();
+      toast.success(
+        res.deleted === 0
+          ? "Ingen ubrugte ingredienser at slette"
+          : `${res.deleted} ubrugte ingredienser slettet`,
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const availM = useMutation({
     mutationFn: (v: { id: string; available: boolean }) => setAvail({ data: v }),
     onSuccess: () => invalidate(),
@@ -123,6 +138,22 @@ export function AdminIngredients() {
           </Button>
         </div>
       </Card>
+
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (confirm("Slet alle ingredienser der ikke indgår i nogen cocktail?")) {
+              delUnusedM.mutate();
+            }
+          }}
+          disabled={delUnusedM.isPending}
+        >
+          <Trash2 className="mr-1 h-4 w-4" />
+          {delUnusedM.isPending ? "Sletter…" : "Slet ubrugte ingredienser"}
+        </Button>
+      </div>
 
       {grouped.map(([cat, items]) =>
         items.length === 0 ? null : (

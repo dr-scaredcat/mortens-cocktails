@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { getThemesData } from "@/lib/themes.functions";
+import { applyThemeColors } from "@/hooks/use-theme";
 
 function NotFoundComponent() {
   return (
@@ -118,11 +120,26 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function ThemeLoader() {
+  useEffect(() => {
+    getThemesData().then(({ themes, activeThemeId }) => {
+      const active = themes.find((t) => t.id === activeThemeId);
+      if (active) {
+        applyThemeColors(active.colors);
+      }
+    }).catch(() => {
+      // Ignore — default CSS variables remain in effect
+    });
+  }, []);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeLoader />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster richColors position="top-center" />
