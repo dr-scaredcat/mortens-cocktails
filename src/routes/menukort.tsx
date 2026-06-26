@@ -2,17 +2,16 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
+import { Shuffle, ArrowDownAZ, Star, Share2, Check, Wine } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CocktailCard } from "@/components/app/cocktail-card";
 import { TagFilter } from "@/components/app/tag-filter";
-import { SiteHeader } from "@/components/app/site-header";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
-import { getOrderingEnabled } from "@/lib/orders.functions";
+import { getOrderingEnabled, getSiteName, DEFAULT_SITE_NAME } from "@/lib/orders.functions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -28,7 +27,27 @@ export const Route = createFileRoute("/menukort")({
 
 type SortMode = "alpha" | "rating";
 
-// ── Share-knap komponent ──────────────────────────────────────────────────────
+// ── Minimal header kun til gæster — ingen navigation ────────────────────────
+function MenukortHeader() {
+  const fetchSiteName = useServerFn(getSiteName);
+  const { data: siteNameData } = useQuery({
+    queryKey: ["site-name"],
+    queryFn: () => fetchSiteName(),
+    staleTime: 1000 * 60 * 5,
+  });
+  const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
+
+  return (
+    <header className="border-b border-border bg-background/85 backdrop-blur">
+      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif text-lg tracking-tight">
+        <Wine className="h-5 w-5 text-primary" />
+        <span>{siteName}</span>
+      </div>
+    </header>
+  );
+}
+
+// ── Share-knap komponent ─────────────────────────────────────────────────────
 function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
   const [copied, setCopied] = useState(false);
 
@@ -91,7 +110,7 @@ function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
 
 function MenukortPage() {
   const fetchCocktails = useServerFn(listCocktails);
@@ -132,7 +151,7 @@ function MenukortPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SiteHeader />
+      <MenukortHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
           <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
