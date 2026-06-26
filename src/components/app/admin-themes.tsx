@@ -145,6 +145,11 @@ export function AdminThemes() {
                         Aktiv
                       </Badge>
                     )}
+                    {theme.isBuiltIn && (
+                      <Badge variant="outline" className="text-xs">
+                        Standard
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="mt-3 flex gap-1.5 flex-wrap">
@@ -167,16 +172,14 @@ export function AdminThemes() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    {!theme.isBuiltIn && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(theme)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDelete(theme)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               </Card>
