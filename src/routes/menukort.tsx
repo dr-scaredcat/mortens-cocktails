@@ -69,73 +69,32 @@ function MenukortHeader() {
   const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
 
   return (
-    <header className="border-b border-border bg-background/85 backdrop-blur">
+    <header className="border-b border-border bg-card px-4 py-4">
       <div
-        className={cn("mx-auto flex max-w-5xl px-4 py-3 font-serif tracking-tight", alignClass[logoAlign])}
-        style={{ gap: logoGap }}
+        className={cn("flex mx-auto max-w-5xl", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
+        style={{ gap: `${logoGap}px` }}
       >
-        <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
-        <span className="leading-none" style={{ fontSize: textSize }}>
-          {siteName}
-        </span>
+        <SiteLogo size={logoSize} type={logoType} siteName={siteName} />
+        <span className="font-serif" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
       </div>
     </header>
   );
 }
 
-// ── Share-knap komponent ─────────────────────────────────────────────────────
 function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
   const [copied, setCopied] = useState(false);
-
   async function handleShare() {
-    const ingLines = cocktail.ingredients
-      .map((i) => {
-        const amt = i.amount != null ? `${i.amount}${i.unit ? ` ${i.unit}` : ""}` : i.unit ?? "";
-        return amt ? `• ${amt} ${i.name}` : `• ${i.name}`;
-      })
-      .join("\n");
-
-    const parts: string[] = [`🍹 ${cocktail.name}`];
-    if (cocktail.description) parts.push(cocktail.description);
-    parts.push("", "Ingredienser:", ingLines);
-    if (cocktail.glass) parts.push("", `Glas: ${cocktail.glass}`);
-    if (cocktail.garnish) parts.push(`Pynt: ${cocktail.garnish}`);
-    if (cocktail.instructions) parts.push("", "Fremgangsmåde:", cocktail.instructions);
-
-    const text = parts.join("\n");
-    const url = window.location.href;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: cocktail.name, text, url });
-        return;
-      } catch {
-        // fald tilbage til clipboard
-      }
-    }
-
+    const text = `${cocktail.name}\n\n${cocktail.ingredients.map((i) => `${i.name}${i.amount ? ` – ${i.amount}${i.unit ? " " + i.unit : ""}` : ""}`).join("\n")}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success("Link kopieret til udklipsholderen");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Kunne ikke kopiere link");
+      toast.error("Kunne ikke kopiere");
     }
   }
-
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={(e) => {
-        e.stopPropagation();
-        handleShare();
-      }}
-      className="gap-1.5"
-      aria-label="Del opskrift"
-    >
+    <Button variant="outline" size="sm" onClick={handleShare} data-share-button>
       {copied ? (
         <Check className="h-3.5 w-3.5 text-primary" />
       ) : (
@@ -254,22 +213,27 @@ function MenukortPage() {
             Ingen cocktails kan laves lige nu.
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((c) => (
-              <CocktailCard
-                key={c.id}
-                cocktail={c}
-                showAvailabilityBadge={false}
-                compact
-                onClick={() => setOpenId(c.id)}
-                footerSlot={
-                  orderingEnabled ? (
-                    <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                  ) : null
-                }
-              />
-            ))}
-          </div>
+          <>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {filtered.length} {filtered.length === 1 ? "cocktail" : "cocktails"}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((c) => (
+                <CocktailCard
+                  key={c.id}
+                  cocktail={c}
+                  showAvailabilityBadge={false}
+                  compact
+                  onClick={() => setOpenId(c.id)}
+                  footerSlot={
+                    orderingEnabled ? (
+                      <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                    ) : null
+                  }
+                />
+              ))}
+            </div>
+          </>
         )}
 
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
