@@ -14,6 +14,7 @@ import { useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
+import { AdminRecipes } from "@/components/app/admin-recipes";
 import { AdminTags } from "@/components/app/admin-tags";
 import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
@@ -33,6 +34,7 @@ function AdminPage() {
   const TABS = [
     { value: "menukort",     label: "Menukort" },
     { value: "cocktails",    label: "Cocktails" },
+    { value: "opskrifter",   label: "Opskrifter" },
     { value: "ingredients",  label: "Ingredienser" },
     { value: "tags",         label: "Tags" },
     { value: "glasses",      label: "Glas" },
@@ -46,7 +48,7 @@ function AdminPage() {
       <main className="mx-auto max-w-5xl px-4 py-6">
         <h1 className="mb-1 font-serif text-3xl">Admin</h1>
         <p className="mb-5 text-sm text-muted-foreground">
-          Administrér ingredienser og cocktails.
+          Administrér ingredienser, cocktails og opskrifter.
         </p>
         {isLoading ? (
           <p className="text-muted-foreground">Indlæser...</p>
@@ -56,24 +58,29 @@ function AdminPage() {
           </div>
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
-            <Select value={tab} onValueChange={setTab}>
-              <SelectTrigger className="mb-6 w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TABS.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="mb-6">
+              <Select value={tab} onValueChange={setTab}>
+                <SelectTrigger className="w-full sm:w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TABS.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <TabsContent value="menukort">
               <AdminMenukort />
             </TabsContent>
             <TabsContent value="cocktails">
               <AdminCocktails />
+            </TabsContent>
+            <TabsContent value="opskrifter">
+              <AdminRecipes />
             </TabsContent>
             <TabsContent value="ingredients">
               <AdminIngredients />
