@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -40,7 +40,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ImageDown, GripVertical, ArrowDownAZ, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ImageDown, GripVertical, ArrowDownAZ, Star, Upload } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -59,6 +59,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { supabase } from "@/integrations/supabase/client";
 
 type Item = { _id: string; name: string; amount: string; unit: string };
 
@@ -162,37 +163,36 @@ export function AdminCocktails() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
-
-  // Local optimistic order for drag-and-drop
   const [localOrder, setLocalOrder] = useState<CocktailWithDetails[] | null>(null);
 
-  const invalidate = () => {
-    setLocalOrder(null);
-    qc.invalidateQueries({ queryKey: ["cocktails"] });
-    qc.invalidateQueries({ queryKey: ["ingredients"] });
-    qc.invalidateQueries({ queryKey: ["glasses"] });
-    qc.invalidateQueries({ queryKey: ["garnishes"] });
-  };
+  const displayList = localOrder ?? (cocktails as CocktailWithDetails[] | undefined) ?? [];
 
   const saveM = useMutation({
-    mutationFn: (payload: any) => save({ data: payload }),
-    onSuccess: () => { invalidate(); setOpen(false); toast.success("Gemt"); },
+    mutationFn: (payload: Parameters<typeof save>[0]["data"]) => save({ data: payload }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cocktails"] });
+      setOpen(false);
+      setLocalOrder(null);
+      toast.success("Cocktail gemt");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const delM = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
-    onSuccess: () => { invalidate(); toast.success("Slettet"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cocktails"] });
+      setLocalOrder(null);
+      toast.success("Cocktail slettet");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const backfillM = useMutation({
     mutationFn: () => backfill(),
     onSuccess: (r) => {
-      invalidate();
-      toast.success(
-        `Opdateret ${r.updated} cocktails${r.missing ? ` (${r.missing} ikke fundet)` : ""}`,
-      );
+      qc.invalidateQueries({ queryKey: ["cocktails"] });
+      toast.success(`Opdateret ${r.updated} cocktail(s). ${r.missing} ikke fundet.`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -209,12 +209,8 @@ export function AdminCocktails() {
 
   const reorderM = useMutation({
     mutationFn: (ids: string[]) => reorder({ data: { ids } }),
-    onSuccess: () => { setLocalOrder(null); qc.invalidateQueries({ queryKey: ["cocktails"] }); },
-    onError: (e: Error) => { setLocalOrder(null); toast.error(e.message); },
+    onError: (e: Error) => toast.error(e.message),
   });
-
-  // The displayed list: local optimistic order if set, otherwise server data (already position-sorted)
-  const displayList = localOrder ?? (cocktails ?? []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -227,7 +223,7 @@ export function AdminCocktails() {
     if (!over || active.id === over.id) return;
     const oldIndex = displayList.findIndex((c) => c.id === active.id);
     const newIndex = displayList.findIndex((c) => c.id === over.id);
-    const reordered = arrayMove([...displayList], oldIndex, newIndex);
+    const reordered = arrayMove(displayList, oldIndex, newIndex);
     setLocalOrder(reordered);
     reorderM.mutate(reordered.map((c) => c.id));
   }
@@ -448,6 +444,53 @@ function CocktailForm({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Billede-upload til Supabase Storage
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validér filtype
+    if (!file.type.startsWith("image/")) {
+      toast.error("Kun billedfiler er tilladt (jpg, png, webp osv.)");
+      return;
+    }
+
+    // Maks 10 MB
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Filen er for stor — maks 10 MB");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Unikt filnavn baseret på timestamp
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const fileName = `cocktail_${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("cocktail-images")
+        .upload(fileName, file, { upsert: false, contentType: file.type });
+
+      if (uploadError) throw new Error(uploadError.message);
+
+      const { data: urlData } = supabase.storage
+        .from("cocktail-images")
+        .getPublicUrl(fileName);
+
+      patch("image_url", urlData.publicUrl);
+      toast.success("Billede uploadet");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload fejlede");
+    } finally {
+      setUploading(false);
+      // Nulstil input så samme fil kan vælges igen
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -458,14 +501,31 @@ function CocktailForm({
         <Label>Beskrivelse</Label>
         <Textarea value={form.description} onChange={(e) => patch("description", e.target.value)} rows={2} />
       </div>
+
+      {/* Billede */}
       <div>
-        <Label>Billede-URL</Label>
-        <div className="flex gap-2">
-          <Input
-            value={form.image_url}
-            onChange={(e) => patch("image_url", e.target.value)}
-            placeholder="https://…"
+        <Label>Billede</Label>
+        <div className="mt-1 flex flex-wrap gap-2">
+          {/* Upload fra fil */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileUpload}
           />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {uploading ? "Uploader…" : "Upload billede"}
+          </Button>
+
+          {/* Hent fra CocktailDB */}
           <Button
             type="button"
             variant="outline"
@@ -473,11 +533,31 @@ function CocktailForm({
             onClick={() => imgM.mutate()}
             disabled={imgM.isPending || !form.name.trim()}
           >
-            {imgM.isPending ? "Henter…" : "Hent"}
+            {imgM.isPending ? "Henter…" : "Hent fra CocktailDB"}
           </Button>
         </div>
+
+        {/* URL-felt */}
+        <Input
+          className="mt-2"
+          value={form.image_url}
+          onChange={(e) => patch("image_url", e.target.value)}
+          placeholder="eller indsæt billed-URL direkte…"
+        />
+
+        {/* Preview */}
         {form.image_url && (
-          <img src={form.image_url} alt="" className="mt-2 h-24 w-24 rounded object-cover" />
+          <div className="mt-2 relative inline-block">
+            <img src={form.image_url} alt="" className="h-24 w-24 rounded object-cover" />
+            <button
+              type="button"
+              onClick={() => patch("image_url", "")}
+              className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-destructive-foreground"
+              title="Fjern billede"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -534,40 +614,37 @@ function CocktailForm({
         <p className="mb-2 text-xs text-muted-foreground">
           Skriv navn på ingrediens. Nye navne tilføjes automatisk til biblioteket.
         </p>
-        <div className="space-y-2">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext
-              items={form.ingredients.map((it) => it._id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {form.ingredients.map((it, i) => (
-                <SortableIngredient
-                  key={it._id}
-                  item={it}
-                  onChange={(p) => setItem(i, p)}
-                  onRemove={() => removeItem(i)}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={form.ingredients.map((i) => i._id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-2">
+              {form.ingredients.map((item, idx) => (
+                <SortableIngredientRow
+                  key={item._id}
+                  item={item}
+                  ingredientNames={ingredientNames}
+                  onChange={(p) => setItem(idx, p)}
+                  onRemove={() => removeItem(idx)}
                 />
               ))}
-            </SortableContext>
-          </DndContext>
-          <datalist id="ingredient-names">
-            {ingredientNames.map((n) => <option key={n} value={n} />)}
-          </datalist>
-          <Button type="button" variant="outline" size="sm" onClick={addItem}>
-            <Plus className="mr-1 h-4 w-4" /> Tilføj ingrediens
-          </Button>
-        </div>
+            </div>
+          </SortableContext>
+        </DndContext>
+        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addItem}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Tilføj ingrediens
+        </Button>
       </div>
     </div>
   );
 }
 
-function SortableIngredient({
+function SortableIngredientRow({
   item,
+  ingredientNames,
   onChange,
   onRemove,
 }: {
   item: Item;
+  ingredientNames: string[];
   onChange: (p: Partial<Item>) => void;
   onRemove: () => void;
 }) {
@@ -579,11 +656,12 @@ function SortableIngredient({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 rounded border border-border bg-background p-2"
+      className="grid grid-cols-[auto_minmax(0,1fr)_5rem_6rem_auto] items-center gap-1.5"
     >
       <button
         type="button"
@@ -593,33 +671,35 @@ function SortableIngredient({
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <Input
-        list="ingredient-names"
-        placeholder="Ingrediens"
-        value={item.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        className="flex-1"
-      />
+      <div>
+        <Input
+          list="ingredient-names"
+          placeholder="Ingrediens"
+          value={item.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+        <datalist id="ingredient-names">
+          {ingredientNames.map((n) => <option key={n} value={n} />)}
+        </datalist>
+      </div>
       <Input
         type="number"
         placeholder="Mængde"
         value={item.amount}
         onChange={(e) => onChange({ amount: e.target.value })}
-        className="w-20"
+        min={0}
       />
       <Select value={item.unit} onValueChange={(v) => onChange({ unit: v })}>
-        <SelectTrigger className="w-20">
-          <SelectValue />
+        <SelectTrigger>
+          <SelectValue placeholder="Enhed" />
         </SelectTrigger>
         <SelectContent>
           {UNITS.map((u) => (
-            <SelectItem key={u} value={u}>
-              {u}
-            </SelectItem>
+            <SelectItem key={u} value={u}>{u}</SelectItem>
           ))}
         </SelectContent>
       </Select>
-      <Button type="button" size="icon" variant="ghost" onClick={onRemove}>
+      <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
         <X className="h-4 w-4" />
       </Button>
     </div>
