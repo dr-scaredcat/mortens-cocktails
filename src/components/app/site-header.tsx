@@ -5,8 +5,15 @@ import { Button } from "@/components/ui/button";
 import { LogOut, Shield, ClipboardList } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getSiteName, DEFAULT_SITE_NAME } from "@/lib/orders.functions";
-import { BarskabLogo } from "@/components/app/barskab-logo";
+import {
+  getSiteName,
+  DEFAULT_SITE_NAME,
+  getLogoSize,
+  DEFAULT_LOGO_SIZE,
+  getLogoType,
+  DEFAULT_LOGO_TYPE,
+} from "@/lib/orders.functions";
+import { SiteLogo } from "@/components/app/site-logo";
 
 const navItems = [
   { to: "/", label: "Klar" },
@@ -18,19 +25,38 @@ const navItems = [
 export function SiteHeader() {
   const { session } = useSession();
   const fetchSiteName = useServerFn(getSiteName);
+  const fetchLogoSize = useServerFn(getLogoSize);
+  const fetchLogoType = useServerFn(getLogoType);
+
   const { data: siteNameData } = useQuery({
     queryKey: ["site-name"],
     queryFn: () => fetchSiteName(),
     staleTime: 1000 * 60 * 5,
   });
+  const { data: logoSizeData } = useQuery({
+    queryKey: ["logo-size"],
+    queryFn: () => fetchLogoSize(),
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: logoTypeData } = useQuery({
+    queryKey: ["logo-type"],
+    queryFn: () => fetchLogoType(),
+    staleTime: 1000 * 60 * 5,
+  });
+
   const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
+  const logoSize = logoSizeData?.size ?? DEFAULT_LOGO_SIZE;
+  const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
+  const textSize = Math.round(logoSize / 2);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-        <Link to="/" className="flex items-center gap-2 font-serif text-lg tracking-tight">
-          <BarskabLogo className="text-primary" />
-          <span>{siteName}</span>
+        <Link to="/" className="flex items-center gap-2 tracking-tight font-serif">
+          <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
+          <span className="leading-none" style={{ fontSize: textSize }}>
+            {siteName}
+          </span>
         </Link>
         <div className="flex items-center gap-1">
           {session ? (
