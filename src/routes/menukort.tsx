@@ -33,8 +33,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Cocktail menu — Barskab" },
-      { name: "description", content: "Cocktails du kan lave lige nu." },
+      { title: "Aston's Bar - Menukort" },
+      { name: "description", content: "Cocktails der kan laves lige nu." },
     ],
   }),
   component: MenukortPage,
@@ -150,7 +150,7 @@ function MenukortPage() {
       <MenukortHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
-          <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
+          <h1 className="font-serif text-3xl tracking-tight">Menukort</h1>
           {orderingEnabled && (
             <p className="text-sm text-muted-foreground">
               Vælg en cocktail og tryk Bestil — bartenderen får besked.
