@@ -4,6 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   listCocktails,
   listIngredients,
+  listGlasses,
+  listGarnishes,
   type CocktailWithDetails,
 } from "@/lib/cocktails.functions";
 import {
@@ -37,7 +39,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, Download, ImageDown, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ImageDown, GripVertical } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -81,6 +83,8 @@ export function AdminCocktails() {
   const fetchCocktails = useServerFn(listCocktails);
   const fetchIngs = useServerFn(listIngredients);
   const fetchTags = useServerFn(listTags);
+  const fetchGlasses = useServerFn(listGlasses);
+  const fetchGarnishes = useServerFn(listGarnishes);
   const save = useServerFn(saveCocktail);
   const del = useServerFn(deleteCocktail);
   const backfill = useServerFn(backfillCocktailImages);
@@ -95,6 +99,8 @@ export function AdminCocktails() {
     queryFn: () => fetchIngs(),
   });
   const { data: tags } = useQuery({ queryKey: ["tags"], queryFn: () => fetchTags() });
+  const { data: glasses } = useQuery({ queryKey: ["glasses"], queryFn: () => fetchGlasses() });
+  const { data: garnishes } = useQuery({ queryKey: ["garnishes"], queryFn: () => fetchGarnishes() });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -104,6 +110,8 @@ export function AdminCocktails() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cocktails"] });
       qc.invalidateQueries({ queryKey: ["ingredients"] });
+      qc.invalidateQueries({ queryKey: ["glasses"] });
+      qc.invalidateQueries({ queryKey: ["garnishes"] });
       setOpen(false);
       toast.success("Gemt");
     },
@@ -123,7 +131,9 @@ export function AdminCocktails() {
     mutationFn: () => backfill(),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["cocktails"] });
-      toast.success(`Opdateret ${r.updated} cocktails${r.missing ? ` (${r.missing} ikke fundet)` : ""}`);
+      toast.success(
+        `Opdateret ${r.updated} cocktails${r.missing ? ` (${r.missing} ikke fundet)` : ""}`,
+      );
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -217,6 +227,8 @@ export function AdminCocktails() {
               setForm={setForm}
               ingredientNames={(ingredients ?? []).map((i) => i.name)}
               tagNames={(tags ?? []).map((t) => t.name)}
+              glassNames={(glasses ?? []).map((g) => g.name)}
+              garnishNames={(garnishes ?? []).map((g) => g.name)}
             />
             <DialogFooter>
               {form.id && (
@@ -286,14 +298,24 @@ function CocktailForm({
   setForm,
   ingredientNames,
   tagNames,
+  glassNames,
+  garnishNames,
 }: {
   form: ReturnType<typeof emptyForm>;
   setForm: (f: ReturnType<typeof emptyForm>) => void;
   ingredientNames: string[];
   tagNames: string[];
+  glassNames: string[];
+  garnishNames: string[];
 }) {
   const fetchImg = useServerFn(fetchCocktailDbImage);
   const [fetchingImg, setFetchingImg] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(TouchSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   async function pullImage() {
     const name = form.name.trim();
@@ -320,42 +342,34 @@ function CocktailForm({
   function patch<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm({ ...form, [k]: v });
   }
-  function setItem(idx: number, patch: Partial<Item>) {
-    const next = form.ingredients.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+
+  function setItem(idx: number, p: Partial<Item>) {
+    const next = form.ingredients.map((it, i) => (i === idx ? { ...it, ...p } : it));
     setForm({ ...form, ingredients: next });
   }
+
   function addItem() {
     setForm({
       ...form,
-      ingredients: [
-        ...form.ingredients,
-        { _id: newId(), name: "", amount: "", unit: "ml" },
-      ],
+      ingredients: [...form.ingredients, { _id: newId(), name: "", amount: "", unit: "ml" }],
     });
   }
+
   function removeItem(idx: number) {
     setForm({ ...form, ingredients: form.ingredients.filter((_, i) => i !== idx) });
   }
+
+  function toggleTag(t: string) {
+    const next = form.tags.includes(t) ? form.tags.filter((x) => x !== t) : [...form.tags, t];
+    setForm({ ...form, tags: next });
+  }
+
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const oldIdx = form.ingredients.findIndex((it) => it._id === active.id);
     const newIdx = form.ingredients.findIndex((it) => it._id === over.id);
-    if (oldIdx < 0 || newIdx < 0) return;
     setForm({ ...form, ingredients: arrayMove(form.ingredients, oldIdx, newIdx) });
-  }
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  function toggleTag(tag: string) {
-    setForm({
-      ...form,
-      tags: form.tags.includes(tag)
-        ? form.tags.filter((t) => t !== tag)
-        : [...form.tags, tag],
-    });
   }
 
   return (
@@ -369,23 +383,18 @@ function CocktailForm({
         <Textarea
           value={form.description}
           onChange={(e) => patch("description", e.target.value)}
+          rows={2}
         />
       </div>
       <div>
         <Label>Billede-URL</Label>
         <div className="flex gap-2">
           <Input
-            placeholder="https://..."
             value={form.image_url}
             onChange={(e) => patch("image_url", e.target.value)}
+            className="flex-1"
           />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={pullImage}
-            disabled={fetchingImg}
-          >
-            <Download className="mr-1 h-4 w-4" />
+          <Button type="button" variant="outline" onClick={pullImage} disabled={fetchingImg}>
             {fetchingImg ? "Henter…" : "Hent"}
           </Button>
         </div>
@@ -397,16 +406,45 @@ function CocktailForm({
           />
         )}
       </div>
+
+      {/* Glas og pynt med autocomplete */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Glas</Label>
-          <Input value={form.glass} onChange={(e) => patch("glass", e.target.value)} />
+          <p className="mb-1 text-xs text-muted-foreground">
+            Nye glastyper tilføjes automatisk.
+          </p>
+          <Input
+            list="glass-names"
+            placeholder="fx Martini-glas"
+            value={form.glass}
+            onChange={(e) => patch("glass", e.target.value)}
+          />
+          <datalist id="glass-names">
+            {glassNames.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
         </div>
         <div>
           <Label>Pynt</Label>
-          <Input value={form.garnish} onChange={(e) => patch("garnish", e.target.value)} />
+          <p className="mb-1 text-xs text-muted-foreground">
+            Nye pynttyper tilføjes automatisk.
+          </p>
+          <Input
+            list="garnish-names"
+            placeholder="fx Limeskive"
+            value={form.garnish}
+            onChange={(e) => patch("garnish", e.target.value)}
+          />
+          <datalist id="garnish-names">
+            {garnishNames.map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
         </div>
       </div>
+
       <div>
         <Label>Fremgangsmåde</Label>
         <Textarea
@@ -476,8 +514,9 @@ function SortableIngredient({
   onChange: (p: Partial<Item>) => void;
   onRemove: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item._id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item._id,
+  });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
