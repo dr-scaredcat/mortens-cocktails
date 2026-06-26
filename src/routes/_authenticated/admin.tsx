@@ -14,12 +14,9 @@ import { useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
-import { AdminCategories } from "@/components/app/admin-categories";
 import { AdminTags } from "@/components/app/admin-tags";
-import { AdminUsers } from "@/components/app/admin-users";
 import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
-import { AdminThemes } from "@/components/app/admin-themes";
 import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
 
@@ -31,18 +28,16 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const check = useServerFn(isAdmin);
   const { data, isLoading } = useQuery({ queryKey: ["isAdmin"], queryFn: () => check() });
-  const [tab, setTab] = useState("ingredients");
+  const [tab, setTab] = useState("menukort");
+
   const TABS = [
-    { value: "ingredients", label: "Ingredienser" },
-    { value: "cocktails", label: "Cocktails" },
-    { value: "menukort", label: "Menukort" },
-    { value: "categories", label: "Kategorier" },
-    { value: "tags", label: "Tags" },
-    { value: "glasses", label: "Glas" },
-    { value: "garnishes", label: "Pynt" },
-    { value: "users", label: "Brugere" },
-    { value: "settings", label: "Indstillinger" },
-    { value: "themes", label: "Temaer" },
+    { value: "menukort",     label: "Menukort" },
+    { value: "cocktails",    label: "Cocktails" },
+    { value: "ingredients",  label: "Ingredienser" },
+    { value: "tags",         label: "Tags" },
+    { value: "glasses",      label: "Glas" },
+    { value: "garnishes",    label: "Pynt" },
+    { value: "settings",     label: "Indstillinger" },
   ];
 
   return (
@@ -74,17 +69,14 @@ function AdminPage() {
               </SelectContent>
             </Select>
 
-            <TabsContent value="ingredients">
-              <AdminIngredients />
+            <TabsContent value="menukort">
+              <AdminMenukort />
             </TabsContent>
             <TabsContent value="cocktails">
               <AdminCocktails />
             </TabsContent>
-            <TabsContent value="menukort">
-              <AdminMenukort />
-            </TabsContent>
-            <TabsContent value="categories">
-              <AdminCategories />
+            <TabsContent value="ingredients">
+              <AdminIngredients />
             </TabsContent>
             <TabsContent value="tags">
               <AdminTags />
@@ -95,14 +87,8 @@ function AdminPage() {
             <TabsContent value="garnishes">
               <AdminGarnishes />
             </TabsContent>
-            <TabsContent value="users">
-              <AdminUsers />
-            </TabsContent>
             <TabsContent value="settings">
               <AdminSettings />
-            </TabsContent>
-            <TabsContent value="themes">
-              <AdminThemes />
             </TabsContent>
           </Tabs>
         )}
