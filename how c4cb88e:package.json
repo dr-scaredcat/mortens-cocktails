@@ -1,0 +1,20 @@
+[33m9ab1b2f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mClaude-ai[m[33m, [m[1;31morigin/Claude-ai[m[33m)[m Remove package-lock.json
+[33m61a7fac[m Back to working versions
+[33m5e24cba[m Downgrade vite to 6.x with updated lockfile
+[33md93e436[m Downgrade vite to 6.x
+[33m84bf66d[m Freeze lockfile
+[33m133a375[m Lock tanstack versions
+[33mfeeb910[m Fix vite version
+[33m8b98749[m Update package.json
+[33m959a9e0[m Update package.json
+[33me2e9524[m Update theme-editor.tsx
+[33me4d1d19[m Update admin-themes.tsx
+[33m23a2763[m Update package.json
+[33mec8e4c1[m Update package.json
+[33mc4cb88e[m Update theme-editor.tsx
+[33m9c38a6b[m Update theme-editor.tsx
+[33m2f5cc31[m Delete bun.lock
+[33md02942d[m Update package.json
+[33mf9d5878[m Update vite.config.ts
+[33m850c17e[m Update vite.config.ts
+[33mba86c95[m Update themes.functions.ts
