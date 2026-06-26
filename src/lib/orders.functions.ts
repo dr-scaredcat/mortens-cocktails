@@ -166,3 +166,35 @@ export const setSignupEnabled = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// =================== Sidenavn ===================
+
+export const DEFAULT_SITE_NAME = "Barskab";
+
+export const getSiteName = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "site_name")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { name: DEFAULT_SITE_NAME };
+    const v = data.value;
+    return { name: typeof v === "string" && v.length > 0 ? v : DEFAULT_SITE_NAME };
+  });
+
+export const setSiteName = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { name: string }) =>
+    z.object({ name: z.string().trim().min(1).max(60) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "site_name", value: data.name as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
