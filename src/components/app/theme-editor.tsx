@@ -2,57 +2,35 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemePreview } from "@/components/app/theme-preview";
 import type { Theme, ThemeColors } from "@/lib/themes.functions";
 import { oklchToHex, hexToOklch, isOklchString } from "@/lib/color-utils";
-import {
-  generateRandomPalette,
-  generatePaletteFromColor,
-  paletteToThemeColors,
-} from "@/lib/palette-api";
+import { generateRandomPalette, generatePaletteFromColor, paletteToThemeColors } from "@/lib/palette-api";
 import { Shuffle, Wand2, Loader2 } from "lucide-react";
 
-type ColorGroup = {
-  key: keyof ThemeColors;
-  label: string;
-  description: string;
-};
-
-const COLOR_GROUPS: ColorGroup[] = [
+const COLOR_GROUPS: { key: keyof ThemeColors; label: string; description: string }[] = [
   { key: "background", label: "Baggrund", description: "Sidens baggrund" },
-  { key: "card", label: "Kort & overflader", description: "Kortbaggrund, dropdowns, tooltips" },
-  { key: "foreground", label: "Tekst", description: "Primær tekst, korttekst" },
-  { key: "primary", label: "Primær", description: "Knapper, aktive links, badges, focus-ring" },
-  { key: "primaryForeground", label: "Primær tekst", description: "Tekst oven på primærfarve" },
-  { key: "muted", label: "Dæmpet", description: "Hover-baggrunde, inputfelter" },
-  { key: "mutedForeground", label: "Dæmpet tekst", description: "Hjælpetekst og ikoner" },
-  { key: "accent", label: "Accent", description: "Highlights, sekundære badges, hover-effekter" },
-  { key: "accentForeground", label: "Accent tekst", description: "Tekst oven på accent-farve" },
+  { key: "card", label: "Kort og overflader", description: "Kortbaggrund, dropdowns, tooltips" },
+  { key: "foreground", label: "Tekst", description: "Primaer tekst, korttekst" },
+  { key: "primary", label: "Primaer", description: "Knapper, aktive links, badges, focus-ring" },
+  { key: "primaryForeground", label: "Primaer tekst", description: "Tekst oven paa primaerfarve" },
+  { key: "muted", label: "Daempet", description: "Hover-baggrunde, inputfelter" },
+  { key: "mutedForeground", label: "Daempet tekst", description: "Hjaelpetekst og ikoner" },
+  { key: "accent", label: "Accent", description: "Highlights, sekundaere badges" },
+  { key: "accentForeground", label: "Accent tekst", description: "Tekst oven paa accent-farve" },
   { key: "border", label: "Kant", description: "Alle kanter og streger" },
   { key: "destructive", label: "Fejl", description: "Slet-knapper og fejlbeskeder" },
-  { key: "destructiveForeground", label: "Fejl tekst", description: "Tekst oven på fejlfarve" },
+  { key: "destructiveForeground", label: "Fejl tekst", description: "Tekst oven paa fejlfarve" },
 ];
 
 type SchemeMode = "analogic" | "complement" | "analogic-complement" | "triad";
 
 const SCHEME_LABELS: Record<SchemeMode, string> = {
   analogic: "Analogt",
-  complement: "Komplementær",
-  "analogic-complement": "Analogt + komplementær",
+  complement: "Komplementaer",
+  "analogic-complement": "Analogt + komplementaer",
   triad: "Triade",
 };
 
@@ -71,18 +49,18 @@ const DEFAULT_COLORS: ThemeColors = {
   destructiveForeground: "oklch(0.99 0.01 80)",
 };
 
+function colorToHex(value: string): string {
+  if (isOklchString(value)) return oklchToHex(value);
+  if (value.startsWith("#")) return value;
+  return "#888888";
+}
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initial: Theme | null;
   onSave: (theme: Theme) => void;
 };
-
-function colorToHex(value: string): string {
-  if (isOklchString(value)) return oklchToHex(value);
-  if (value.startsWith("#")) return value;
-  return "#888888";
-}
 
 export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
   const [name, setName] = useState(initial?.name ?? "Nyt tema");
@@ -121,7 +99,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
     try {
       setGeneratedPalette(await generateRandomPalette());
     } catch {
-      setGenerateError("Kunne ikke hente tilfældig palette. Prøv igen.");
+      setGenerateError("Kunne ikke hente tilfaeldig palette. Proev igen.");
     } finally {
       setIsGenerating(false);
     }
@@ -133,7 +111,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
     try {
       setGeneratedPalette(await generatePaletteFromColor(seedColor, schemeMode));
     } catch {
-      setGenerateError("Kunne ikke hente palette. Prøv igen.");
+      setGenerateError("Kunne ikke hente palette. Proev igen.");
     } finally {
       setIsGenerating(false);
     }
@@ -145,17 +123,18 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
     setGeneratedPalette([]);
   }
 
+  const spinnerIcon = <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />;
+  const shuffleIcon = <Shuffle className="mr-1.5 h-3.5 w-3.5" />;
+  const wandIcon = <Wand2 className="mr-1.5 h-3.5 w-3.5" />;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{initial ? "Rediger tema" : "Nyt tema"}</DialogTitle>
         </DialogHeader>
-
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-5">
-
-            {/* Temanavn */}
             <div>
               <Label htmlFor="theme-name">Temanavn</Label>
               <Input
@@ -166,12 +145,8 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                 className="mt-1"
               />
             </div>
-
-            {/* Palette generator */}
             <div className="rounded-lg border border-border p-4 space-y-4">
               <p className="text-sm font-medium">Generer palette</p>
-
-              {/* Tilfældig */}
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -181,17 +156,13 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                   disabled={isGenerating}
                   className="shrink-0"
                 >
-                  {isGenerating
-                    ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    : <Shuffle className="mr-1.5 h-3.5 w-3.5" />}
-                  Tilfældig
+                  {isGenerating ? spinnerIcon : shuffleIcon}
+                  Tilfaeldig
                 </Button>
                 <span className="text-xs text-muted-foreground">
-                  Genererer en tilfældig farvepalette
+                  Genererer en tilfaeldig farvepalette
                 </span>
               </div>
-
-              {/* Fra startfarve */}
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Fra startfarve</p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -200,7 +171,7 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                     value={seedColor}
                     onChange={(e) => setSeedColor(e.target.value)}
                     className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                    title="Vælg startfarve"
+                    title="Vaelg startfarve"
                   />
                   <Select value={schemeMode} onValueChange={(v) => setSchemeMode(v as SchemeMode)}>
                     <SelectTrigger className="h-9 w-48 text-xs">
@@ -222,20 +193,14 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                     disabled={isGenerating}
                     className="shrink-0"
                   >
-                    {isGenerating
-                      ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
+                    {isGenerating ? spinnerIcon : wandIcon}
                     Generer
                   </Button>
                 </div>
               </div>
-
-              {/* Fejlbesked */}
               {generateError && (
                 <p className="text-xs text-destructive">{generateError}</p>
               )}
-
-              {/* Genereret palette preview */}
               {generatedPalette.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">Genereret palette</p>
@@ -255,8 +220,6 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                 </div>
               )}
             </div>
-
-            {/* Farvevælgere */}
             <div className="space-y-3">
               <p className="text-sm font-medium">Farver</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -277,20 +240,16 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave }: Props) {
                 ))}
               </div>
             </div>
-
           </div>
-
-          {/* Live preview */}
           <div className="space-y-2">
-            <p className="text-sm font-medium">Forhåndsvisning</p>
+            <p className="text-sm font-medium">Forhaandsvisning</p>
             <div className="sticky top-4">
               <ThemePreview colors={colors} />
             </div>
           </div>
         </div>
-
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Annullér</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Annuller</Button>
           <Button onClick={handleSave}>Gem tema</Button>
         </DialogFooter>
       </DialogContent>
