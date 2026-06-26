@@ -17,6 +17,12 @@ import {
   DEFAULT_SITE_NAME,
   getLogoSize,
   DEFAULT_LOGO_SIZE,
+  getTextSize,
+  DEFAULT_TEXT_SIZE,
+  getLogoGap,
+  DEFAULT_LOGO_GAP,
+  getLogoAlign,
+  DEFAULT_LOGO_ALIGN,
   getLogoType,
   DEFAULT_LOGO_TYPE,
 } from "@/lib/orders.functions";
@@ -36,36 +42,38 @@ export const Route = createFileRoute("/menukort")({
 
 type SortMode = "alpha" | "rating";
 
+const alignClass = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
+
 // ── Minimal header kun til gæster — ingen navigation ────────────────────────
 function MenukortHeader() {
   const fetchSiteName = useServerFn(getSiteName);
   const fetchLogoSize = useServerFn(getLogoSize);
+  const fetchTextSize = useServerFn(getTextSize);
+  const fetchLogoGap = useServerFn(getLogoGap);
+  const fetchLogoAlign = useServerFn(getLogoAlign);
   const fetchLogoType = useServerFn(getLogoType);
 
-  const { data: siteNameData } = useQuery({
-    queryKey: ["site-name"],
-    queryFn: () => fetchSiteName(),
-    staleTime: 1000 * 60 * 5,
-  });
-  const { data: logoSizeData } = useQuery({
-    queryKey: ["logo-size"],
-    queryFn: () => fetchLogoSize(),
-    staleTime: 1000 * 60 * 5,
-  });
-  const { data: logoTypeData } = useQuery({
-    queryKey: ["logo-type"],
-    queryFn: () => fetchLogoType(),
-    staleTime: 1000 * 60 * 5,
-  });
+  const stale = { staleTime: 1000 * 60 * 5 };
+  const { data: siteNameData } = useQuery({ queryKey: ["site-name"], queryFn: () => fetchSiteName(), ...stale });
+  const { data: logoSizeData } = useQuery({ queryKey: ["logo-size"], queryFn: () => fetchLogoSize(), ...stale });
+  const { data: textSizeData } = useQuery({ queryKey: ["text-size"], queryFn: () => fetchTextSize(), ...stale });
+  const { data: logoGapData } = useQuery({ queryKey: ["logo-gap"], queryFn: () => fetchLogoGap(), ...stale });
+  const { data: logoAlignData } = useQuery({ queryKey: ["logo-align"], queryFn: () => fetchLogoAlign(), ...stale });
+  const { data: logoTypeData } = useQuery({ queryKey: ["logo-type"], queryFn: () => fetchLogoType(), ...stale });
 
   const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
   const logoSize = logoSizeData?.size ?? DEFAULT_LOGO_SIZE;
+  const textSize = textSizeData?.size ?? DEFAULT_TEXT_SIZE;
+  const logoGap = logoGapData?.gap ?? DEFAULT_LOGO_GAP;
+  const logoAlign = logoAlignData?.align ?? DEFAULT_LOGO_ALIGN;
   const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
-  const textSize = Math.round(logoSize / 2);
 
   return (
     <header className="border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif tracking-tight">
+      <div
+        className={cn("mx-auto flex max-w-5xl px-4 py-3 font-serif tracking-tight", alignClass[logoAlign])}
+        style={{ gap: logoGap }}
+      >
         <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
         <span className="leading-none" style={{ fontSize: textSize }}>
           {siteName}
@@ -217,7 +225,6 @@ function MenukortPage() {
             }
             onClear={() => setTags([])}
           />
-
           <div className="flex gap-2">
             <Button
               variant="outline"
