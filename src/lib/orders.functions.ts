@@ -137,7 +137,6 @@ export const setOrderingEnabled = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Signup er slået til som default (ingen row i app_settings = tilladt)
 export const getSignupEnabled = createServerFn({ method: "GET" })
   .handler(async () => {
     const sb = publicClient();
@@ -147,7 +146,6 @@ export const getSignupEnabled = createServerFn({ method: "GET" })
       .eq("key", "signup_enabled")
       .maybeSingle();
     if (error) throw new Error(error.message);
-    // Ingen row => default til true
     if (!data) return { enabled: true };
     const v = data.value;
     return { enabled: v !== false && v !== "false" };
@@ -195,6 +193,73 @@ export const setSiteName = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("app_settings")
       .upsert({ key: "site_name", value: data.name as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Logostørrelse ===================
+
+export const DEFAULT_LOGO_SIZE = 20;
+
+export const getLogoSize = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "logo_size")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { size: DEFAULT_LOGO_SIZE };
+    const v = data.value;
+    const n = typeof v === "number" ? v : Number(v);
+    return { size: Number.isFinite(n) ? n : DEFAULT_LOGO_SIZE };
+  });
+
+export const setLogoSize = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { size: number }) =>
+    z.object({ size: z.number().int().min(16).max(48) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_size", value: data.size as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Logotype ===================
+
+export type LogoType = "barskab" | "martini" | "wine";
+export const DEFAULT_LOGO_TYPE: LogoType = "barskab";
+
+export const getLogoType = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "logo_type")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { type: DEFAULT_LOGO_TYPE };
+    const v = data.value;
+    const valid: LogoType[] = ["barskab", "martini", "wine"];
+    return { type: valid.includes(v as LogoType) ? (v as LogoType) : DEFAULT_LOGO_TYPE };
+  });
+
+export const setLogoType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { type: LogoType }) =>
+    z.object({ type: z.enum(["barskab", "martini", "wine"]) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_type", value: data.type as unknown as never });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
