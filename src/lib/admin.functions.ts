@@ -129,7 +129,6 @@ export const saveCocktail = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const sb = context.supabase;
 
-    // Resolve / create ingredients
     const ingIds: { ingredient_id: string; amount: number | null; unit: string | null }[] = [];
     for (const item of data.ingredients) {
       const name = item.name.trim();
@@ -149,21 +148,14 @@ export const saveCocktail = createServerFn({ method: "POST" })
         if (error) throw new Error(error.message);
         id = created.id;
       }
-      ingIds.push({
-        ingredient_id: id!,
-        amount: item.amount ?? null,
-        unit: item.unit ?? null,
-      });
+      ingIds.push({ ingredient_id: id!, amount: item.amount ?? null, unit: item.unit ?? null });
     }
 
-    // Auto-opret glas i tabellen hvis det ikke allerede findes
     if (data.glass?.trim()) {
       await sb
         .from("glasses")
         .upsert({ name: data.glass.trim() }, { onConflict: "name", ignoreDuplicates: true });
     }
-
-    // Auto-opret pynt i tabellen hvis den ikke allerede findes
     if (data.garnish?.trim()) {
       await sb
         .from("garnishes")
@@ -185,16 +177,23 @@ export const saveCocktail = createServerFn({ method: "POST" })
       const { error } = await sb.from("cocktails").update(payload).eq("id", cocktailId);
       if (error) throw new Error(error.message);
     } else {
+      // Ny cocktail: sæt position til max+1 så den havner sidst
+      const { data: maxRow } = await sb
+        .from("cocktails")
+        .select("position")
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const nextPos = (maxRow?.position ?? 0) + 1;
       const { data: row, error } = await sb
         .from("cocktails")
-        .insert(payload)
+        .insert({ ...payload, position: nextPos })
         .select("id")
         .single();
       if (error) throw new Error(error.message);
       cocktailId = row.id;
     }
 
-    // Replace ingredients
     await sb.from("cocktail_ingredients").delete().eq("cocktail_id", cocktailId!);
     if (ingIds.length > 0) {
       const { error } = await sb.from("cocktail_ingredients").insert(
@@ -203,7 +202,6 @@ export const saveCocktail = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
 
-    // Replace tags
     await sb.from("cocktail_tags").delete().eq("cocktail_id", cocktailId!);
     if (data.tags.length > 0) {
       const { error } = await sb
@@ -253,6 +251,20 @@ export const resetCocktailRating = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const reorderCocktails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) => sb.from("cocktails").update({ position: i + 1 }).eq("id", id)),
+    );
+    return { ok: true };
+  });
+
 // =================== Categories ===================
 
 export const upsertCategory = createServerFn({ method: "POST" })
@@ -273,10 +285,7 @@ export const upsertCategory = createServerFn({ method: "POST" })
       const { error } = await sb.from("categories").update({ name: data.name }).eq("id", data.id);
       if (error) throw new Error(error.message);
       if (data.oldName && data.oldName !== data.name) {
-        await sb
-          .from("ingredients")
-          .update({ category: data.name })
-          .eq("category", data.oldName);
+        await sb.from("ingredients").update({ category: data.name }).eq("category", data.oldName);
       }
       return { id: data.id };
     }
@@ -297,10 +306,23 @@ export const deleteCategory = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
-    // Move ingredients in this category to "Andet"
     await sb.from("ingredients").update({ category: "Andet" }).eq("category", data.name);
     const { error } = await sb.from("categories").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reorderCategories = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) => sb.from("categories").update({ position: i + 1 }).eq("id", id)),
+    );
     return { ok: true };
   });
 
@@ -384,7 +406,6 @@ export const upsertGlass = createServerFn({ method: "POST" })
     if (data.id) {
       const { error } = await sb.from("glasses").update({ name: data.name }).eq("id", data.id);
       if (error) throw new Error(error.message);
-      // Cascade rename til alle cocktails der bruger det gamle glasnavn
       if (data.oldName && data.oldName !== data.name) {
         await sb.from("cocktails").update({ glass: data.name }).eq("glass", data.oldName);
       }
@@ -407,7 +428,6 @@ export const deleteGlass = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
-    // Nulstil glasfeltet på cocktails der bruger dette glas
     await sb.from("cocktails").update({ glass: null }).eq("glass", data.name);
     const { error } = await sb.from("glasses").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -433,7 +453,6 @@ export const upsertGarnish = createServerFn({ method: "POST" })
     if (data.id) {
       const { error } = await sb.from("garnishes").update({ name: data.name }).eq("id", data.id);
       if (error) throw new Error(error.message);
-      // Cascade rename til alle cocktails der bruger det gamle pyntnavn
       if (data.oldName && data.oldName !== data.name) {
         await sb.from("cocktails").update({ garnish: data.name }).eq("garnish", data.oldName);
       }
@@ -456,7 +475,6 @@ export const deleteGarnish = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
-    // Nulstil garnishfeltet på cocktails der bruger denne pynt
     await sb.from("cocktails").update({ garnish: null }).eq("garnish", data.name);
     const { error } = await sb.from("garnishes").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -487,9 +505,7 @@ export const listAdmins = createServerFn({ method: "GET" })
 
 export const grantAdminByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { email: string }) =>
-    z.object({ email: z.string().email() }).parse(d),
-  )
+  .inputValidator((d: { email: string }) => z.object({ email: z.string().email() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const target = await findUserIdByEmail(data.email);
@@ -519,9 +535,7 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
 
 export const revokeAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string }) =>
-    z.object({ userId: z.string().uuid() }).parse(d),
-  )
+  .inputValidator((d: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     if (data.userId === context.userId) {
@@ -552,9 +566,7 @@ async function lookupCocktailDbImage(name: string): Promise<string | null> {
 
 export const fetchCocktailDbImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { name: string }) =>
-    z.object({ name: z.string().min(1).max(120) }).parse(d),
-  )
+  .inputValidator((d: { name: string }) => z.object({ name: z.string().min(1).max(120) }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const image = await lookupCocktailDbImage(data.name);
@@ -566,23 +578,15 @@ export const backfillCocktailImages = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
-    const { data: rows, error } = await sb
-      .from("cocktails")
-      .select("id, name, image_url");
+    const { data: rows, error } = await sb.from("cocktails").select("id, name, image_url");
     if (error) throw new Error(error.message);
     let updated = 0;
     let missing = 0;
     for (const c of rows ?? []) {
       if (c.image_url) continue;
       const image = await lookupCocktailDbImage(c.name);
-      if (!image) {
-        missing += 1;
-        continue;
-      }
-      const { error: upErr } = await sb
-        .from("cocktails")
-        .update({ image_url: image })
-        .eq("id", c.id);
+      if (!image) { missing += 1; continue; }
+      const { error: upErr } = await sb.from("cocktails").update({ image_url: image }).eq("id", c.id);
       if (!upErr) updated += 1;
     }
     return { updated, missing };
