@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Wine, Shuffle, ArrowDownAZ, Star } from "lucide-react";
+import { Wine, Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
@@ -13,6 +13,7 @@ import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functio
 import { OrderButton } from "@/components/app/order-button";
 import { getOrderingEnabled } from "@/lib/orders.functions";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -25,6 +26,74 @@ export const Route = createFileRoute("/menukort")({
 });
 
 type SortMode = "alpha" | "rating";
+
+// ── Share-knap komponent ──────────────────────────────────────────────────────
+function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleShare() {
+    // Byg en tekstlig opskrift til deling
+    const ingLines = cocktail.ingredients
+      .map((i) => {
+        const amt = i.amount != null ? `${i.amount}${i.unit ? ` ${i.unit}` : ""}` : i.unit ?? "";
+        return amt ? `• ${amt} ${i.name}` : `• ${i.name}`;
+      })
+      .join("\n");
+
+    const parts: string[] = [`🍹 ${cocktail.name}`];
+    if (cocktail.description) parts.push(cocktail.description);
+    parts.push("", "Ingredienser:", ingLines);
+    if (cocktail.glass) parts.push("", `Glas: ${cocktail.glass}`);
+    if (cocktail.garnish) parts.push(`Pynt: ${cocktail.garnish}`);
+    if (cocktail.instructions) parts.push("", "Fremgangsmåde:", cocktail.instructions);
+
+    const text = parts.join("\n");
+    const url = window.location.href;
+
+    // Forsøg Web Share API (mobil/understøttede browsere)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: cocktail.name, text, url });
+        return;
+      } catch {
+        // Bruger afviste eller API fejlede — fald tilbage til clipboard
+      }
+    }
+
+    // Fallback: kopier URL til clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Link kopieret til udklipsholderen");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Kunne ikke kopiere link");
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        handleShare();
+      }}
+      className="gap-1.5"
+      aria-label="Del opskrift"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-primary" />
+      ) : (
+        <Share2 className="h-3.5 w-3.5" />
+      )}
+      {copied ? "Kopieret!" : "Del"}
+    </Button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function MenukortPage() {
   const fetchCocktails = useServerFn(listCocktails);
@@ -157,6 +226,7 @@ function MenukortPage() {
           </div>
         )}
 
+        {/* Detaljeret kortvisning */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
@@ -174,6 +244,7 @@ function MenukortPage() {
                       className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest("[data-order-button]")) return;
+                        if ((e.target as HTMLElement).closest("[data-share-button]")) return;
                         setOpenId(null);
                       }}
                     >
@@ -181,9 +252,19 @@ function MenukortPage() {
                         cocktail={c}
                         showAvailabilityBadge={false}
                         footerSlot={
-                          orderingEnabled ? (
-                            <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                          ) : null
+                          <div
+                            className="flex flex-wrap gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div data-share-button>
+                              <ShareButton cocktail={c} />
+                            </div>
+                            {orderingEnabled && (
+                              <div data-order-button className="flex-1">
+                                <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                              </div>
+                            )}
+                          </div>
                         }
                       />
                     </div>
