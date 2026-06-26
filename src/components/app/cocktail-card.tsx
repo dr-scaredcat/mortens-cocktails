@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 function fmt(amount: number | null, unit: string | null) {
   if (amount == null) return unit ?? "";
   const a = Number(amount);
-  const n = Number.isInteger(a) ? a.toString() : a.toString();
+  // Brug komma som decimaltegn i visningen
+  const n = Number.isInteger(a) ? a.toString() : a.toString().replace(".", ",");
   return unit ? `${n} ${unit}` : n;
 }
 
