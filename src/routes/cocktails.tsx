@@ -123,11 +123,16 @@ function CocktailsPage() {
             Ingen cocktails matcher.
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((c) => (
-              <CocktailCard key={c.id} cocktail={c} />
-            ))}
-          </div>
+          <>
+            <p className="mb-3 text-sm text-muted-foreground">
+              {filtered.length} {filtered.length === 1 ? "cocktail" : "cocktails"}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((c) => (
+                <CocktailCard key={c.id} cocktail={c} />
+              ))}
+            </div>
+          </>
         )}
       </main>
     </div>
