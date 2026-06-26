@@ -437,3 +437,130 @@ export const backfillCocktailImages = createServerFn({ method: "POST" })
     }
     return { updated, missing };
   });
+// ============================================================
+// PATCH: Tilføj disse exports til bunden af admin.functions.ts
+// ============================================================
+
+// =================== Glasses ===================
+
+export const upsertGlass = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(80),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await sb.from("glasses").update({ name: data.name }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      // Cascade rename to all cocktails using the old glass name
+      if (data.oldName && data.oldName !== data.name) {
+        await sb
+          .from("cocktails")
+          .update({ glass: data.name })
+          .eq("glass", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await sb
+      .from("glasses")
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteGlass = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    // Null out the glass field on cocktails using this glass
+    await sb.from("cocktails").update({ glass: null }).eq("glass", data.name);
+    const { error } = await sb.from("glasses").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Garnishes ===================
+
+export const upsertGarnish = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(120),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await sb.from("garnishes").update({ name: data.name }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      // Cascade rename to all cocktails using the old garnish name
+      if (data.oldName && data.oldName !== data.name) {
+        await sb
+          .from("cocktails")
+          .update({ garnish: data.name })
+          .eq("garnish", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await sb
+      .from("garnishes")
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteGarnish = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    // Null out the garnish field on cocktails using this garnish
+    await sb.from("cocktails").update({ garnish: null }).eq("garnish", data.name);
+    const { error } = await sb.from("garnishes").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== saveCocktail PATCH ===================
+// I den eksisterende saveCocktail handler, tilføj dette
+// FØR payload-objektet bygges (efter ingredient-resolve-loopet):
+
+/*
+  // Auto-opret glas hvis ikke-tomt og ikke allerede i tabellen
+  if (data.glass?.trim()) {
+    await sb
+      .from("glasses")
+      .upsert({ name: data.glass.trim() }, { onConflict: "name", ignoreDuplicates: true });
+  }
+
+  // Auto-opret pynt hvis ikke-tom og ikke allerede i tabellen
+  if (data.garnish?.trim()) {
+    await sb
+      .from("garnishes")
+      .upsert({ name: data.garnish.trim() }, { onConflict: "name", ignoreDuplicates: true });
+  }
+*/
