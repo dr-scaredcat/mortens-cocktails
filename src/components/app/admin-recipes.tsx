@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { listRecipes, listIngredients, type RecipeWithDetails } from "@/lib/cocktails.functions";
-import { saveRecipe, deleteRecipe } from "@/lib/recipes.functions";
+import { listIngredients } from "@/lib/cocktails.functions";
+import { listRecipes, saveRecipe, deleteRecipe } from "@/lib/recipes.functions";
+import type { RecipeWithDetails } from "@/lib/cocktails.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,14 +25,36 @@ import {
 } from "@/components/ui/select";
 import { UNITS } from "@/lib/constants";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type IngItem = { _id: string; name: string; amount: string; unit: string };
 type ImgItem = { _id: string; url: string };
 
 let _seq = 0;
-const newId = () => `item_${++_seq}_${Date.now()}`;
+const newId = () => `it_${++_seq}_${Date.now()}`;
+
+/** Konvertér decimal-punktum (fra databasen) til komma for visning */
+function toCommaDisplay(val: string): string {
+  return val.replace(".", ",");
+}
+
+/** Konvertér komma-streng til tal for API-kald */
+function amountToNumber(val: string): number | null {
+  if (!val) return null;
+  return parseFloat(val.replace(",", "."));
+}
+
+/** Håndter input i mængde-felt: tillad kun cifre + ét komma, konvertér punktum til komma */
+function sanitizeAmountInput(raw: string): string {
+  let val = raw.replace(/[^0-9.,]/g, "");
+  val = val.replace(/\./g, ",");
+  const parts = val.split(",");
+  if (parts.length > 2) {
+    val = parts[0] + "," + parts.slice(1).join("");
+  }
+  return val;
+}
 
 function emptyForm() {
   return {
@@ -44,13 +67,19 @@ function emptyForm() {
   };
 }
 
-// Simple image preview carousel for the form
-function FormImagePreview({ images, onRemove }: { images: ImgItem[]; onRemove: (id: string) => void }) {
+function ImageCarousel({
+  images,
+  onRemove,
+}: {
+  images: ImgItem[];
+  onRemove: (id: string) => void;
+}) {
   const [idx, setIdx] = useState(0);
   if (images.length === 0) return null;
   const safe = Math.min(idx, images.length - 1);
+
   return (
-    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-muted">
+    <div className="relative aspect-video w-full overflow-hidden rounded-md bg-muted">
       <img src={images[safe].url} alt="" className="h-full w-full object-cover" />
       <button
         type="button"
@@ -136,7 +165,8 @@ export function AdminRecipes() {
         ? r.ingredients.map((i) => ({
             _id: newId(),
             name: i.name,
-            amount: i.amount != null ? String(i.amount) : "",
+            // Konvertér decimal-punktum fra databasen til komma for visning
+            amount: i.amount != null ? toCommaDisplay(String(i.amount)) : "",
             unit: i.unit ?? "ml",
           }))
         : [{ _id: newId(), name: "", amount: "", unit: "ml" }],
@@ -208,7 +238,7 @@ export function AdminRecipes() {
             .filter((it) => it.name.trim())
             .map((it) => ({
               name: it.name.trim(),
-              amount: it.amount ? parseFloat(it.amount) : null,
+              amount: amountToNumber(it.amount),
               unit: it.unit || null,
             })),
         },
@@ -285,11 +315,11 @@ export function AdminRecipes() {
             <DialogTitle>{form.id ? "Rediger opskrift" : "Ny opskrift"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4">
             {/* Navn */}
             <div>
               <Label>Navn</Label>
-              <Input value={form.name} onChange={(e) => patch("name", e.target.value)} placeholder="Fx Hindbærsirup" />
+              <Input value={form.name} onChange={(e) => patch("name", e.target.value)} placeholder="Opskriftsnavn" />
             </div>
 
             {/* Beskrivelse */}
@@ -301,24 +331,25 @@ export function AdminRecipes() {
             {/* Billeder */}
             <div>
               <Label>Billeder</Label>
-              <FormImagePreview images={form.images} onRemove={removeImage} />
+              <ImageCarousel images={form.images} onRemove={removeImage} />
               <div className="mt-2 flex gap-2">
-                {/* Upload */}
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                  <Upload className="mr-1.5 h-3.5 w-3.5" />
-                  {uploading ? "Uploader…" : "Upload"}
-                </Button>
-                {/* URL */}
                 <Input
-                  placeholder="Eller indsæt billed-URL..."
+                  placeholder="Billede-URL"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addImageUrl(); } }}
+                  onKeyDown={(e) => e.key === "Enter" && addImageUrl()}
                 />
-                <Button type="button" variant="outline" size="sm" onClick={addImageUrl}>
-                  Tilføj
+                <Button type="button" variant="outline" onClick={addImageUrl}>Tilføj</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  <Upload className="mr-1 h-4 w-4" />
+                  {uploading ? "Uploader…" : "Upload"}
                 </Button>
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
               </div>
               {form.images.length > 0 && (
                 <p className="mt-1 text-xs text-muted-foreground">{form.images.length} billede{form.images.length !== 1 ? "r" : ""}</p>
@@ -343,10 +374,12 @@ export function AdminRecipes() {
                       </datalist>
                     </div>
                     <Input
+                      type="text"
+                      inputMode="decimal"
                       placeholder="Mængde"
-                      className="w-20"
+                      className="w-20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={it.amount}
-                      onChange={(e) => setItem(i, { amount: e.target.value })}
+                      onChange={(e) => setItem(i, { amount: sanitizeAmountInput(e.target.value) })}
                     />
                     <Select value={it.unit} onValueChange={(v) => setItem(i, { unit: v })}>
                       <SelectTrigger className="w-20">
