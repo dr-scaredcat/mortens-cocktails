@@ -20,6 +20,8 @@ import { AdminUsers } from "@/components/app/admin-users";
 import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
 import { AdminThemes } from "@/components/app/admin-themes";
+import { AdminGlasses } from "@/components/app/admin-glasses";
+import { AdminGarnishes } from "@/components/app/admin-garnishes";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
@@ -36,6 +38,8 @@ function AdminPage() {
     { value: "menukort", label: "Menukort" },
     { value: "categories", label: "Kategorier" },
     { value: "tags", label: "Tags" },
+    { value: "glasses", label: "Glas" },
+    { value: "garnishes", label: "Pynt" },
     { value: "users", label: "Brugere" },
     { value: "settings", label: "Indstillinger" },
     { value: "themes", label: "Temaer" },
@@ -58,7 +62,7 @@ function AdminPage() {
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
             <Select value={tab} onValueChange={setTab}>
-              <SelectTrigger className="w-full sm:max-w-xs">
+              <SelectTrigger className="mb-6 w-52">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -69,28 +73,35 @@ function AdminPage() {
                 ))}
               </SelectContent>
             </Select>
-            <TabsContent value="ingredients" className="mt-4">
+
+            <TabsContent value="ingredients">
               <AdminIngredients />
             </TabsContent>
-            <TabsContent value="cocktails" className="mt-4">
+            <TabsContent value="cocktails">
               <AdminCocktails />
             </TabsContent>
-            <TabsContent value="menukort" className="mt-4">
+            <TabsContent value="menukort">
               <AdminMenukort />
             </TabsContent>
-            <TabsContent value="categories" className="mt-4">
+            <TabsContent value="categories">
               <AdminCategories />
             </TabsContent>
-            <TabsContent value="tags" className="mt-4">
+            <TabsContent value="tags">
               <AdminTags />
             </TabsContent>
-            <TabsContent value="users" className="mt-4">
+            <TabsContent value="glasses">
+              <AdminGlasses />
+            </TabsContent>
+            <TabsContent value="garnishes">
+              <AdminGarnishes />
+            </TabsContent>
+            <TabsContent value="users">
               <AdminUsers />
             </TabsContent>
-            <TabsContent value="settings" className="mt-4">
+            <TabsContent value="settings">
               <AdminSettings />
             </TabsContent>
-            <TabsContent value="themes" className="mt-4">
+            <TabsContent value="themes">
               <AdminThemes />
             </TabsContent>
           </Tabs>
