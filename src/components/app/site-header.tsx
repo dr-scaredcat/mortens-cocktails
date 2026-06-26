@@ -12,7 +12,6 @@ const navItems = [
   { to: "/naesten", label: "Næsten" },
   { to: "/alle", label: "Alle" },
   { to: "/ingredienser", label: "Ingredienser" },
-  { to: "/tilfoej-naeste", label: "Tilføj næste" },
 ] as const;
 
 export function SiteHeader() {
@@ -21,7 +20,7 @@ export function SiteHeader() {
   const { data: siteNameData } = useQuery({
     queryKey: ["site-name"],
     queryFn: () => fetchSiteName(),
-    staleTime: 1000 * 60 * 5, // 5 min cache
+    staleTime: 1000 * 60 * 5,
   });
   const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
 
@@ -66,7 +65,7 @@ export function SiteHeader() {
           <Link
             key={n.to}
             to={n.to}
-            activeOptions={{ exact: true }}
+            activeOptions={{ exact: n.to === "/" }}
             className="rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground data-[status=active]:border-primary/40 data-[status=active]:bg-primary/10 data-[status=active]:text-primary"
           >
             {n.label}
