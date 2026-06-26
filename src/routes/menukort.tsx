@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Wine, Shuffle } from "lucide-react";
+import { Wine, Shuffle, ArrowDownAZ, Star } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
 import { getOrderingEnabled } from "@/lib/orders.functions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -22,6 +23,8 @@ export const Route = createFileRoute("/menukort")({
   }),
   component: MenukortPage,
 });
+
+type SortMode = "alpha" | "rating";
 
 function MenukortPage() {
   const fetchCocktails = useServerFn(listCocktails);
@@ -40,6 +43,7 @@ function MenukortPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("alpha");
 
   const filtered = useMemo(() => {
     const list = (data ?? []) as CocktailWithDetails[];
@@ -53,8 +57,12 @@ function MenukortPage() {
           c.ingredients.some((i) => i.name.toLowerCase().includes(s)),
       );
     }
-    return [...f].sort((a, b) => a.name.localeCompare(b.name));
-  }, [data, tags, q]);
+    if (sortMode === "rating") {
+      return [...f].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
+    }
+    // alpha (default)
+    return [...f].sort((a, b) => a.name.localeCompare(b.name, "da"));
+  }, [data, tags, q, sortMode]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,6 +81,7 @@ function MenukortPage() {
             </p>
           )}
         </div>
+
         <Button
           variant="outline"
           className="mb-5 w-full"
@@ -85,6 +94,7 @@ function MenukortPage() {
           <Shuffle className="h-4 w-4" />
           Overrask mig
         </Button>
+
         <div className="mb-5 space-y-3">
           <Input
             placeholder="Søg efter cocktail..."
@@ -98,7 +108,30 @@ function MenukortPage() {
             }
             onClear={() => setTags([])}
           />
+
+          {/* Sorterings-toggle */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortMode("alpha")}
+              className={cn(sortMode === "alpha" && "border-primary/60 bg-primary/10 text-primary")}
+            >
+              <ArrowDownAZ className="mr-1 h-4 w-4" />
+              A-Z
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortMode("rating")}
+              className={cn(sortMode === "rating" && "border-primary/60 bg-primary/10 text-primary")}
+            >
+              <Star className="mr-1 h-4 w-4" />
+              Bedst vurderet
+            </Button>
+          </div>
         </div>
+
         {isLoading ? (
           <p className="text-muted-foreground">Indlæser...</p>
         ) : filtered.length === 0 ? (
@@ -123,6 +156,7 @@ function MenukortPage() {
             ))}
           </div>
         )}
+
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
@@ -148,9 +182,7 @@ function MenukortPage() {
                         showAvailabilityBadge={false}
                         footerSlot={
                           orderingEnabled ? (
-                            <div data-order-button onClick={(e) => e.stopPropagation()}>
-                              <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                            </div>
+                            <OrderButton cocktailId={c.id} cocktailName={c.name} />
                           ) : null
                         }
                       />
