@@ -82,18 +82,22 @@ export const listTags = createServerFn({ method: "GET" }).handler(async () => {
 
 export const listCocktails = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
-  const [cocktailsRes, ciRes, ingRes, tagsRes, ratingsRes] = await Promise.all([
+  const [cocktailsRes, ciRes, ingRes, tagsRes, ratingsRes, tagListRes] = await Promise.all([
     sb.from("cocktails").select("*").order("name"),
     sb.from("cocktail_ingredients").select("cocktail_id, ingredient_id, amount, unit, position"),
     sb.from("ingredients").select("id, name, available"),
     sb.from("cocktail_tags").select("cocktail_id, tag"),
     sb.from("cocktail_ratings").select("cocktail_id, rating"),
+    sb.from("tags").select("name, position").order("position"),
   ]);
   if (cocktailsRes.error) throw new Error(cocktailsRes.error.message);
   if (ciRes.error) throw new Error(ciRes.error.message);
   if (ingRes.error) throw new Error(ingRes.error.message);
   if (tagsRes.error) throw new Error(tagsRes.error.message);
   if (ratingsRes.error) throw new Error(ratingsRes.error.message);
+  if (tagListRes.error) throw new Error(tagListRes.error.message);
+
+  const tagOrder = new Map((tagListRes.data ?? []).map((t) => [t.name, t.position]));
 
   const ratingMap = new Map<string, { sum: number; count: number }>();
   for (const r of ratingsRes.data ?? []) {
@@ -121,7 +125,8 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
     const missing = items.filter((i) => !i.available).map((i) => i.name);
     const tags = (tagsRes.data ?? [])
       .filter((t) => t.cocktail_id === c.id)
-      .map((t) => t.tag);
+      .map((t) => t.tag)
+      .sort((a, b) => (tagOrder.get(a) ?? 999) - (tagOrder.get(b) ?? 999));
     const agg = ratingMap.get(c.id);
     return {
       id: c.id,
@@ -180,9 +185,6 @@ export const getMyRatings = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return (rows ?? []) as { cocktail_id: string; rating: number }[];
   });
-// ============================================================
-// PATCH: Tilføj disse exports til bunden af cocktails.functions.ts
-// ============================================================
 
 export type GlassRow = { id: string; name: string };
 export type GarnishRow = { id: string; name: string };
