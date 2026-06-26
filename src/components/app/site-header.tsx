@@ -2,10 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, Shield, ClipboardList } from "lucide-react";
+import { LogOut, Shield, ClipboardList } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getSiteName, DEFAULT_SITE_NAME } from "@/lib/orders.functions";
+import { BarskabLogo } from "@/components/app/barskab-logo";
 
 const navItems = [
   { to: "/", label: "Klar" },
@@ -28,7 +29,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
         <Link to="/" className="flex items-center gap-2 font-serif text-lg tracking-tight">
-          <Wine className="h-5 w-5 text-primary" />
+          <BarskabLogo className="text-primary" />
           <span>{siteName}</span>
         </Link>
         <div className="flex items-center gap-1">
