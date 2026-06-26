@@ -140,7 +140,8 @@ function MenukortPage() {
       f = f.filter(
         (c) =>
           c.name.toLowerCase().includes(s) ||
-          c.ingredients.some((i) => i.name.toLowerCase().includes(s)),
+          c.ingredients.some((i) => i.name.toLowerCase().includes(s)) ||
+          c.tags.some((t) => t.toLowerCase().includes(s)),
       );
     }
     if (sortMode === "rating") {
@@ -177,7 +178,7 @@ function MenukortPage() {
 
         <div className="mb-5 space-y-3">
           <Input
-            placeholder="Søg efter cocktail..."
+            placeholder="Søg efter navn eller ingrediens..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
