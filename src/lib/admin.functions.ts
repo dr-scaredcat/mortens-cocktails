@@ -351,6 +351,20 @@ export const deleteTag = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const reorderTags = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) => sb.from("tags").update({ position: i + 1 }).eq("id", id)),
+    );
+    return { ok: true };
+  });
+
 // =================== Glasses ===================
 
 export const upsertGlass = createServerFn({ method: "POST" })
