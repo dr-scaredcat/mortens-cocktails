@@ -219,13 +219,113 @@ export const getLogoSize = createServerFn({ method: "GET" })
 export const setLogoSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { size: number }) =>
-    z.object({ size: z.number().int().min(16).max(48) }).parse(d),
+    z.object({ size: z.number().int().min(8).max(100) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
       .from("app_settings")
       .upsert({ key: "logo_size", value: data.size as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Tekststørrelse ===================
+
+export const DEFAULT_TEXT_SIZE = 18;
+
+export const getTextSize = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "text_size")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { size: DEFAULT_TEXT_SIZE };
+    const v = data.value;
+    const n = typeof v === "number" ? v : Number(v);
+    return { size: Number.isFinite(n) ? n : DEFAULT_TEXT_SIZE };
+  });
+
+export const setTextSize = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { size: number }) =>
+    z.object({ size: z.number().int().min(8).max(100) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "text_size", value: data.size as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Logo-tekst afstand ===================
+
+export const DEFAULT_LOGO_GAP = 8;
+
+export const getLogoGap = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "logo_gap")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { gap: DEFAULT_LOGO_GAP };
+    const v = data.value;
+    const n = typeof v === "number" ? v : Number(v);
+    return { gap: Number.isFinite(n) ? n : DEFAULT_LOGO_GAP };
+  });
+
+export const setLogoGap = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { gap: number }) =>
+    z.object({ gap: z.number().int().min(0).max(48) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_gap", value: data.gap as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Logo-tekst justering ===================
+
+export type LogoAlign = "top" | "center" | "bottom";
+export const DEFAULT_LOGO_ALIGN: LogoAlign = "center";
+
+export const getLogoAlign = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "logo_align")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { align: DEFAULT_LOGO_ALIGN };
+    const v = data.value;
+    const valid: LogoAlign[] = ["top", "center", "bottom"];
+    return { align: valid.includes(v as LogoAlign) ? (v as LogoAlign) : DEFAULT_LOGO_ALIGN };
+  });
+
+export const setLogoAlign = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { align: LogoAlign }) =>
+    z.object({ align: z.enum(["top", "center", "bottom"]) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_align", value: data.align as unknown as never });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
