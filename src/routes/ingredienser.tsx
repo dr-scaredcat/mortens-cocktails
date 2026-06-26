@@ -1,313 +1,278 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { SiteHeader } from "@/components/app/site-header";
-import { listIngredients, listCocktails, listCategories } from "@/lib/cocktails.functions";
-import { setIngredientAvailable } from "@/lib/admin.functions";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useSession } from "@/hooks/use-session";
-import { isAdmin as isAdminFn } from "@/lib/admin.functions";
+import { Wine, Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
+import { CocktailCard } from "@/components/app/cocktail-card";
+import { TagFilter } from "@/components/app/tag-filter";
+import { Input } from "@/components/ui/input";
+import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
+import { OrderButton } from "@/components/app/order-button";
+import { getOrderingEnabled } from "@/lib/orders.functions";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import type { CocktailWithDetails } from "@/lib/cocktails.functions";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
-export const Route = createFileRoute("/ingredienser")({
+export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Ingredienser — Barskab" },
-      { name: "description", content: "Marker hvilke ingredienser du har i barskabet." },
+      { title: "Cocktail menu — Barskab" },
+      { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
-  component: IngredientsPage,
+  component: MenukortPage,
 });
 
-type Tab = "alle" | "goer-klar" | "indgaar-flest";
+type SortMode = "alpha" | "rating";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "alle", label: "Alle" },
-  { id: "goer-klar", label: "Gør en cocktail klar" },
-  { id: "indgaar-flest", label: "Indgår i flest cocktails" },
-];
+// ── Share-knap komponent ──────────────────────────────────────────────────────
+function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
+  const [copied, setCopied] = useState(false);
 
-function IngredientsPage() {
-  const qc = useQueryClient();
-  const { session } = useSession();
-  const fetchList = useServerFn(listIngredients);
+  async function handleShare() {
+    // Byg en tekstlig opskrift til deling
+    const ingLines = cocktail.ingredients
+      .map((i) => {
+        const amt = i.amount != null ? `${i.amount}${i.unit ? ` ${i.unit}` : ""}` : i.unit ?? "";
+        return amt ? `• ${amt} ${i.name}` : `• ${i.name}`;
+      })
+      .join("\n");
+
+    const parts: string[] = [`🍹 ${cocktail.name}`];
+    if (cocktail.description) parts.push(cocktail.description);
+    parts.push("", "Ingredienser:", ingLines);
+    if (cocktail.glass) parts.push("", `Glas: ${cocktail.glass}`);
+    if (cocktail.garnish) parts.push(`Pynt: ${cocktail.garnish}`);
+    if (cocktail.instructions) parts.push("", "Fremgangsmåde:", cocktail.instructions);
+
+    const text = parts.join("\n");
+    const url = window.location.href;
+
+    // Forsøg Web Share API (mobil/understøttede browsere)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: cocktail.name, text, url });
+        return;
+      } catch {
+        // Bruger afviste eller API fejlede — fald tilbage til clipboard
+      }
+    }
+
+    // Fallback: kopier URL til clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Link kopieret til udklipsholderen");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Kunne ikke kopiere link");
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={(e) => {
+        e.stopPropagation();
+        handleShare();
+      }}
+      className="gap-1.5"
+      aria-label="Del opskrift"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-primary" />
+      ) : (
+        <Share2 className="h-3.5 w-3.5" />
+      )}
+      {copied ? "Kopieret!" : "Del"}
+    </Button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MenukortPage() {
   const fetchCocktails = useServerFn(listCocktails);
-  const checkAdmin = useServerFn(isAdminFn);
-  const setAvail = useServerFn(setIngredientAvailable);
-  const fetchCats = useServerFn(listCategories);
-
-  const [tab, setTab] = useState<Tab>("alle");
-  const [openName, setOpenName] = useState<string | null>(null);
-
-  const { data: ingredients } = useQuery({
-    queryKey: ["ingredients"],
-    queryFn: () => fetchList(),
-  });
-  const { data: cocktails } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
   });
-  const { data: categories } = useQuery({
-    queryKey: ["categories"],
-    queryFn: () => fetchCats(),
+  const fetchOrdering = useServerFn(getOrderingEnabled);
+  const { data: orderingData } = useQuery({
+    queryKey: ["ordering-enabled"],
+    queryFn: () => fetchOrdering(),
+    refetchInterval: 30_000,
   });
-  const { data: admin } = useQuery({
-    queryKey: ["isAdmin", session?.user.id ?? null],
-    queryFn: () => checkAdmin(),
-    enabled: !!session,
-  });
+  const orderingEnabled = !!orderingData?.enabled;
 
-  const canEdit = !!admin?.isAdmin;
+  const [tags, setTags] = useState<string[]>([]);
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("alpha");
 
-  const toggle = useMutation({
-    mutationFn: (vars: { id: string; available: boolean }) =>
-      setAvail({ data: vars }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ingredients"] });
-      qc.invalidateQueries({ queryKey: ["cocktails"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // ── Fane: Alle — grupperet efter kategori ──
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof ingredients>();
-    for (const cat of categories ?? []) map.set(cat.name, [] as any);
-    if (!map.has("Andet")) map.set("Andet", [] as any);
-    for (const ing of ingredients ?? []) {
-      const k = (map.has(ing.category) ? ing.category : "Andet") as string;
-      (map.get(k) as any[]).push(ing);
+  const filtered = useMemo(() => {
+    const list = (data ?? []) as CocktailWithDetails[];
+    let f = list.filter((c) => c.missing.length === 0 && c.on_menu !== false);
+    if (tags.length > 0) f = f.filter((c) => tags.every((t) => c.tags.includes(t)));
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      f = f.filter(
+        (c) =>
+          c.name.toLowerCase().includes(s) ||
+          c.ingredients.some((i) => i.name.toLowerCase().includes(s)),
+      );
     }
-    return Array.from(map.entries()).filter(([, v]) => (v as any[]).length > 0);
-  }, [ingredients, categories]);
-
-  // ── Fane: Gør en cocktail klar — ingredienser hvor kun den ene mangler ──
-  const goerKlarRows = useMemo(() => {
-    const list = (cocktails ?? []) as CocktailWithDetails[];
-    const map = new Map<string, string[]>(); // ingrediensnavn → cocktailnavne
-    for (const c of list) {
-      if (c.missing.length === 1) {
-        const ingName = c.missing[0];
-        const arr = map.get(ingName) ?? [];
-        arr.push(c.name);
-        map.set(ingName, arr);
-      }
+    if (sortMode === "rating") {
+      return [...f].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
     }
-    return Array.from(map.entries())
-      .map(([name, cocktailNames]) => ({
-        name,
-        cocktailNames: [...cocktailNames].sort((a, b) => a.localeCompare(b, "da")),
-        ingredient: (ingredients ?? []).find((i) => i.name === name),
-      }))
-      .sort((a, b) => b.cocktailNames.length - a.cocktailNames.length || a.name.localeCompare(b.name, "da"));
-  }, [cocktails, ingredients]);
-
-  // ── Fane: Indgår i flest cocktails — ikke tilgængelige ingredienser sorteret efter brug ──
-  const indgaarFlestRows = useMemo(() => {
-    const list = (cocktails ?? []) as CocktailWithDetails[];
-    const map = new Map<string, string[]>(); // ingrediensnavn → cocktailnavne
-    for (const c of list) {
-      for (const i of c.ingredients) {
-        if (!i.available) {
-          const arr = map.get(i.name) ?? [];
-          arr.push(c.name);
-          map.set(i.name, arr);
-        }
-      }
-    }
-    return Array.from(map.entries())
-      .map(([name, cocktailNames]) => ({
-        name,
-        // Deduplicate
-        cocktailNames: [...new Set(cocktailNames)].sort((a, b) => a.localeCompare(b, "da")),
-        ingredient: (ingredients ?? []).find((i) => i.name === name),
-      }))
-      .sort((a, b) => b.cocktailNames.length - a.cocktailNames.length || a.name.localeCompare(b.name, "da"));
-  }, [cocktails, ingredients]);
-
-  const openRow =
-    tab === "goer-klar"
-      ? goerKlarRows.find((r) => r.name === openName) ?? null
-      : indgaarFlestRows.find((r) => r.name === openName) ?? null;
+    // alpha (default)
+    return [...f].sort((a, b) => a.name.localeCompare(b.name, "da"));
+  }, [data, tags, q, sortMode]);
 
   return (
     <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <h1 className="mb-1 font-serif text-3xl">Ingredienser</h1>
-        <p className="mb-5 text-sm text-muted-foreground">
-          {canEdit
-            ? "Marker hvad du har på lager. Ændringer slår igennem med det samme."
-            : "Oversigt over ingredienser. Log ind som admin for at redigere lager."}
-        </p>
-
-        {/* Fane-vælger */}
-        <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      <header className="border-b border-border bg-background/85 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 font-serif text-lg tracking-tight">
+          <Wine className="h-5 w-5 text-primary" />
+          <span>Cocktail menu</span>
+        </div>
+      </header>
+      <main className="mx-auto max-w-5xl px-4 py-6">
+        <div className="mb-5 space-y-1">
+          <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
+          {orderingEnabled && (
+            <p className="text-sm text-muted-foreground">
+              Vælg en cocktail og tryk Bestil — bartenderen får besked.
+            </p>
+          )}
         </div>
 
-        {/* ── Fane: Alle ── */}
-        {tab === "alle" && (
-          <div className="space-y-6">
-            {grouped.map(([cat, items]) => (
-              <section key={cat}>
-                <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-primary">
-                  {cat}
-                </h2>
-                <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                  {(items as any[]).map((ing) => (
-                    <li key={ing.id} className="flex items-center px-4 py-3">
-                      <label className="flex flex-1 cursor-pointer items-center gap-3">
-                        <Checkbox
-                          checked={ing.available}
-                          disabled={!canEdit || toggle.isPending}
-                          onCheckedChange={(v) =>
-                            canEdit && toggle.mutate({ id: ing.id, available: !!v })
-                          }
-                        />
-                        <span className={ing.available ? "" : "text-muted-foreground"}>
-                          {ing.name}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+        <Button
+          variant="outline"
+          className="mb-5 w-full"
+          onClick={() => {
+            if (filtered.length === 0) return;
+            const random = filtered[Math.floor(Math.random() * filtered.length)];
+            setOpenId(random.id);
+          }}
+        >
+          <Shuffle className="h-4 w-4" />
+          Overrask mig
+        </Button>
+
+        <div className="mb-5 space-y-3">
+          <Input
+            placeholder="Søg efter cocktail..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <TagFilter
+            selected={tags}
+            onToggle={(t) =>
+              setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+            }
+            onClear={() => setTags([])}
+          />
+
+          {/* Sorterings-toggle */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortMode("alpha")}
+              className={cn(sortMode === "alpha" && "border-primary/60 bg-primary/10 text-primary")}
+            >
+              <ArrowDownAZ className="mr-1 h-4 w-4" />
+              A-Z
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortMode("rating")}
+              className={cn(sortMode === "rating" && "border-primary/60 bg-primary/10 text-primary")}
+            >
+              <Star className="mr-1 h-4 w-4" />
+              Bedst vurderet
+            </Button>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <p className="text-muted-foreground">Indlæser...</p>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
+            Ingen cocktails kan laves lige nu.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((c) => (
+              <CocktailCard
+                key={c.id}
+                cocktail={c}
+                showAvailabilityBadge={false}
+                compact
+                onClick={() => setOpenId(c.id)}
+                footerSlot={
+                  orderingEnabled ? (
+                    <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                  ) : null
+                }
+              />
             ))}
-            {grouped.length === 0 && (
-              <p className="text-muted-foreground">Ingen ingredienser endnu.</p>
-            )}
           </div>
         )}
 
-        {/* ── Fane: Gør en cocktail klar ── */}
-        {tab === "goer-klar" && (
-          <div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Ingredienser der mangler præcis én gang for at en cocktail bliver klar, sorteret efter flest cocktails.
-            </p>
-            {goerKlarRows.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-                Ingen ingredienser ville gøre en cocktail klar med det samme.
-              </div>
-            ) : (
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {goerKlarRows.map((r) => (
-                  <li key={r.name} className="flex items-center gap-3 px-4 py-3">
-                    {r.ingredient && (
-                      <Checkbox
-                        checked={r.ingredient.available}
-                        disabled={!canEdit || toggle.isPending}
-                        onCheckedChange={(v) =>
-                          canEdit &&
-                          r.ingredient &&
-                          toggle.mutate({ id: r.ingredient.id, available: !!v })
+        {/* Detaljeret kortvisning */}
+        <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
+          <DialogPortal>
+            <DialogOverlay />
+            <DialogPrimitive.Content
+              className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border-0 bg-transparent p-0 shadow-none outline-none sm:max-w-md"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              {(() => {
+                const c = filtered.find((x) => x.id === openId);
+                if (!c) return null;
+                return (
+                  <>
+                    <DialogPrimitive.Title className="sr-only">{c.name}</DialogPrimitive.Title>
+                    <div
+                      className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("[data-order-button]")) return;
+                        if ((e.target as HTMLElement).closest("[data-share-button]")) return;
+                        setOpenId(null);
+                      }}
+                    >
+                      <CocktailCard
+                        cocktail={c}
+                        showAvailabilityBadge={false}
+                        footerSlot={
+                          <div
+                            className="flex flex-wrap gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div data-share-button>
+                              <ShareButton cocktail={c} />
+                            </div>
+                            {orderingEnabled && (
+                              <div data-order-button className="flex-1">
+                                <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                              </div>
+                            )}
+                          </div>
                         }
                       />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setOpenName(r.name)}
-                      className="flex flex-1 items-center justify-between gap-3 text-left"
-                    >
-                      <span className="font-medium">{r.name}</span>
-                      <span className="shrink-0 text-sm text-muted-foreground">
-                        {r.cocktailNames.length}{" "}
-                        {r.cocktailNames.length === 1 ? "cocktail" : "cocktails"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* ── Fane: Indgår i flest cocktails ── */}
-        {tab === "indgaar-flest" && (
-          <div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Ikke-tilgængelige ingredienser sorteret efter hvor mange cocktails de indgår i.
-            </p>
-            {indgaarFlestRows.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-                Alle ingredienser er markeret som tilgængelige.
-              </div>
-            ) : (
-              <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {indgaarFlestRows.map((r) => (
-                  <li key={r.name} className="flex items-center gap-3 px-4 py-3">
-                    {r.ingredient && (
-                      <Checkbox
-                        checked={r.ingredient.available}
-                        disabled={!canEdit || toggle.isPending}
-                        onCheckedChange={(v) =>
-                          canEdit &&
-                          r.ingredient &&
-                          toggle.mutate({ id: r.ingredient.id, available: !!v })
-                        }
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setOpenName(r.name)}
-                      className="flex flex-1 items-center justify-between gap-3 text-left"
-                    >
-                      <span className={r.ingredient?.available ? "font-medium" : "font-medium"}>
-                        {r.name}
-                      </span>
-                      <span className="shrink-0 text-sm text-muted-foreground">
-                        {r.cocktailNames.length}{" "}
-                        {r.cocktailNames.length === 1 ? "cocktail" : "cocktails"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* Dialog: vis cocktails for valgt ingrediens */}
-        <Dialog open={!!openName} onOpenChange={(o) => !o && setOpenName(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{openName}</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              {tab === "goer-klar"
-                ? "Disse cocktails bliver klar hvis du tilføjer ingrediensen:"
-                : "Disse cocktails indeholder ingrediensen:"}
-            </p>
-            <ul className="mt-2 space-y-1">
-              {openRow?.cocktailNames.map((name) => (
-                <li key={name} className="text-sm">
-                  {name}
-                </li>
-              ))}
-            </ul>
-          </DialogContent>
+                    </div>
+                  </>
+                );
+              })()}
+            </DialogPrimitive.Content>
+          </DialogPortal>
         </Dialog>
       </main>
     </div>
