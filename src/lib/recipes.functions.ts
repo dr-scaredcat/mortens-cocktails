@@ -40,17 +40,27 @@ export const saveRecipe = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const sb = context.supabase;
 
+    // ── Tjek om en ANDEN opskrift allerede har dette navn (case-insensitiv) ──
+    const { data: existing } = await sb
+      .from("recipes")
+      .select("id")
+      .ilike("name", data.name.trim())
+      .maybeSingle();
+    if (existing && existing.id !== data.id) {
+      throw new Error(`En opskrift med navnet "${data.name.trim()}" eksisterer allerede`);
+    }
+
     // Resolve / auto-create ingredients
     const ingIds: { ingredient_id: string; amount: number | null; unit: string | null }[] = [];
     for (const item of data.ingredients) {
       const name = item.name.trim();
       if (!name) continue;
-      const { data: existing } = await sb
+      const { data: existingIng } = await sb
         .from("ingredients")
         .select("id")
         .ilike("name", name)
         .maybeSingle();
-      let id = existing?.id as string | undefined;
+      let id = existingIng?.id as string | undefined;
       if (!id) {
         const { data: created, error } = await sb
           .from("ingredients")
@@ -115,3 +125,73 @@ export const deleteRecipe = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const listRecipes = createServerFn({ method: "GET" }).handler(async () => {
+  const { createClient } = await import("@supabase/supabase-js");
+  const url =
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
+    process.env.SUPABASE_URL ||
+    "https://dkvrwwpbaarfyqyrnhha.supabase.co";
+  const key =
+    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    "sb_publishable_NsAPFaHuYb2mQbejaLy9WQ_BtLxx8ri";
+  const sb = createClient(url, key, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data: recipes, error } = await sb
+    .from("recipes")
+    .select("id, name, description, instructions")
+    .order("name");
+  if (error) throw new Error(error.message);
+
+  const { data: images } = await sb
+    .from("recipe_images")
+    .select("recipe_id, id, url, position")
+    .order("position");
+
+  const { data: recipeIngs } = await sb
+    .from("recipe_ingredients")
+    .select("recipe_id, ingredient_id, amount, unit, position")
+    .order("position");
+
+  const { data: ings } = await sb
+    .from("ingredients")
+    .select("id, name, available");
+
+  const ingMap = new Map((ings ?? []).map((i: any) => [i.id, i]));
+
+  return (recipes ?? []).map((r: any) => {
+    const imgs = (images ?? [])
+      .filter((img: any) => img.recipe_id === r.id)
+      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+      .map((img: any) => ({ id: img.id, url: img.url, position: img.position }));
+
+    const items = (recipeIngs ?? [])
+      .filter((ri: any) => ri.recipe_id === r.id)
+      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+      .map((ri: any) => {
+        const ing = ingMap.get(ri.ingredient_id) as any;
+        return {
+          ingredient_id: ri.ingredient_id,
+          name: ing?.name ?? "Ukendt",
+          amount: ri.amount,
+          unit: ri.unit,
+          available: !!ing?.available,
+        };
+      });
+
+    const missing = items.filter((i: any) => !i.available).map((i: any) => i.name);
+
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      instructions: r.instructions,
+      images: imgs,
+      ingredients: items,
+      missing,
+    };
+  });
+});
