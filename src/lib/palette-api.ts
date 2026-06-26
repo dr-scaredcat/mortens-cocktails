@@ -3,9 +3,102 @@ import type { ThemeColors } from "@/lib/themes.functions";
 
 export type RgbColor = [number, number, number];
 
-function rgbToHex([r, g, b]: RgbColor): string {
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+// ─── OKLCH helpers ───────────────────────────────────────────────────────────
+
+type OklchColor = { L: number; C: number; H: number };
+
+function parseOklch(str: string): OklchColor {
+  const m = str.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+  if (!m) return { L: 0.5, C: 0.1, H: 0 };
+  return { L: parseFloat(m[1]), C: parseFloat(m[2]), H: parseFloat(m[3]) };
 }
+
+function formatOklch({ L, C, H }: OklchColor): string {
+  // Clamp to valid OKLCH ranges
+  const lc = Math.max(0.05, Math.min(0.99, L));
+  const cc = Math.max(0, Math.min(0.4, C));
+  const hc = ((H % 360) + 360) % 360;
+  return `oklch(${lc.toFixed(3)} ${cc.toFixed(3)} ${hc.toFixed(1)})`;
+}
+
+/** Apply an OKLCH offset (dL, dC, dH) to a base color */
+function applyOffset(base: OklchColor, dL: number, dC: number, dH: number): string {
+  return formatOklch({ L: base.L + dL, C: base.C + dC, H: base.H + dH });
+}
+
+/** Compute the OKLCH offset from anchor to target (both as oklch strings) */
+function oklchOffset(
+  anchor: string,
+  target: string,
+): { dL: number; dC: number; dH: number } {
+  const a = parseOklch(anchor);
+  const t = parseOklch(target);
+  // Hue offset: pick the shortest arc
+  let dH = t.H - a.H;
+  if (dH > 180) dH -= 360;
+  if (dH < -180) dH += 360;
+  return { dL: t.L - a.L, dC: t.C - a.C, dH };
+}
+
+// ─── Lys-tema referencefarver (ankerpunkter) ─────────────────────────────────
+//
+// Gruppering (jf. billede 1 + 2):
+//
+//  LYSEST-gruppe  → anchor: background
+//    card            = background + offset
+//    muted           = background + offset
+//
+//  TEKST-gruppe   → anchor: foreground
+//    accentForeground = foreground + offset
+//    mutedForeground  = foreground + offset     (A: relativt til foreground)
+//
+//  PRIMARY-gruppe → anchor: primary
+//    primaryForeground = primary + offset       (A: relativt til primary)
+//    border            = primary + offset (lys-midt farve fra paletten bruges
+//                        dog som yderligere korektion — se nedenfor)
+//
+//  ACCENT-gruppe  → anchor: accent
+//    (accentForeground beregnes fra foreground-gruppen, se billede 1)
+//
+//  DESTRUCTIVE    → egen logik (uændret)
+
+const LYS = {
+  background:          "oklch(0.97 0.025 75)",
+  card:                "oklch(0.99 0.015 80)",
+  muted:               "oklch(0.93 0.03 80)",
+  foreground:          "oklch(0.22 0.04 320)",
+  accentForeground:    "oklch(0.22 0.05 240)",
+  mutedForeground:     "oklch(0.45 0.06 320)",
+  primary:             "oklch(0.65 0.22 0)",
+  primaryForeground:   "oklch(0.99 0.01 80)",
+  accent:              "oklch(0.78 0.17 195)",
+  border:              "oklch(0.85 0.05 20)",
+  destructive:         "oklch(0.6 0.22 25)",
+  destructiveForeground: "oklch(0.99 0.01 80)",
+};
+
+// Pre-compute offsets fra Lys-temaet
+const OFFSETS = {
+  // Lysest-gruppe (anchor = background)
+  cardFromBg:    oklchOffset(LYS.background, LYS.card),
+  mutedFromBg:   oklchOffset(LYS.background, LYS.muted),
+
+  // Tekst-gruppe (anchor = foreground)
+  accentFgFromFg:  oklchOffset(LYS.foreground, LYS.accentForeground),
+  mutedFgFromFg:   oklchOffset(LYS.foreground, LYS.mutedForeground),
+
+  // Primary-gruppe (anchor = primary)
+  primaryFgFromPrimary: oklchOffset(LYS.primary, LYS.primaryForeground),
+  borderFromPrimary:    oklchOffset(LYS.primary, LYS.border),
+
+  // Accent-gruppe (anchor = accent) — accentForeground beregnes fra foreground
+  // (ingen ekstra offset her; accent er sit eget ankerpunkt)
+
+  // Destructive-gruppe (anchor = destructive)
+  destructiveFgFromDestructive: oklchOffset(LYS.destructive, LYS.destructiveForeground),
+};
+
+// ─── RGB hjælpere (bruges kun til sortering) ─────────────────────────────────
 
 function hexToRgb(hex: string): RgbColor {
   const clean = hex.replace("#", "");
@@ -32,45 +125,92 @@ function saturation([r, g, b]: RgbColor): number {
   return l > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min);
 }
 
+function rgbToHex([r, g, b]: RgbColor): string {
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+// ─── Hoved-mapping ───────────────────────────────────────────────────────────
+
 function mapPaletteToTheme(palette: RgbColor[]): ThemeColors {
+  // Sortér palette fra mørkest til lysest
   const sorted = [...palette].sort((a, b) => luminance(a) - luminance(b));
 
+  // Vælg den mest mættede farve som primary-anker
   const mostSaturatedIdx = sorted.reduce(
     (bestIdx, color, idx) =>
       saturation(color) > saturation(sorted[bestIdx]) ? idx : bestIdx,
     0,
   );
 
-  const darkest = sorted[0];
-  const darkMid = sorted[1];
-  const mid = sorted[2];
+  // De 5 palettefarver (mørk→lys)
+  const darkest  = sorted[0]; // → foreground-gruppe anker
+  const darkMid  = sorted[1];
+  const mid      = sorted[2];
   const lightMid = sorted[3];
-  const lightest = sorted[4];
+  const lightest = sorted[4]; // → background-gruppe anker
 
-  const primary = sorted[mostSaturatedIdx];
-  const primaryForeground = luminance(primary) < 0.4 ? lightest : darkest;
+  // Primary: den mest mættede palettefarve
+  const primaryRgb = sorted[mostSaturatedIdx];
+  const primaryOklch = parseOklch(hexToOklch(rgbToHex(primaryRgb)));
 
-  const destructive = sorted.find(([r, , b]) => r > 150 && r > b * 1.3) ?? darkMid;
-  const destructiveForeground = luminance(destructive) < 0.4 ? lightest : darkest;
+  // Accent: anden mest mættede (ikke primary), ellers mid
+  const accentRgb =
+    sorted.find((c, i) => i !== mostSaturatedIdx && saturation(c) > 0.08) ?? mid;
+  const accentOklch = parseOklch(hexToOklch(rgbToHex(accentRgb)));
 
-  const accent = sorted.find((c) => c !== primary && saturation(c) > 0.1) ?? mid;
-  const accentForeground = luminance(accent) < 0.4 ? lightest : darkest;
+  // Destructive: rødlig farve fra paletten, ellers beregn fra primary med
+  // Lys-temaets destructive-karakteristika (lav hue, høj chroma)
+  const destructiveRgb =
+    sorted.find(([r, , b]) => r > 150 && r > b * 1.3) ?? darkMid;
+  const destructiveOklch = parseOklch(hexToOklch(rgbToHex(destructiveRgb)));
+
+  // Foreground-anker
+  const fgOklch = parseOklch(hexToOklch(rgbToHex(darkest)));
+
+  // Background-anker
+  const bgOklch = parseOklch(hexToOklch(rgbToHex(lightest)));
+
+  // ── Beregn alle farver via Lys-temaets offsets ──
+
+  // Lysest-gruppe (anchor = background)
+  const background = formatOklch(bgOklch);
+  const card       = applyOffset(bgOklch, OFFSETS.cardFromBg.dL,  OFFSETS.cardFromBg.dC,  OFFSETS.cardFromBg.dH);
+  const muted      = applyOffset(bgOklch, OFFSETS.mutedFromBg.dL, OFFSETS.mutedFromBg.dC, OFFSETS.mutedFromBg.dH);
+
+  // Tekst-gruppe (anchor = foreground)
+  const foreground       = formatOklch(fgOklch);
+  const accentForeground = applyOffset(fgOklch, OFFSETS.accentFgFromFg.dL, OFFSETS.accentFgFromFg.dC, OFFSETS.accentFgFromFg.dH);
+  const mutedForeground  = applyOffset(fgOklch, OFFSETS.mutedFgFromFg.dL,  OFFSETS.mutedFgFromFg.dC,  OFFSETS.mutedFgFromFg.dH);
+
+  // Primary-gruppe (anchor = primary)
+  const primary            = formatOklch(primaryOklch);
+  const primaryForeground  = applyOffset(primaryOklch, OFFSETS.primaryFgFromPrimary.dL, OFFSETS.primaryFgFromPrimary.dC, OFFSETS.primaryFgFromPrimary.dH);
+  const border             = applyOffset(primaryOklch, OFFSETS.borderFromPrimary.dL,    OFFSETS.borderFromPrimary.dC,    OFFSETS.borderFromPrimary.dH);
+
+  // Accent-gruppe (anchor = accent)
+  const accent = formatOklch(accentOklch);
+
+  // Destructive-gruppe (anchor = destructive, egen logik)
+  const destructive            = formatOklch(destructiveOklch);
+  const destructiveForeground  = applyOffset(destructiveOklch, OFFSETS.destructiveFgFromDestructive.dL, OFFSETS.destructiveFgFromDestructive.dC, OFFSETS.destructiveFgFromDestructive.dH);
 
   return {
-    background: hexToOklch(rgbToHex(lightest)),
-    card: hexToOklch(rgbToHex(lightMid)),
-    foreground: hexToOklch(rgbToHex(darkest)),
-    primary: hexToOklch(rgbToHex(primary)),
-    primaryForeground: hexToOklch(rgbToHex(primaryForeground)),
-    muted: hexToOklch(rgbToHex(lightMid)),
-    mutedForeground: hexToOklch(rgbToHex(darkMid)),
-    accent: hexToOklch(rgbToHex(accent)),
-    accentForeground: hexToOklch(rgbToHex(accentForeground)),
-    border: hexToOklch(rgbToHex(mid)),
-    destructive: hexToOklch(rgbToHex(destructive)),
-    destructiveForeground: hexToOklch(rgbToHex(destructiveForeground)),
+    background,
+    card,
+    foreground,
+    primary,
+    primaryForeground,
+    muted,
+    mutedForeground,
+    accent,
+    accentForeground,
+    border,
+    destructive,
+    destructiveForeground,
   };
 }
+
+// ─── Offentlige funktioner (API uændret) ──────────────────────────────────────
 
 const SCHEME_MODES = ["analogic", "complement", "analogic-complement", "triad"] as const;
 
@@ -80,17 +220,13 @@ const SCHEME_MODES = ["analogic", "complement", "analogic-complement", "triad"] 
  * 2. Using that as seed for a randomly chosen scheme mode
  */
 export async function generateRandomPalette(): Promise<string[]> {
-  // Step 1: get a random seed color
   const randomRes = await fetch("https://www.thecolorapi.com/random?format=json");
   if (!randomRes.ok) throw new Error("Kunne ikke hente tilfældig farve");
 
   const randomData = await randomRes.json() as { hex: { clean: string } };
   const seedHex = randomData.hex.clean;
 
-  // Step 2: pick a random scheme mode
   const mode = SCHEME_MODES[Math.floor(Math.random() * SCHEME_MODES.length)];
-
-  // Step 3: generate a scheme from that seed
   return generatePaletteFromColor(`#${seedHex}`, mode);
 }
 
