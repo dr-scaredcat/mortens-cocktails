@@ -1,8 +1,8 @@
 {
-  "name": "Barskab",
-  "short_name": "Barskab",
+  "name": "Aston's Bar",
+  "short_name": "Aston's Bar",
   "description": "Dit personlige cocktail-bibliotek.",
-  "start_url": "/",
+  "start_url": "/menukort",
   "display": "standalone",
   "background_color": "#09090b",
   "theme_color": "#09090b",
