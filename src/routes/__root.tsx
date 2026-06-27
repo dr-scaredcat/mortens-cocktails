@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { getThemesData } from "@/lib/themes.functions";
 import { applyThemeColors } from "@/hooks/use-theme";
+import { oklchToHex, isOklchString } from "@/lib/color-utils";
 
 function NotFoundComponent() {
   return (
@@ -86,6 +87,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Dit personlige cocktail-bibliotek." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      // Statisk fallback — ThemeLoader overskriver denne dynamisk ved load
+      { name: "theme-color", content: "#09090b" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Barskab" },
     ],
     links: [
       {
@@ -98,6 +104,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap",
       },
+      // Favicon
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "icon", type: "image/png", sizes: "96x96", href: "/favicon-96x96.png" },
+      // iOS hjemmeskærm
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      // PWA manifest
+      { rel: "manifest", href: "/site.webmanifest" },
     ],
   }),
   shellComponent: RootShell,
@@ -120,15 +133,30 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function colorToHex(value: string): string {
+  if (isOklchString(value)) return oklchToHex(value);
+  if (value.startsWith("#")) return value;
+  return value; // fx "rgb(...)" — send direkte til browseren
+}
+
+function setThemeColorMeta(background: string) {
+  const hex = colorToHex(background);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute("content", hex);
+  }
+}
+
 function ThemeLoader() {
   useEffect(() => {
     getThemesData().then(({ themes, activeThemeId }) => {
       const active = themes.find((t) => t.id === activeThemeId);
       if (active) {
         applyThemeColors(active.colors);
+        setThemeColorMeta(active.colors.background);
       }
     }).catch(() => {
-      // Ignore — default CSS variables remain in effect
+      // Ignore — default CSS variables og statisk theme-color forbliver
     });
   }, []);
   return null;

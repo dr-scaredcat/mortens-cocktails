@@ -38,10 +38,10 @@ export function CocktailListPage({
       f = f.filter(
         (c) =>
           c.name.toLowerCase().includes(s) ||
-          c.ingredients.some((i) => i.name.toLowerCase().includes(s)),
+          c.ingredients.some((i) => i.name.toLowerCase().includes(s)) ||
+          c.tags.some((t) => t.toLowerCase().includes(s)),
       );
     }
-    // missing.length er primær sortering; admin position bruges som tiebreaker
     return [...f].sort(
       (a, b) => a.missing.length - b.missing.length || (a.position ?? 0) - (b.position ?? 0),
     );
@@ -57,7 +57,7 @@ export function CocktailListPage({
         </div>
         <div className="mb-5 space-y-3">
           <Input
-            placeholder="Søg efter cocktail..."
+            placeholder="Søg efter navn eller ingrediens..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />

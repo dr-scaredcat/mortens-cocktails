@@ -30,27 +30,27 @@ const ingredientInput = z.object({
 
 export const upsertIngredient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id?: string; name: string; category: string; available?: boolean }) => ({
-    id: d.id,
-    ...ingredientInput.parse({ name: d.name, category: d.category, available: d.available }),
-  }))
+  .inputValidator((d: { id?: string; name: string; category: string; available?: boolean }) =>
+    ingredientInput.extend({ id: z.string().uuid().optional() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
+    const sb = context.supabase;
     if (data.id) {
-      const { error } = await context.supabase
+      const { error } = await sb
         .from("ingredients")
-        .update({ name: data.name, category: data.category, available: data.available })
+        .update({ name: data.name, category: data.category, available: data.available ?? false })
         .eq("id", data.id);
       if (error) throw new Error(error.message);
-      return { id: data.id };
+    } else {
+      const { error } = await sb.from("ingredients").insert({
+        name: data.name,
+        category: data.category,
+        available: data.available ?? false,
+      });
+      if (error) throw new Error(error.message);
     }
-    const { data: row, error } = await context.supabase
-      .from("ingredients")
-      .insert({ name: data.name, category: data.category, available: data.available })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { ok: true };
   });
 
 export const setIngredientAvailable = createServerFn({ method: "POST" })
@@ -83,11 +83,8 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
-    const { data: used, error: usedErr } = await sb
-      .from("cocktail_ingredients")
-      .select("ingredient_id");
-    if (usedErr) throw new Error(usedErr.message);
-    const usedIds: string[] = (used ?? []).map(
+    const { data: used } = await sb.from("cocktail_ingredients").select("ingredient_id");
+    const usedIds = (used ?? []).map(
       (r: { ingredient_id: string }) => r.ingredient_id,
     );
     if (usedIds.length === 0) {
@@ -101,6 +98,8 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { deleted: count ?? 0 };
   });
+
+// =================== Cocktails ===================
 
 const cocktailInput = z.object({
   id: z.string().uuid().optional(),
@@ -129,16 +128,26 @@ export const saveCocktail = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const sb = context.supabase;
 
+    // ── Tjek om et ANDET cocktail allerede har dette navn (case-insensitiv) ──
+    const { data: existing } = await sb
+      .from("cocktails")
+      .select("id")
+      .ilike("name", data.name.trim())
+      .maybeSingle();
+    if (existing && existing.id !== data.id) {
+      throw new Error(`En cocktail med navnet "${data.name.trim()}" eksisterer allerede`);
+    }
+
     const ingIds: { ingredient_id: string; amount: number | null; unit: string | null }[] = [];
     for (const item of data.ingredients) {
       const name = item.name.trim();
       if (!name) continue;
-      const { data: existing } = await sb
+      const { data: existingIng } = await sb
         .from("ingredients")
         .select("id")
         .ilike("name", name)
         .maybeSingle();
-      let id = existing?.id as string | undefined;
+      let id = existingIng?.id as string | undefined;
       if (!id) {
         const { data: created, error } = await sb
           .from("ingredients")
@@ -177,7 +186,6 @@ export const saveCocktail = createServerFn({ method: "POST" })
       const { error } = await sb.from("cocktails").update(payload).eq("id", cocktailId);
       if (error) throw new Error(error.message);
     } else {
-      // Ny cocktail: sæt position til max+1 så den havner sidst
       const { data: maxRow } = await sb
         .from("cocktails")
         .select("position")
@@ -253,15 +261,13 @@ export const resetCocktailRating = createServerFn({ method: "POST" })
 
 export const reorderCocktails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { ids: string[] }) =>
-    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
-  )
+  .inputValidator((d: string[]) => z.array(z.string().uuid()).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
-    await Promise.all(
-      data.ids.map((id, i) => sb.from("cocktails").update({ position: i + 1 }).eq("id", id)),
-    );
+    for (let i = 0; i < data.length; i++) {
+      await sb.from("cocktails").update({ position: i }).eq("id", data[i]);
+    }
     return { ok: true };
   });
 
@@ -503,44 +509,39 @@ export const listAdmins = createServerFn({ method: "GET" })
     return result;
   });
 
+async function findUserIdByEmail(email: string): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin.auth.admin.listUsers();
+  const user = (data?.users ?? []).find(
+    (u) => u.email?.toLowerCase() === email.toLowerCase(),
+  );
+  return user?.id ?? null;
+}
+
 export const grantAdminByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { email: string }) => z.object({ email: z.string().email() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const target = await findUserIdByEmail(data.email);
-    if (!target) throw new Error("Ingen bruger fundet med den email. Brugeren skal være oprettet først.");
+    if (!target)
+      throw new Error(
+        "Ingen bruger fundet med den email. Brugeren skal være oprettet først.",
+      );
     const { error } = await context.supabase
       .from("user_roles")
-      .insert({ user_id: target, role: "admin" });
-    if (error && !error.message.includes("duplicate")) throw new Error(error.message);
+      .upsert({ user_id: target, role: "admin" }, { onConflict: "user_id,role", ignoreDuplicates: true });
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
-
-async function findUserIdByEmail(email: string): Promise<string | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const target = email.toLowerCase();
-  let page = 1;
-  const perPage = 200;
-  while (true) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
-    if (error) throw new Error(error.message);
-    const found = data.users.find((u) => u.email?.toLowerCase() === target);
-    if (found) return found.id;
-    if (!data.users.length || data.users.length < perPage) return null;
-    page += 1;
-    if (page > 25) return null;
-  }
-}
 
 export const revokeAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    if (data.userId === context.userId) {
-      throw new Error("Du kan ikke fjerne dig selv som admin.");
-    }
+    if (data.userId === context.userId)
+      throw new Error("Du kan ikke fjerne dine egne admin-rettigheder");
     const { error } = await context.supabase
       .from("user_roles")
       .delete()
@@ -550,18 +551,19 @@ export const revokeAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// =================== TheCocktailDB image lookup ===================
+// =================== CocktailDB image helpers ===================
 
 async function lookupCocktailDbImage(name: string): Promise<string | null> {
   const url = `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(name)}`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const json = (await res.json()) as { drinks: Array<{ strDrink: string; strDrinkThumb: string | null }> | null };
-  if (!json.drinks || json.drinks.length === 0) return null;
-  const lower = name.trim().toLowerCase();
-  const exact = json.drinks.find((d) => d.strDrink.toLowerCase() === lower);
-  const pick = exact ?? json.drinks[0];
-  return pick.strDrinkThumb ?? null;
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.drinks?.length) return null;
+    const pick = json.drinks[0];
+    return pick.strDrinkThumb ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export const fetchCocktailDbImage = createServerFn({ method: "POST" })

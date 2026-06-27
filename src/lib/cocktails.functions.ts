@@ -46,6 +46,22 @@ export type CocktailWithDetails = {
   rating_count: number;
 };
 
+export type RecipeWithDetails = {
+  id: string;
+  name: string;
+  description: string | null;
+  instructions: string | null;
+  images: { id: string; url: string; position: number }[];
+  ingredients: {
+    ingredient_id: string;
+    name: string;
+    amount: number | null;
+    unit: string | null;
+    available: boolean;
+  }[];
+  missing: string[];
+};
+
 export const listIngredients = createServerFn({ method: "GET" }).handler(async () => {
   const sb = publicClient();
   const { data, error } = await sb
@@ -146,6 +162,57 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
       rating_count: agg ? agg.count : 0,
     };
   });
+  return result;
+});
+
+export const listRecipes = createServerFn({ method: "GET" }).handler(async () => {
+  const sb = publicClient();
+  const [recipesRes, imagesRes, riRes, ingRes] = await Promise.all([
+    sb.from("recipes").select("*").order("name"),
+    sb.from("recipe_images").select("id, recipe_id, url, position").order("position"),
+    sb.from("recipe_ingredients").select("recipe_id, ingredient_id, amount, unit, position"),
+    sb.from("ingredients").select("id, name, available"),
+  ]);
+  if (recipesRes.error) throw new Error(recipesRes.error.message);
+  if (imagesRes.error) throw new Error(imagesRes.error.message);
+  if (riRes.error) throw new Error(riRes.error.message);
+  if (ingRes.error) throw new Error(ingRes.error.message);
+
+  const ingMap = new Map((ingRes.data ?? []).map((i) => [i.id, i]));
+
+  const result: RecipeWithDetails[] = (recipesRes.data ?? []).map((r) => {
+    const images = (imagesRes.data ?? [])
+      .filter((img) => img.recipe_id === r.id)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .map((img) => ({ id: img.id, url: img.url, position: img.position }));
+
+    const items = (riRes.data ?? [])
+      .filter((ri) => ri.recipe_id === r.id)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .map((ri) => {
+        const ing = ingMap.get(ri.ingredient_id);
+        return {
+          ingredient_id: ri.ingredient_id,
+          name: ing?.name ?? "Ukendt",
+          amount: ri.amount,
+          unit: ri.unit,
+          available: !!ing?.available,
+        };
+      });
+
+    const missing = items.filter((i) => !i.available).map((i) => i.name);
+
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      instructions: r.instructions,
+      images,
+      ingredients: items,
+      missing,
+    };
+  });
+
   return result;
 });
 

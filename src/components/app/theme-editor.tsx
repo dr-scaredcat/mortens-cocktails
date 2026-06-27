@@ -3,12 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemePreview } from "@/components/app/theme-preview";
 import type { Theme, ThemeColors } from "@/lib/themes.functions";
 import { oklchToHex, hexToOklch, isOklchString } from "@/lib/color-utils";
-import { generateRandomPalette, generatePaletteFromColor, paletteToThemeColors } from "@/lib/palette-api";
-import { Shuffle, Wand2, Loader2, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 const COLOR_GROUPS: { key: keyof ThemeColors; label: string; description: string }[] = [
   { key: "background", label: "Baggrund", description: "Sidens baggrund" },
@@ -24,15 +22,6 @@ const COLOR_GROUPS: { key: keyof ThemeColors; label: string; description: string
   { key: "destructive", label: "Fejl", description: "Slet-knapper og fejlbeskeder" },
   { key: "destructiveForeground", label: "Fejl tekst", description: "Tekst oven på fejlfarve" },
 ];
-
-type SchemeMode = "analogic" | "complement" | "analogic-complement" | "triad";
-
-const SCHEME_LABELS: Record<SchemeMode, string> = {
-  analogic: "Analogt",
-  complement: "Komplementær",
-  "analogic-complement": "Analogt + komplementær",
-  triad: "Triade",
-};
 
 const DEFAULT_COLORS: ThemeColors = {
   background: "oklch(0.97 0.025 75)",
@@ -66,18 +55,11 @@ type Props = {
 export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Props) {
   const [name, setName] = useState(initial?.name ?? "Nyt tema");
   const [colors, setColors] = useState<ThemeColors>(initial?.colors ?? DEFAULT_COLORS);
-  const [generatedPalette, setGeneratedPalette] = useState<string[]>([]);
-  const [seedColor, setSeedColor] = useState("#c94a3a");
-  const [schemeMode, setSchemeMode] = useState<SchemeMode>("analogic-complement");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "Nyt tema");
       setColors(initial?.colors ?? DEFAULT_COLORS);
-      setGeneratedPalette([]);
-      setGenerateError(null);
     }
   }, [open, initial]);
 
@@ -100,40 +82,6 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
     }
   }
 
-  async function handleRandomPalette() {
-    setIsGenerating(true);
-    setGenerateError(null);
-    try {
-      setGeneratedPalette(await generateRandomPalette());
-    } catch {
-      setGenerateError("Kunne ikke hente tilfældig palette. Prøv igen.");
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
-  async function handleColorPalette() {
-    setIsGenerating(true);
-    setGenerateError(null);
-    try {
-      setGeneratedPalette(await generatePaletteFromColor(seedColor, schemeMode));
-    } catch {
-      setGenerateError("Kunne ikke hente palette. Prøv igen.");
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
-  function handleApplyPalette() {
-    if (generatedPalette.length === 0) return;
-    setColors(paletteToThemeColors(generatedPalette));
-    setGeneratedPalette([]);
-  }
-
-  const spinnerIcon = <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />;
-  const shuffleIcon = <Shuffle className="mr-1.5 h-3.5 w-3.5" />;
-  const wandIcon = <Wand2 className="mr-1.5 h-3.5 w-3.5" />;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
@@ -150,98 +98,26 @@ export function ThemeEditor({ open, onOpenChange, initial, onSave, onReset }: Pr
                 onChange={(e) => setName(e.target.value)}
                 placeholder="fx Mit tema"
                 className="mt-1"
-                disabled={!!initial?.isBuiltIn}
               />
             </div>
-            <div className="rounded-lg border border-border p-4 space-y-4">
-              <p className="text-sm font-medium">Generer palette</p>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRandomPalette}
-                  disabled={isGenerating}
-                  className="shrink-0"
-                >
-                  {isGenerating ? spinnerIcon : shuffleIcon}
-                  Tilfældig
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Eller vælg en farve som udgangspunkt</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    type="color"
-                    value={seedColor}
-                    onChange={(e) => setSeedColor(e.target.value)}
-                    className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                  />
-                  <Select value={schemeMode} onValueChange={(v) => setSchemeMode(v as SchemeMode)}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(SCHEME_LABELS) as SchemeMode[]).map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {SCHEME_LABELS[m]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleColorPalette}
-                    disabled={isGenerating}
-                  >
-                    {isGenerating ? spinnerIcon : wandIcon}
-                    Generer
-                  </Button>
-                </div>
-              </div>
-              {generateError && (
-                <p className="text-xs text-destructive">{generateError}</p>
-              )}
-              {generatedPalette.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Genereret palette</p>
-                  <div className="flex gap-1.5">
-                    {generatedPalette.map((hex, i) => (
-                      <div
-                        key={i}
-                        className="h-8 flex-1 rounded-md border border-border"
-                        style={{ backgroundColor: hex }}
-                        title={hex}
-                      />
-                    ))}
-                  </div>
-                  <Button type="button" size="sm" onClick={handleApplyPalette} className="w-full">
-                    Anvend palette
-                  </Button>
-                </div>
-              )}
-            </div>
+
             <div className="space-y-3">
               <p className="text-sm font-medium">Farver</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {COLOR_GROUPS.map((group) => (
-                  <div key={group.key} className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={colorToHex(colors[group.key])}
-                      onChange={(e) => handleColorChange(group.key, e.target.value)}
-                      className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
-                      title={group.label}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium leading-none">{group.label}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{group.description}</p>
-                    </div>
+              {COLOR_GROUPS.map(({ key, label, description }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={colorToHex(colors[key])}
+                    onChange={(e) => handleColorChange(key, e.target.value)}
+                    className="h-9 w-9 cursor-pointer rounded-md border border-border bg-transparent p-0.5 shrink-0"
+                    title={description}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-none">{label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
           <div className="space-y-2">

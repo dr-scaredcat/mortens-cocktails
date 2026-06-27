@@ -93,7 +93,7 @@ export function OrderButton({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={300}
-              placeholder="Fx mindre is, ekstra lime..."
+              placeholder="Fx mindre lime, ekstra is..."
               rows={3}
             />
           </div>
