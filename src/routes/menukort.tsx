@@ -5,8 +5,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { Shuffle, ArrowDownAZ, Star, Share2, Check, Home } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CocktailCard } from "@/components/app/cocktail-card";
+import { RatingStars } from "@/components/app/rating-stars";
 import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
@@ -30,6 +33,7 @@ import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
+import { Wine } from "lucide-react";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
@@ -91,6 +95,71 @@ function MenukortHeader() {
         )}
       </div>
     </header>
+  );
+}
+
+// ── Simpelt kort til gitteret — ingen mængder, ingen glas/pynt/fremgangsmåde ─
+function MenukortCocktailCard({
+  cocktail,
+  onOpen,
+  orderingEnabled,
+}: {
+  cocktail: CocktailWithDetails;
+  onOpen: () => void;
+  orderingEnabled: boolean;
+}) {
+  return (
+    <Card className="flex flex-col overflow-hidden border-border/70 bg-card cursor-pointer transition hover:border-primary/50">
+      {/* Hele kortet åbner dialogen — undtagen bestil-knappen */}
+      <div onClick={onOpen}>
+        {/* Billede */}
+        <div className="aspect-[4/3] w-full bg-muted">
+          {cocktail.image_url ? (
+            <img
+              src={cocktail.image_url}
+              alt={cocktail.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <Wine className="h-10 w-10" />
+            </div>
+          )}
+        </div>
+
+        {/* Indhold */}
+        <div className="flex flex-col gap-2 p-4">
+          <h3 className="font-serif text-xl leading-tight">{cocktail.name}</h3>
+          <RatingStars
+            cocktailId={cocktail.id}
+            avg={cocktail.avg_rating}
+            count={cocktail.rating_count}
+          />
+          {cocktail.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {cocktail.tags.map((t) => (
+                <Badge key={t} variant="outline" className="text-xs">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {cocktail.ingredients.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {cocktail.ingredients.map((i) => i.name).join(", ")}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Bestil-knap — stopper klik fra at boble op til dialogen */}
+      {orderingEnabled && (
+        <div className="px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+          <OrderButton cocktailId={cocktail.id} cocktailName={cocktail.name} />
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -224,25 +293,19 @@ function MenukortPage() {
         ) : filtered.length === 0 ? (
           <p className="text-muted-foreground">Ingen cocktails matcher din søgning.</p>
         ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((c) => (
-                <CocktailCard
-                  key={c.id}
-                  cocktail={c}
-                  showAvailabilityBadge={false}
-                  onClick={() => setOpenId(c.id)}
-                  footerSlot={
-                    orderingEnabled ? (
-                      <OrderButton cocktailId={c.id} cocktailName={c.name} />
-                    ) : null
-                  }
-                />
-              ))}
-            </div>
-          </>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((c) => (
+              <MenukortCocktailCard
+                key={c.id}
+                cocktail={c}
+                onOpen={() => setOpenId(c.id)}
+                orderingEnabled={orderingEnabled}
+              />
+            ))}
+          </div>
         )}
 
+        {/* Detalje-dialog — viser det fulde CocktailCard med alt info */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
