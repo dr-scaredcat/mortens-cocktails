@@ -20,6 +20,7 @@ import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
 import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
+import { AdminStatistik } from "@/components/app/admin-statistik";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
