@@ -77,7 +77,7 @@ function MenukortHeader() {
           className={cn("flex", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
           style={{ gap: `${logoGap}px` }}
         >
-          <SiteLogo size={logoSize} type={logoType} siteName={siteName} />
+          <SiteLogo size={logoSize} type={logoType} className="shrink-0 text-primary" />
           <span className="font-serif" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
         </div>
 
