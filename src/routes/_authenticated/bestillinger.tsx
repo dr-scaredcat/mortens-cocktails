@@ -18,6 +18,7 @@ import {
   listOrders,
   setOrderStatus,
 } from "@/lib/orders.functions";
+import { logOrder, logOrdersBulk } from "@/lib/stats.functions";
 
 export const Route = createFileRoute("/_authenticated/bestillinger")({
   head: () => ({ meta: [{ title: "Bestillinger — Barskab" }] }),
@@ -29,6 +30,8 @@ function OrdersPage() {
   const updateStatus = useServerFn(setOrderStatus);
   const removeOrder = useServerFn(deleteOrder);
   const removeAll = useServerFn(deleteAllOrders);
+  const writeLog = useServerFn(logOrder);
+  const writeBulkLog = useServerFn(logOrdersBulk);
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders"],
@@ -56,6 +59,25 @@ function OrdersPage() {
 
   async function remove(id: string) {
     if (!confirm("Slet denne bestilling?")) return;
+    // Log bestillingen før sletning
+    const order = (data ?? []).find((o) => o.id === id);
+    if (order) {
+      try {
+        await writeLog({
+          data: {
+            originalOrderId: order.id,
+            cocktailId: order.cocktail_id,
+            cocktailName: order.cocktail_name,
+            customerName: order.customer_name,
+            note: order.note,
+            status: order.status,
+            loggedAt: order.created_at,
+          },
+        });
+      } catch {
+        // Log fejl er ikke kritisk — fortsæt med sletning
+      }
+    }
     try {
       await removeOrder({ data: { id } });
       qc.invalidateQueries({ queryKey: ["orders"] });
@@ -66,6 +88,27 @@ function OrdersPage() {
 
   async function clearAll() {
     if (!confirm("Slet ALLE bestillinger? Dette kan ikke fortrydes.")) return;
+    // Log alle bestillinger inden sletning
+    const orders = data ?? [];
+    if (orders.length > 0) {
+      try {
+        await writeBulkLog({
+          data: {
+            orders: orders.map((o) => ({
+              originalOrderId: o.id,
+              cocktailId: o.cocktail_id,
+              cocktailName: o.cocktail_name,
+              customerName: o.customer_name,
+              note: o.note,
+              status: o.status,
+              loggedAt: o.created_at,
+            })),
+          },
+        });
+      } catch {
+        // Log fejl er ikke kritisk — fortsæt med sletning
+      }
+    }
     try {
       await removeAll();
       qc.invalidateQueries({ queryKey: ["orders"] });
@@ -213,7 +256,7 @@ function OrderItem({ order, done, onDone, onReopen, onDelete, onOpen }: OrderIte
             <span className="text-sm text-muted-foreground">til {order.customer_name}</span>
           </div>
           {order.note && (
-            <p className="mt-1 text-sm text-foreground/80">“{order.note}”</p>
+            <p className="mt-1 text-sm text-foreground/80">"{order.note}"</p>
           )}
           <p className="mt-1 text-xs text-muted-foreground">{time}</p>
         </div>
