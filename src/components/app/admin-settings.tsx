@@ -12,17 +12,12 @@ import { Wine, Martini, AlignStartVertical, AlignCenterVertical, AlignEndVertica
 import {
   getOrderingEnabled,
   setOrderingEnabled,
-  getSiteName,
+  getSiteSettings,
   setSiteName,
-  getLogoSize,
   setLogoSize,
-  getTextSize,
   setTextSize,
-  getLogoGap,
   setLogoGap,
-  getLogoAlign,
   setLogoAlign,
-  getLogoType,
   setLogoType,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
@@ -104,17 +99,12 @@ function SliderRow({
 export function AdminSettings() {
   const fetchSetting = useServerFn(getOrderingEnabled);
   const updateSetting = useServerFn(setOrderingEnabled);
-  const fetchSiteName = useServerFn(getSiteName);
+  const fetchSettings = useServerFn(getSiteSettings);
   const updateSiteName = useServerFn(setSiteName);
-  const fetchLogoSize = useServerFn(getLogoSize);
   const updateLogoSize = useServerFn(setLogoSize);
-  const fetchTextSize = useServerFn(getTextSize);
   const updateTextSize = useServerFn(setTextSize);
-  const fetchLogoGap = useServerFn(getLogoGap);
   const updateLogoGap = useServerFn(setLogoGap);
-  const fetchLogoAlign = useServerFn(getLogoAlign);
   const updateLogoAlign = useServerFn(setLogoAlign);
-  const fetchLogoType = useServerFn(getLogoType);
   const updateLogoType = useServerFn(setLogoType);
   const qc = useQueryClient();
 
@@ -122,15 +112,13 @@ export function AdminSettings() {
     queryKey: ["ordering-enabled"],
     queryFn: () => fetchSetting(),
   });
-  const { data: siteNameData, isLoading: siteNameLoading } = useQuery({
-    queryKey: ["site-name"],
-    queryFn: () => fetchSiteName(),
+
+  // Ét samlet kald i stedet for seks separate læsninger.
+  const { data: settings, isLoading: settingsLoading } = useQuery({
+    queryKey: ["site-settings"],
+    queryFn: () => fetchSettings(),
+    staleTime: 1000 * 60 * 5,
   });
-  const { data: logoSizeData } = useQuery({ queryKey: ["logo-size"], queryFn: () => fetchLogoSize() });
-  const { data: textSizeData } = useQuery({ queryKey: ["text-size"], queryFn: () => fetchTextSize() });
-  const { data: logoGapData } = useQuery({ queryKey: ["logo-gap"], queryFn: () => fetchLogoGap() });
-  const { data: logoAlignData } = useQuery({ queryKey: ["logo-align"], queryFn: () => fetchLogoAlign() });
-  const { data: logoTypeData } = useQuery({ queryKey: ["logo-type"], queryFn: () => fetchLogoType() });
 
   const [siteName, setSiteNameLocal] = useState("");
   const [siteNameBusy, setSiteNameBusy] = useState(false);
@@ -145,12 +133,16 @@ export function AdminSettings() {
   const [logoType, setLogoTypeLocal] = useState<LogoType>(DEFAULT_LOGO_TYPE);
   const [logoTypeBusy, setLogoTypeBusy] = useState(false);
 
-  useEffect(() => { if (siteNameData?.name) setSiteNameLocal(siteNameData.name); }, [siteNameData]);
-  useEffect(() => { if (logoSizeData?.size) setLogoSizeLocal(logoSizeData.size); }, [logoSizeData]);
-  useEffect(() => { if (textSizeData?.size) setTextSizeLocal(textSizeData.size); }, [textSizeData]);
-  useEffect(() => { if (logoGapData?.gap !== undefined) setLogoGapLocal(logoGapData.gap); }, [logoGapData]);
-  useEffect(() => { if (logoAlignData?.align) setLogoAlignLocal(logoAlignData.align); }, [logoAlignData]);
-  useEffect(() => { if (logoTypeData?.type) setLogoTypeLocal(logoTypeData.type); }, [logoTypeData]);
+  // Synk lokal formstate med det samlede settings-objekt når det loader.
+  useEffect(() => {
+    if (!settings) return;
+    setSiteNameLocal(settings.name);
+    setLogoSizeLocal(settings.logoSize);
+    setTextSizeLocal(settings.textSize);
+    setLogoGapLocal(settings.logoGap);
+    setLogoAlignLocal(settings.logoAlign);
+    setLogoTypeLocal(settings.logoType);
+  }, [settings]);
 
   async function toggle(enabled: boolean) {
     try {
@@ -168,7 +160,7 @@ export function AdminSettings() {
     setSiteNameBusy(true);
     try {
       await updateSiteName({ data: { name: trimmed } });
-      qc.invalidateQueries({ queryKey: ["site-name"] });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
       toast.success("Sidenavn gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
@@ -181,7 +173,7 @@ export function AdminSettings() {
     setLogoSizeBusy(true);
     try {
       await updateLogoSize({ data: { size: logoSize } });
-      qc.invalidateQueries({ queryKey: ["logo-size"] });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
       toast.success("Logostørrelse gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
@@ -194,7 +186,7 @@ export function AdminSettings() {
     setTextSizeBusy(true);
     try {
       await updateTextSize({ data: { size: textSize } });
-      qc.invalidateQueries({ queryKey: ["text-size"] });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
       toast.success("Tekststørrelse gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
@@ -207,7 +199,7 @@ export function AdminSettings() {
     setLogoGapBusy(true);
     try {
       await updateLogoGap({ data: { gap: logoGap } });
-      qc.invalidateQueries({ queryKey: ["logo-gap"] });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
       toast.success("Afstand gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
@@ -221,7 +213,7 @@ export function AdminSettings() {
     setLogoAlignBusy(true);
     try {
       await updateLogoAlign({ data: { align } });
-      qc.invalidateQueries({ queryKey: ["logo-align"] });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
       toast.success("Justering gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
@@ -235,7 +227,7 @@ export function AdminSettings() {
     setLogoTypeBusy(true);
     try {
       await updateLogoType({ data: { type } });
-      qc.invalidateQueries({ queryKey: ["logo-type"] });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
       toast.success("Logo gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
@@ -268,11 +260,11 @@ export function AdminSettings() {
                 onChange={(e) => setSiteNameLocal(e.target.value)}
                 placeholder="fx Barskab"
                 maxLength={60}
-                disabled={siteNameLoading}
+                disabled={settingsLoading}
                 className="max-w-sm"
                 onKeyDown={(e) => { if (e.key === "Enter") saveSiteName(); }}
               />
-              <Button onClick={saveSiteName} disabled={siteNameBusy || siteNameLoading}>
+              <Button onClick={saveSiteName} disabled={siteNameBusy || settingsLoading}>
                 {siteNameBusy ? "Gemmer…" : "Gem"}
               </Button>
             </div>
