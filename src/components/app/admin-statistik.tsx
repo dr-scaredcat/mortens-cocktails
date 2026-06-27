@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   BarChart,
@@ -15,12 +15,15 @@ import {
   Cell,
 } from "recharts";
 import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   getTagStats,
   getRatingDistribution,
   getTopCocktails,
   getOrdersOverTime,
   getGuestSeries,
+  clearOrderLog,
 } from "@/lib/stats.functions";
 
 // ── Farvepalette til linjediagrammer ────────────────────────────────────────
@@ -174,38 +177,64 @@ function RatingChart() {
 // ── 3. Top 5 mest bestilte ──────────────────────────────────────────────────
 function TopCocktailsChart() {
   const fn = useServerFn(getTopCocktails);
+  const clearFn = useServerFn(clearOrderLog);
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["stat-top-cocktails"], queryFn: () => fn() });
 
+  async function handleReset() {
+    if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
+    try {
+      await clearFn();
+      qc.invalidateQueries({ queryKey: ["stat-top-cocktails"] });
+      qc.invalidateQueries({ queryKey: ["stat-orders-time"] });
+      qc.invalidateQueries({ queryKey: ["stat-guests"] });
+      toast.success("Statistikdata nulstillet");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
+    }
+  }
+
   if (isLoading) return <p className="text-sm text-muted-foreground">Indlæser...</p>;
-  if (!data || data.length === 0) return <Empty />;
 
   return (
-    <div className="space-y-3">
-      {data.map((row, i) => {
-        const max = data[0].count;
-        const pct = max > 0 ? (row.count / max) * 100 : 0;
-        return (
-          <div key={row.cocktail_name} className="flex items-center gap-3">
-            <span className="w-5 shrink-0 text-right text-sm font-medium text-muted-foreground">
-              {i + 1}.
-            </span>
-            <div className="flex-1">
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium">{row.cocktail_name}</span>
-                <span className="text-muted-foreground">
-                  {row.count} bestilling{row.count === 1 ? "" : "er"}
+    <div>
+      {!data || data.length === 0 ? (
+        <Empty />
+      ) : (
+        <div className="space-y-3">
+          {data.map((row, i) => {
+            const max = data[0].count;
+            const pct = max > 0 ? (row.count / max) * 100 : 0;
+            return (
+              <div key={row.cocktail_name} className="flex items-center gap-3">
+                <span className="w-5 shrink-0 text-right text-sm font-medium text-muted-foreground">
+                  {i + 1}.
                 </span>
+                <div className="flex-1">
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="font-medium">{row.cocktail_name}</span>
+                    <span className="text-muted-foreground">
+                      {row.count} bestilling{row.count === 1 ? "" : "er"}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      )}
+      <div className="mt-4 flex justify-end">
+        <Button variant="outline" size="sm" onClick={handleReset} className="text-muted-foreground">
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Nulstil data
+        </Button>
+      </div>
     </div>
   );
 }
@@ -215,10 +244,25 @@ function OrdersOverTimeChart() {
   const [period, setPeriod] = useState<Period>("all");
   const range = useMemo(() => periodToRange(period), [period]);
   const fn = useServerFn(getOrdersOverTime);
+  const clearFn = useServerFn(clearOrderLog);
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["stat-orders-time", period],
     queryFn: () => fn({ data: { from: range.from, to: range.to } }),
   });
+
+  async function handleReset() {
+    if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
+    try {
+      await clearFn();
+      qc.invalidateQueries({ queryKey: ["stat-top-cocktails"] });
+      qc.invalidateQueries({ queryKey: ["stat-orders-time"] });
+      qc.invalidateQueries({ queryKey: ["stat-guests"] });
+      toast.success("Statistikdata nulstillet");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
+    }
+  }
 
   const formatX = (key: string) => {
     // key er enten YYYY-MM-DD eller YYYY-MM-DDTHH:00
@@ -272,6 +316,12 @@ function OrdersOverTimeChart() {
           </BarChart>
         </ResponsiveContainer>
       )}
+      <div className="mt-4 flex justify-end">
+        <Button variant="outline" size="sm" onClick={handleReset} className="text-muted-foreground">
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Nulstil data
+        </Button>
+      </div>
     </div>
   );
 }
@@ -281,10 +331,25 @@ function GuestSeriesChart() {
   const [period, setPeriod] = useState<Period>("all");
   const range = useMemo(() => periodToRange(period), [period]);
   const fn = useServerFn(getGuestSeries);
+  const clearFn = useServerFn(clearOrderLog);
+  const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["stat-guests", period],
     queryFn: () => fn({ data: { from: range.from, to: range.to } }),
   });
+
+  async function handleReset() {
+    if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
+    try {
+      await clearFn();
+      qc.invalidateQueries({ queryKey: ["stat-top-cocktails"] });
+      qc.invalidateQueries({ queryKey: ["stat-orders-time"] });
+      qc.invalidateQueries({ queryKey: ["stat-guests"] });
+      toast.success("Statistikdata nulstillet");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
+    }
+  }
 
   // Byg fladt datasæt til Recharts: array af {time, [navn]: kumTotal}
   const { chartData, guests } = useMemo(() => {
@@ -364,6 +429,12 @@ function GuestSeriesChart() {
           </LineChart>
         </ResponsiveContainer>
       )}
+      <div className="mt-4 flex justify-end">
+        <Button variant="outline" size="sm" onClick={handleReset} className="text-muted-foreground">
+          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+          Nulstil data
+        </Button>
+      </div>
     </div>
   );
 }
