@@ -34,7 +34,7 @@ import { useSession } from "@/hooks/use-session";
 export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Cocktail menu — Barskab" },
+      { title: "Menukort" },
       { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
@@ -71,7 +71,7 @@ function MenukortHeader() {
   const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
 
   return (
-    <header className="border-b border-border bg-card px-4 py-4">
+    <header className="border-b border-border bg-background px-4 py-4">
       <div className="mx-auto flex max-w-5xl items-center justify-between">
         <div
           className={cn("flex", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
