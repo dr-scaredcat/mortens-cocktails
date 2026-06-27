@@ -363,3 +363,48 @@ export const setLogoType = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// =================== Samlet header-konfiguration ===================
+// Ét DB-kald der henter alle header-/logo-indstillinger på én gang, så
+// headeren ikke laver seks separate round-trips pr. sideindlæsning.
+
+export type SiteSettings = {
+  name: string;
+  logoSize: number;
+  textSize: number;
+  logoGap: number;
+  logoAlign: LogoAlign;
+  logoType: LogoType;
+};
+
+export const getSiteSettings = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SiteSettings> => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("key, value")
+      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type"]);
+    if (error) throw new Error(error.message);
+
+    const map = new Map((data ?? []).map((r) => [r.key, r.value]));
+    const num = (v: unknown, fallback: number) => {
+      const n = typeof v === "number" ? v : Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const nameVal = map.get("site_name");
+    const alignVal = map.get("logo_align");
+    const typeVal = map.get("logo_type");
+    const validAlign: LogoAlign[] = ["top", "center", "bottom"];
+    const validType: LogoType[] = ["barskab", "martini", "wine"];
+
+    return {
+      name: typeof nameVal === "string" && nameVal.length > 0 ? nameVal : DEFAULT_SITE_NAME,
+      logoSize: num(map.get("logo_size"), DEFAULT_LOGO_SIZE),
+      textSize: num(map.get("text_size"), DEFAULT_TEXT_SIZE),
+      logoGap: num(map.get("logo_gap"), DEFAULT_LOGO_GAP),
+      logoAlign: validAlign.includes(alignVal as LogoAlign) ? (alignVal as LogoAlign) : DEFAULT_LOGO_ALIGN,
+      logoType: validType.includes(typeVal as LogoType) ? (typeVal as LogoType) : DEFAULT_LOGO_TYPE,
+    };
+  },
+);
