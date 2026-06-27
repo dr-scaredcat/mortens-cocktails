@@ -69,7 +69,7 @@ function MenukortHeader() {
   const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
 
   return (
-    <header className="border-b border-border bg-card px-4 py-4">
+    <header className="border-b border-border bg-background px-4 py-4">
       <div
         className={cn("flex mx-auto max-w-5xl", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
         style={{ gap: `${logoGap}px` }}
