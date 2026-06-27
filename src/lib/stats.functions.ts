@@ -278,4 +278,18 @@ export const getGuestSeries = createServerFn({ method: "POST" })
 
     return result;
   });
-            
+
+// ── Nulstil statistikdata ──────────────────────────────────────────────────
+
+export const clearOrderLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = await getAdminClient();
+    const { error } = await sb
+      .from("order_log" as any)
+      .delete()
+      .not("id", "is", null);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
