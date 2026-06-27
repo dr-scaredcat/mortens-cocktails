@@ -74,8 +74,8 @@ function MenukortHeader() {
         className={cn("flex mx-auto max-w-5xl", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
         style={{ gap: `${logoGap}px` }}
       >
-        <SiteLogo size={logoSize} type={logoType} siteName={siteName} />
-        <span className="font-serif" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
+        <SiteLogo size={logoSize} type={logoType} className="shrink-0 text-primary" />
+        <span className="font-serif text-foreground" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
       </div>
     </header>
   );
