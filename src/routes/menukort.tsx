@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
+import { Shuffle, ArrowDownAZ, Star, Share2, Check, Home } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
@@ -29,12 +29,13 @@ import {
 import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Aston's Bar - Menukort" },
-      { name: "description", content: "Cocktails der kan laves lige nu." },
+      { title: "Cocktail menu — Barskab" },
+      { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
   component: MenukortPage,
@@ -46,6 +47,7 @@ const alignClass = { top: "items-start", center: "items-center", bottom: "items-
 
 // ── Minimal header kun til gæster — ingen navigation ────────────────────────
 function MenukortHeader() {
+  const { session } = useSession();
   const fetchSiteName = useServerFn(getSiteName);
   const fetchLogoSize = useServerFn(getLogoSize);
   const fetchTextSize = useServerFn(getTextSize);
@@ -69,13 +71,24 @@ function MenukortHeader() {
   const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
 
   return (
-    <header className="border-b border-border bg-background px-4 py-4">
-      <div
-        className={cn("flex mx-auto max-w-5xl", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
-        style={{ gap: `${logoGap}px` }}
-      >
-        <SiteLogo size={logoSize} type={logoType} className="shrink-0 text-primary" />
-        <span className="font-serif text-foreground" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
+    <header className="border-b border-border bg-card px-4 py-4">
+      <div className="mx-auto flex max-w-5xl items-center justify-between">
+        <div
+          className={cn("flex", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
+          style={{ gap: `${logoGap}px` }}
+        >
+          <SiteLogo size={logoSize} type={logoType} siteName={siteName} />
+          <span className="font-serif" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
+        </div>
+
+        {/* Hjem-knap — kun synlig for loggede brugere */}
+        {session && (
+          <Button asChild size="sm" variant="ghost" aria-label="Gå til forsiden">
+            <Link to="/cocktails">
+              <Home className="h-4 w-4" />
+            </Link>
+          </Button>
+        )}
       </div>
     </header>
   );
@@ -150,7 +163,7 @@ function MenukortPage() {
       <MenukortHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
-          <h1 className="font-serif text-3xl tracking-tight">Menukort</h1>
+          <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
           {orderingEnabled && (
             <p className="text-sm text-muted-foreground">
               Vælg en cocktail og tryk Bestil — bartenderen får besked.
@@ -209,21 +222,15 @@ function MenukortPage() {
         {isLoading ? (
           <p className="text-muted-foreground">Indlæser...</p>
         ) : filtered.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-            Ingen cocktails kan laves lige nu.
-          </div>
+          <p className="text-muted-foreground">Ingen cocktails matcher din søgning.</p>
         ) : (
           <>
-            <p className="mb-3 text-sm text-muted-foreground">
-              {filtered.length} {filtered.length === 1 ? "cocktail" : "cocktails"}
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {filtered.map((c) => (
                 <CocktailCard
                   key={c.id}
                   cocktail={c}
                   showAvailabilityBadge={false}
-                  compact
                   onClick={() => setOpenId(c.id)}
                   footerSlot={
                     orderingEnabled ? (
