@@ -6,17 +6,12 @@ import { LogOut } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  getSiteName,
+  getSiteSettings,
   DEFAULT_SITE_NAME,
-  getLogoSize,
   DEFAULT_LOGO_SIZE,
-  getTextSize,
   DEFAULT_TEXT_SIZE,
-  getLogoGap,
   DEFAULT_LOGO_GAP,
-  getLogoAlign,
   DEFAULT_LOGO_ALIGN,
-  getLogoType,
   DEFAULT_LOGO_TYPE,
 } from "@/lib/orders.functions";
 import { SiteLogo } from "@/components/app/site-logo";
@@ -39,27 +34,21 @@ const authNavItems = [
 
 export function SiteHeader() {
   const { session } = useSession();
-  const fetchSiteName = useServerFn(getSiteName);
-  const fetchLogoSize = useServerFn(getLogoSize);
-  const fetchTextSize = useServerFn(getTextSize);
-  const fetchLogoGap = useServerFn(getLogoGap);
-  const fetchLogoAlign = useServerFn(getLogoAlign);
-  const fetchLogoType = useServerFn(getLogoType);
+  const fetchSettings = useServerFn(getSiteSettings);
 
-  const stale = { staleTime: 1000 * 60 * 5 };
-  const { data: siteNameData } = useQuery({ queryKey: ["site-name"], queryFn: () => fetchSiteName(), ...stale });
-  const { data: logoSizeData } = useQuery({ queryKey: ["logo-size"], queryFn: () => fetchLogoSize(), ...stale });
-  const { data: textSizeData } = useQuery({ queryKey: ["text-size"], queryFn: () => fetchTextSize(), ...stale });
-  const { data: logoGapData } = useQuery({ queryKey: ["logo-gap"], queryFn: () => fetchLogoGap(), ...stale });
-  const { data: logoAlignData } = useQuery({ queryKey: ["logo-align"], queryFn: () => fetchLogoAlign(), ...stale });
-  const { data: logoTypeData } = useQuery({ queryKey: ["logo-type"], queryFn: () => fetchLogoType(), ...stale });
+  // Ét samlet kald i stedet for seks separate round-trips.
+  const { data } = useQuery({
+    queryKey: ["site-settings"],
+    queryFn: () => fetchSettings(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const siteName = siteNameData?.name ?? DEFAULT_SITE_NAME;
-  const logoSize = logoSizeData?.size ?? DEFAULT_LOGO_SIZE;
-  const textSize = textSizeData?.size ?? DEFAULT_TEXT_SIZE;
-  const logoGap = logoGapData?.gap ?? DEFAULT_LOGO_GAP;
-  const logoAlign = logoAlignData?.align ?? DEFAULT_LOGO_ALIGN;
-  const logoType = logoTypeData?.type ?? DEFAULT_LOGO_TYPE;
+  const siteName = data?.name ?? DEFAULT_SITE_NAME;
+  const logoSize = data?.logoSize ?? DEFAULT_LOGO_SIZE;
+  const textSize = data?.textSize ?? DEFAULT_TEXT_SIZE;
+  const logoGap = data?.logoGap ?? DEFAULT_LOGO_GAP;
+  const logoAlign = data?.logoAlign ?? DEFAULT_LOGO_ALIGN;
+  const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
