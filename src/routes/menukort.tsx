@@ -50,6 +50,7 @@ function MenukortHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
 
+  // Ét samlet kald i stedet for seks separate round-trips.
   const { data } = useQuery({
     queryKey: ["site-settings"],
     queryFn: () => fetchSettings(),
@@ -87,7 +88,7 @@ function MenukortHeader() {
   );
 }
 
-// ── Bestseller/Populær-badge ────────────────────────────────────────────────
+// ── Bestseller/Populær-badge - teksen 6 linjer nede redigerer teksen i badget────────────────────────────────────────────────
 function PopularityBadge({ badge }: { badge: PopularBadge }) {
   if (badge === "bestseller") {
     return (
@@ -105,7 +106,7 @@ function PopularityBadge({ badge }: { badge: PopularBadge }) {
   );
 }
 
-// ── Simpelt kort til gitteret — bestil-knap altid i bunden ──────────────────
+// ── Simpelt kort til gitteret — ingen mængder, ingen glas/pynt/fremgangsmåde ─
 function MenukortCocktailCard({
   cocktail,
   onOpen,
@@ -118,13 +119,11 @@ function MenukortCocktailCard({
   badge?: PopularBadge;
 }) {
   return (
-    // flex flex-col + h-full sikrer at kortet fylder hele grid-cellen,
-    // og at bestil-knappen altid skubbes til bunden med mt-auto.
-    <Card className="flex h-full flex-col overflow-hidden border-border/70 bg-card cursor-pointer transition hover:border-primary/50">
+    <Card className="flex flex-col overflow-hidden border-border/70 bg-card cursor-pointer transition hover:border-primary/50">
       {/* Hele kortet åbner dialogen — undtagen bestil-knappen */}
-      <div className="flex flex-1 flex-col" onClick={onOpen}>
+      <div onClick={onOpen}>
         {/* Billede */}
-        <div className="relative aspect-[4/3] w-full bg-muted shrink-0">
+        <div className="relative aspect-[4/3] w-full bg-muted">
           {badge && (
             <div className="absolute left-2 top-2 z-10">
               <PopularityBadge badge={badge} />
@@ -144,8 +143,8 @@ function MenukortCocktailCard({
           )}
         </div>
 
-        {/* Indhold — vokser og fylder tilgængeligt rum */}
-        <div className="flex flex-1 flex-col gap-2 p-4">
+        {/* Indhold */}
+        <div className="flex flex-col gap-2 p-4">
           <h3 className="font-serif text-xl leading-tight">{cocktail.name}</h3>
           <RatingStars
             cocktailId={cocktail.id}
@@ -169,9 +168,9 @@ function MenukortCocktailCard({
         </div>
       </div>
 
-      {/* Bestil-knap — altid i bunden, stopper klik fra at boble op */}
+      {/* Bestil-knap — stopper klik fra at boble op til dialogen */}
       {orderingEnabled && (
-        <div className="mt-auto px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+        <div className="px-4 pb-4" onClick={(e) => e.stopPropagation()}>
           <OrderButton cocktailId={cocktail.id} cocktailName={cocktail.name} />
         </div>
       )}
@@ -203,168 +202,186 @@ function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+
 function MenukortPage() {
   const fetchCocktails = useServerFn(listCocktails);
-  const fetchOrderingEnabled = useServerFn(getOrderingEnabled);
-  const fetchPopular = useServerFn(getPopularCocktails);
-
-  const { data: cocktails } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
   });
-
-  const { data: orderingEnabled } = useQuery({
+  const fetchOrdering = useServerFn(getOrderingEnabled);
+  const { data: orderingData } = useQuery({
     queryKey: ["ordering-enabled"],
-    queryFn: () => fetchOrderingEnabled(),
-    select: (d) => d.enabled,
+    queryFn: () => fetchOrdering(),
+    refetchInterval: 30_000,
   });
+  const orderingEnabled = !!orderingData?.enabled;
 
+  const fetchPopular = useServerFn(getPopularCocktails);
   const { data: popular } = useQuery({
     queryKey: ["popular-cocktails"],
     queryFn: () => fetchPopular(),
+    staleTime: 1000 * 60,
   });
+  const badgeById = useMemo(() => {
+    const m = new Map<string, PopularBadge>();
+    for (const p of popular ?? []) m.set(p.cocktail_id, p.badge);
+    return m;
+  }, [popular]);
 
-  const [search, setSearch] = useState("");
-  const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>("alpha");
+  const [tags, setTags] = useState<string[]>([]);
+  const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const menuCocktails = useMemo(
-    () => (cocktails ?? []).filter((c) => c.on_menu),
-    [cocktails],
-  );
-
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of menuCocktails) for (const t of c.tags) set.add(t);
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
-  }, [menuCocktails]);
+  const [sortMode, setSortMode] = useState<SortMode>("alpha");
 
   const filtered = useMemo(() => {
-    let list = menuCocktails;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
+    const list = (data ?? []) as CocktailWithDetails[];
+    let f = list.filter((c) => c.missing.length === 0 && c.on_menu !== false);
+    if (tags.length > 0) f = f.filter((c) => tags.every((t) => c.tags.includes(t)));
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      f = f.filter(
         (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.ingredients.some((i) => i.name.toLowerCase().includes(q)),
+          c.name.toLowerCase().includes(s) ||
+          c.ingredients.some((i) => i.name.toLowerCase().includes(s)) ||
+          c.tags.some((t) => t.toLowerCase().includes(s)),
       );
     }
-    if (activeTags.length > 0) {
-      list = list.filter((c) => activeTags.every((t) => c.tags.includes(t)));
+    if (sortMode === "rating") {
+      return [...f].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
     }
-    if (sortMode === "alpha") {
-      list = [...list].sort((a, b) => a.name.localeCompare(b.name, "da"));
-    } else {
-      list = [...list].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
-    }
-    return list;
-  }, [menuCocktails, search, activeTags, sortMode]);
-
-  const openCocktail = openId ? (cocktails ?? []).find((c) => c.id === openId) ?? null : null;
-
-  const badgeMap = useMemo(() => {
-    const map = new Map<string, PopularBadge>();
-    if (popular?.bestseller) map.set(popular.bestseller, "bestseller");
-    if (popular?.popular && popular.popular !== popular.bestseller)
-      map.set(popular.popular, "popular");
-    return map;
-  }, [popular]);
+    return [...f].sort((a, b) => a.name.localeCompare(b.name, "da"));
+  }, [data, tags, q, sortMode]);
 
   return (
     <div className="min-h-screen bg-background">
       <MenukortHeader />
-
       <main className="mx-auto max-w-5xl px-4 py-6">
-        {/* Søg + sortering */}
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mb-5 space-y-1">
+          <h1 className="font-serif text-3xl tracking-tight">Cocktail menu</h1>
+          {orderingEnabled && (
+            <p className="text-sm text-muted-foreground">
+              Vælg en cocktail og tryk Bestil — bartenderen får besked.
+            </p>
+          )}
+        </div>
+
+        <Button
+          variant="outline"
+          className="mb-5 w-full"
+          onClick={() => {
+            if (filtered.length === 0) return;
+            const random = filtered[Math.floor(Math.random() * filtered.length)];
+            setOpenId(random.id);
+          }}
+        >
+          <Shuffle className="h-4 w-4" />
+          Overrask mig
+        </Button>
+
+        <div className="mb-5 space-y-3">
           <Input
-            placeholder="Søg cocktail eller ingrediens…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="sm:max-w-xs"
+            placeholder="Søg efter navn eller ingrediens..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <TagFilter
+            selected={tags}
+            onToggle={(t) =>
+              setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+            }
+            onClear={() => setTags([])}
           />
           <div className="flex gap-2">
             <Button
+              variant="outline"
               size="sm"
-              variant={sortMode === "alpha" ? "default" : "outline"}
               onClick={() => setSortMode("alpha")}
+              className={cn(sortMode === "alpha" && "border-primary/60 bg-primary/10 text-primary")}
             >
               <ArrowDownAZ className="mr-1 h-4 w-4" />
-              A–Z
+              A-Z
             </Button>
             <Button
+              variant="outline"
               size="sm"
-              variant={sortMode === "rating" ? "default" : "outline"}
               onClick={() => setSortMode("rating")}
+              className={cn(sortMode === "rating" && "border-primary/60 bg-primary/10 text-primary")}
             >
               <Star className="mr-1 h-4 w-4" />
-              Rating
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const shuffled = [...filtered].sort(() => Math.random() - 0.5);
-                // Trigger re-render via sortMode trick — brug ekstern state i stedet
-              }}
-            >
-              <Shuffle className="mr-1 h-4 w-4" />
-              Tilfældig
+              Bedst vurderet
             </Button>
           </div>
         </div>
 
-        {/* Tag-filter */}
-        {allTags.length > 0 && (
-          <div className="mb-6">
-            <TagFilter tags={allTags} active={activeTags} onChange={setActiveTags} />
+        {isLoading ? (
+          <p className="text-muted-foreground">Indlæser...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-muted-foreground">Ingen cocktails matcher din søgning.</p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((c) => (
+              <MenukortCocktailCard
+                key={c.id}
+                cocktail={c}
+                onOpen={() => setOpenId(c.id)}
+                orderingEnabled={orderingEnabled}
+                badge={badgeById.get(c.id)}
+              />
+            ))}
           </div>
         )}
 
-        {/* Gitter — items-stretch sikrer at alle kort i en række har samme højde */}
-        <div className="grid grid-cols-2 items-stretch gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((c) => (
-            <MenukortCocktailCard
-              key={c.id}
-              cocktail={c}
-              onOpen={() => setOpenId(c.id)}
-              orderingEnabled={orderingEnabled ?? false}
-              badge={badgeMap.get(c.id)}
-            />
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <p className="mt-12 text-center text-muted-foreground">Ingen cocktails matcher søgningen.</p>
-        )}
-      </main>
-
-      {/* Detail-dialog */}
-      {openCocktail && (
-        <Dialog open={!!openId} onOpenChange={(v) => { if (!v) setOpenId(null); }}>
+        {/* Detalje-dialog — viser det fulde CocktailCard med alt info */}
+        <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
-            <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-background p-0 shadow-xl focus:outline-none">
-              <CocktailCard
-                cocktail={openCocktail}
-                showAvailabilityBadge={false}
-                footerSlot={
-                  <div className="flex items-center justify-between gap-2">
-                    <ShareButton cocktail={openCocktail} />
-                    {orderingEnabled && (
-                      <OrderButton
-                        cocktailId={openCocktail.id}
-                        cocktailName={openCocktail.name}
+            <DialogPrimitive.Content
+              className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border-0 bg-transparent p-0 shadow-none outline-none sm:max-w-md"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              {(() => {
+                const c = filtered.find((x) => x.id === openId);
+                if (!c) return null;
+                return (
+                  <>
+                    <DialogPrimitive.Title className="sr-only">{c.name}</DialogPrimitive.Title>
+                    <div
+                      className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("[data-order-button]")) return;
+                        if ((e.target as HTMLElement).closest("[data-share-button]")) return;
+                        setOpenId(null);
+                      }}
+                    >
+                      <CocktailCard
+                        cocktail={c}
+                        showAvailabilityBadge={false}
+                        footerSlot={
+                          <div
+                            className="flex flex-wrap gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div data-share-button>
+                              <ShareButton cocktail={c} />
+                            </div>
+                            {orderingEnabled && (
+                              <div data-order-button className="flex-1">
+                                <OrderButton cocktailId={c.id} cocktailName={c.name} />
+                              </div>
+                            )}
+                          </div>
+                        }
                       />
-                    )}
-                  </div>
-                }
-              />
+                    </div>
+                  </>
+                );
+              })()}
             </DialogPrimitive.Content>
           </DialogPortal>
         </Dialog>
-      )}
+      </main>
     </div>
   );
 }
