@@ -21,6 +21,7 @@ export const logOrder = createServerFn({ method: "POST" })
     note: string | null;
     status: string;
     loggedAt: string;
+    quantity?: number;
   }) => z.object({
     originalOrderId: z.string(),
     cocktailId: z.string().uuid().nullable(),
@@ -29,6 +30,7 @@ export const logOrder = createServerFn({ method: "POST" })
     note: z.string().nullable(),
     status: z.string(),
     loggedAt: z.string(),
+    quantity: z.number().int().min(1).optional().default(1),
   }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
@@ -41,6 +43,7 @@ export const logOrder = createServerFn({ method: "POST" })
       note: data.note,
       status: data.status,
       logged_at: data.loggedAt,
+      quantity: data.quantity,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -59,6 +62,7 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
       note: string | null;
       status: string;
       loggedAt: string;
+      quantity?: number;
     }>;
   }) => z.object({
     orders: z.array(z.object({
@@ -69,6 +73,7 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
       note: z.string().nullable(),
       status: z.string(),
       loggedAt: z.string(),
+      quantity: z.number().int().min(1).optional().default(1),
     })),
   }).parse(d))
   .handler(async ({ data, context }) => {
@@ -83,6 +88,7 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
       note: o.note,
       status: o.status,
       logged_at: o.loggedAt,
+      quantity: o.quantity,
     }));
     const { error } = await sb.from("order_log" as any).insert(rows);
     if (error) throw new Error(error.message);
@@ -136,6 +142,7 @@ export const getRatingDistribution = createServerFn({ method: "GET" })
   });
 
 // ── Statistik: Top 5 mest bestilte cocktails ──────────────────────────────
+// Tæller efter quantity, så en bestilling på ×3 tæller som 3 drinks.
 
 export type TopCocktailRow = { cocktail_name: string; count: number };
 
@@ -146,11 +153,11 @@ export const getTopCocktails = createServerFn({ method: "GET" })
     const sb = await getAdminClient();
     const { data, error } = await sb
       .from("order_log" as any)
-      .select("cocktail_name");
+      .select("cocktail_name, quantity");
     if (error) throw new Error(error.message);
     const counts = new Map<string, number>();
-    for (const row of (data ?? []) as Array<{ cocktail_name: string }>) {
-      counts.set(row.cocktail_name, (counts.get(row.cocktail_name) ?? 0) + 1);
+    for (const row of (data ?? []) as Array<{ cocktail_name: string; quantity: number | null }>) {
+      counts.set(row.cocktail_name, (counts.get(row.cocktail_name) ?? 0) + (row.quantity ?? 1));
     }
     const result: TopCocktailRow[] = Array.from(counts.entries())
       .map(([cocktail_name, count]) => ({ cocktail_name, count }))
@@ -158,6 +165,51 @@ export const getTopCocktails = createServerFn({ method: "GET" })
       .slice(0, 5);
     return result;
   });
+
+// ── Populære cocktails til badges (OFFENTLIG) ──────────────────────────────
+// Bruges på det offentlige menukort, så den er bevidst uden auth-middleware.
+// Den udstiller kun hvilke cocktails der er populære (id + antal) — ingen
+// gæstenavne eller andet følsomt. Tæller efter quantity og matcher på
+// cocktail_id (robust over for omdøbninger).
+
+export type PopularBadge = "bestseller" | "popular";
+export type PopularCocktailRow = {
+  cocktail_id: string;
+  count: number;
+  rank: number;
+  badge: PopularBadge;
+};
+
+const POPULAR_THRESHOLD = 3; // mindst 3 bestillinger før et badge gives
+const POPULAR_LIMIT = 5;     // #1 = bestseller, #2-5 = populær
+
+export const getPopularCocktails = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PopularCocktailRow[]> => {
+    const sb = await getAdminClient();
+    const { data, error } = await sb
+      .from("order_log" as any)
+      .select("cocktail_id, quantity");
+    if (error) throw new Error(error.message);
+
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as Array<{ cocktail_id: string | null; quantity: number | null }>) {
+      if (!row.cocktail_id) continue;
+      counts.set(row.cocktail_id, (counts.get(row.cocktail_id) ?? 0) + (row.quantity ?? 1));
+    }
+
+    return Array.from(counts.entries())
+      .map(([cocktail_id, count]) => ({ cocktail_id, count }))
+      .filter((r) => r.count >= POPULAR_THRESHOLD)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, POPULAR_LIMIT)
+      .map((r, i) => ({
+        cocktail_id: r.cocktail_id,
+        count: r.count,
+        rank: i + 1,
+        badge: (i === 0 ? "bestseller" : "popular") as PopularBadge,
+      }));
+  },
+);
 
 // ── Statistik: Bestillinger over tid ──────────────────────────────────────
 
@@ -176,18 +228,18 @@ export const getOrdersOverTime = createServerFn({ method: "POST" })
     const sb = await getAdminClient();
     let query = sb
       .from("order_log" as any)
-      .select("logged_at")
+      .select("logged_at, quantity")
       .order("logged_at", { ascending: true });
     if (data.from) query = query.gte("logged_at", data.from);
     if (data.to) query = query.lte("logged_at", data.to);
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
 
-    // Gruppér efter dag (YYYY-MM-DD)
+    // Gruppér efter dag (YYYY-MM-DD), tæl efter quantity
     const counts = new Map<string, number>();
-    for (const row of (rows ?? []) as Array<{ logged_at: string }>) {
+    for (const row of (rows ?? []) as Array<{ logged_at: string; quantity: number | null }>) {
       const day = row.logged_at.slice(0, 10); // YYYY-MM-DD
-      counts.set(day, (counts.get(day) ?? 0) + 1);
+      counts.set(day, (counts.get(day) ?? 0) + (row.quantity ?? 1));
     }
 
     // Fyld huller i datoer
@@ -218,7 +270,7 @@ export const getGuestSeries = createServerFn({ method: "POST" })
     const sb = await getAdminClient();
     let query = sb
       .from("order_log" as any)
-      .select("customer_name, logged_at")
+      .select("customer_name, logged_at, quantity")
       .order("logged_at", { ascending: true });
     if (data.from) query = query.gte("logged_at", data.from);
     if (data.to) query = query.lte("logged_at", data.to);
@@ -226,7 +278,11 @@ export const getGuestSeries = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     // Byg tidsserie pr. gæst, grupperet pr. time (eller dag ved lange perioder)
-    const allRows = (rows ?? []) as Array<{ customer_name: string; logged_at: string }>;
+    const allRows = (rows ?? []) as Array<{
+      customer_name: string;
+      logged_at: string;
+      quantity: number | null;
+    }>;
 
     // Find tidsperiode
     if (allRows.length === 0) return [];
@@ -241,13 +297,13 @@ export const getGuestSeries = createServerFn({ method: "POST" })
       return iso.slice(0, 10);                        // YYYY-MM-DD
     }
 
-    // Byg per-gæst optælling
+    // Byg per-gæst optælling (efter quantity)
     const guestMap = new Map<string, Map<string, number>>();
     for (const row of allRows) {
       const b = bucket(row.logged_at);
       if (!guestMap.has(row.customer_name)) guestMap.set(row.customer_name, new Map());
       const m = guestMap.get(row.customer_name)!;
-      m.set(b, (m.get(b) ?? 0) + 1);
+      m.set(b, (m.get(b) ?? 0) + (row.quantity ?? 1));
     }
 
     // Saml alle unikke buckets

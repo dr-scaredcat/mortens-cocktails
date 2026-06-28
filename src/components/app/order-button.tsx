@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { createOrder } from "@/lib/orders.functions";
 
 const NAME_KEY = "barskab.customerName";
+const MAX_QUANTITY = 10;
 
 export function OrderButton({
   cocktailId,
@@ -31,6 +33,7 @@ export function OrderButton({
     typeof window === "undefined" ? "" : localStorage.getItem(NAME_KEY) ?? "",
   );
   const [note, setNote] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,11 +50,17 @@ export function OrderButton({
           cocktailName,
           customerName: name.trim(),
           note: note.trim() || null,
+          quantity,
         },
       });
       if (typeof window !== "undefined") localStorage.setItem(NAME_KEY, name.trim());
-      toast.success(`Bestilling sendt: ${cocktailName}`);
+      toast.success(
+        quantity > 1
+          ? `Bestilling sendt: ${quantity}× ${cocktailName}`
+          : `Bestilling sendt: ${cocktailName}`,
+      );
       setNote("");
+      setQuantity(1);
       setOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Kunne ikke sende bestilling");
@@ -85,6 +94,34 @@ export function OrderButton({
               autoFocus
               required
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Antal</Label>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                disabled={quantity <= 1}
+                aria-label="Færre"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="w-8 text-center text-lg font-medium tabular-nums">{quantity}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
+                disabled={quantity >= MAX_QUANTITY}
+                aria-label="Flere"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="order-note">Note (valgfri)</Label>

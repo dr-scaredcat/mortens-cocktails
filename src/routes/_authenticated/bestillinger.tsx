@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/app/site-header";
@@ -17,8 +17,10 @@ import {
   deleteOrder,
   listOrders,
   setOrderStatus,
+  type OrderRow,
 } from "@/lib/orders.functions";
 import { logOrder } from "@/lib/stats.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/bestillinger")({
   head: () => ({ meta: [{ title: "Bestillinger — Barskab" }] }),
@@ -35,17 +37,54 @@ function OrdersPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders"],
     queryFn: () => fetchOrders(),
-    refetchInterval: 10_000,
+    // Realtime er den hurtige vej; pollingen er et langsomt sikkerhedsnet, der
+    // sikrer at listen altid konvergerer mod korrekt tilstand hvis en
+    // realtime-besked skulle gå tabt eller forbindelsen ryger.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
+
+  // ── Realtime: lyt efter ændringer på cocktail_orders ──────────────────────
+  // Ved enhver insert/update/delete invalideres ["orders"], så listen
+  // genhentes øjeblikkeligt. Ved (gen)tilkobling hentes også, så vi fanger
+  // op på alt der måtte være sket mens forbindelsen var nede.
+  useEffect(() => {
+    const channel = supabase
+      .channel("cocktail_orders_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cocktail_orders" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["orders"] });
+        },
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          qc.invalidateQueries({ queryKey: ["orders"] });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+
   const fetchCocktails = useServerFn(listCocktails);
   const { data: cocktailsData } = useQuery({
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
   });
   const [openCocktailId, setOpenCocktailId] = useState<string | null>(null);
+  const [openQuantity, setOpenQuantity] = useState(1);
   const openCocktail = (cocktailsData ?? []).find(
     (c: CocktailWithDetails) => c.id === openCocktailId,
   );
+
+  function openCard(o: OrderRow) {
+    if (!o.cocktail_id) return;
+    setOpenCocktailId(o.cocktail_id);
+    setOpenQuantity(o.quantity);
+  }
 
   async function mark(id: string, status: "pending" | "done") {
     // Log til statistik når en bestilling markeres som færdig (flueben)
@@ -62,6 +101,7 @@ function OrdersPage() {
               note: order.note,
               status: "done",
               loggedAt: order.created_at,
+              quantity: order.quantity,
             },
           });
         } catch {
@@ -143,9 +183,7 @@ function OrdersPage() {
                       order={o}
                       onDone={() => mark(o.id, "done")}
                       onDelete={() => remove(o.id)}
-                      onOpen={
-                        o.cocktail_id ? () => setOpenCocktailId(o.cocktail_id) : undefined
-                      }
+                      onOpen={o.cocktail_id ? () => openCard(o) : undefined}
                     />
                   ))}
                 </ul>
@@ -162,9 +200,7 @@ function OrdersPage() {
                       done
                       onReopen={() => mark(o.id, "pending")}
                       onDelete={() => remove(o.id)}
-                      onOpen={
-                        o.cocktail_id ? () => setOpenCocktailId(o.cocktail_id) : undefined
-                      }
+                      onOpen={o.cocktail_id ? () => openCard(o) : undefined}
                     />
                   ))}
                 </ul>
@@ -192,7 +228,13 @@ function OrdersPage() {
                   className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
                   onClick={() => setOpenCocktailId(null)}
                 >
-                  <CocktailCard cocktail={openCocktail} showAvailabilityBadge={false} />
+                  <CocktailCard
+                    key={`${openCocktailId}-${openQuantity}`}
+                    cocktail={openCocktail}
+                    showAvailabilityBadge={false}
+                    showMultiplier
+                    initialMultiplier={openQuantity}
+                  />
                 </div>
               </>
             ) : null}
@@ -211,6 +253,7 @@ type OrderItemProps = {
     customer_name: string;
     note: string | null;
     created_at: string;
+    quantity: number;
   };
   done?: boolean;
   onDone?: () => void;
@@ -231,8 +274,13 @@ function OrderItem({ order, done, onDone, onReopen, onDelete, onOpen }: OrderIte
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-serif text-lg">{order.cocktail_name}</span>
+            {order.quantity > 1 && (
+              <Badge className="bg-primary/20 text-primary hover:bg-primary/20">
+                ×{order.quantity}
+              </Badge>
+            )}
             <span className="text-sm text-muted-foreground">til {order.customer_name}</span>
           </div>
           {order.note && (
