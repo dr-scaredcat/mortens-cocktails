@@ -17,5 +17,15 @@ export function SiteLogo({ type, size, className }: SiteLogoProps) {
   if (type === "wine") {
     return <Wine className={className} style={style} />;
   }
+  if (type === "custom") {
+    return (
+      <img
+        src="/custom-logo.png"
+        alt="Logo"
+        className={className}
+        style={{ ...style, objectFit: "contain" }}
+      />
+    );
+  }
   return <BarskabLogo className={className} style={style} />;
 }
