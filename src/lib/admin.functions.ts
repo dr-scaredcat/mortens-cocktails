@@ -140,6 +140,7 @@ export const saveCocktail = createServerFn({ method: "POST" })
     }
 
     // ── Resolve / auto-create ingredienser — batch i stedet for sekventielt ──
+    // Hent alle eksisterende ingredienser én gang og match case-insensitivt i JS.
     const names = data.ingredients.map((i) => i.name.trim()).filter((n) => n.length > 0);
 
     const { data: allIngs, error: ingErr } = await sb.from("ingredients").select("id, name");
@@ -149,11 +150,12 @@ export const saveCocktail = createServerFn({ method: "POST" })
       (allIngs ?? []).map((i: { id: string; name: string }) => [i.name.trim().toLowerCase(), i.id]),
     );
 
-    const missing = [...new Set(names.filter((n) => !idByLowerName.has(n.toLowerCase())))];
-    if (missing.length > 0) {
+    // Find unikke navne der mangler (dedup case-insensitivt), og opret dem i ÉT insert.
+    const missingNames = [...new Set(names.filter((n) => !idByLowerName.has(n.toLowerCase())))];
+    if (missingNames.length > 0) {
       const { data: newIngs, error: insertErr } = await sb
         .from("ingredients")
-        .insert(missing.map((n) => ({ name: n, category: "Andet" })))
+        .insert(missingNames.map((n) => ({ name: n, category: "Andet" })))
         .select("id, name");
       if (insertErr) throw new Error(insertErr.message);
       for (const ing of newIngs ?? []) {
@@ -161,7 +163,7 @@ export const saveCocktail = createServerFn({ method: "POST" })
       }
     }
 
-    const resolvedIngredients = data.ingredients
+    const ingIds = data.ingredients
       .filter((i) => i.name.trim().length > 0)
       .map((i, pos) => ({
         ingredient_id: idByLowerName.get(i.name.trim().toLowerCase())!,
@@ -170,9 +172,10 @@ export const saveCocktail = createServerFn({ method: "POST" })
         position: pos,
       }));
 
+    let cocktailId: string | undefined = data.id;
+
     if (data.id) {
-      // Update
-      const { error: updErr } = await sb
+      const { error } = await sb
         .from("cocktails")
         .update({
           name: data.name.trim(),
@@ -183,31 +186,9 @@ export const saveCocktail = createServerFn({ method: "POST" })
           instructions: data.instructions ?? null,
         })
         .eq("id", data.id);
-      if (updErr) throw new Error(updErr.message);
-
-      // Sync tags
-      await sb.from("cocktail_tags" as any).delete().eq("cocktail_id", data.id);
-      if (data.tags.length > 0) {
-        const { data: tagRows } = await sb.from("tags").select("id, name").in("name", data.tags);
-        if (tagRows && tagRows.length > 0) {
-          await sb.from("cocktail_tags" as any).insert(
-            tagRows.map((t: { id: string }) => ({ cocktail_id: data.id, tag_id: t.id })),
-          );
-        }
-      }
-
-      // Replace ingredients
-      await sb.from("cocktail_ingredients").delete().eq("cocktail_id", data.id);
-      if (resolvedIngredients.length > 0) {
-        const { error: ingInsErr } = await sb.from("cocktail_ingredients").insert(
-          resolvedIngredients.map((r) => ({ ...r, cocktail_id: data.id })),
-        );
-        if (ingInsErr) throw new Error(ingInsErr.message);
-      }
-      return { id: data.id };
+      if (error) throw new Error(error.message);
     } else {
-      // Insert
-      const { data: newCocktail, error: insErr } = await sb
+      const { data: row, error } = await sb
         .from("cocktails")
         .insert({
           name: data.name.trim(),
@@ -220,25 +201,346 @@ export const saveCocktail = createServerFn({ method: "POST" })
         })
         .select("id")
         .single();
-      if (insErr) throw new Error(insErr.message);
-      const cocktailId = newCocktail.id;
-
-      // Sync tags
-      if (data.tags.length > 0) {
-        const { data: tagRows } = await sb.from("tags").select("id, name").in("name", data.tags);
-        if (tagRows && tagRows.length > 0) {
-          await sb.from("cocktail_tags" as any).insert(
-            tagRows.map((t: { id: string }) => ({ cocktail_id: cocktailId, tag_id: t.id })),
-          );
-        }
-      }
-
-      if (resolvedIngredients.length > 0) {
-        const { error: ingInsErr } = await sb.from("cocktail_ingredients").insert(
-          resolvedIngredients.map((r) => ({ ...r, cocktail_id: cocktailId })),
-        );
-        if (ingInsErr) throw new Error(ingInsErr.message);
-      }
-      return { id: cocktailId };
+      if (error) throw new Error(error.message);
+      cocktailId = row.id;
     }
+
+    await sb.from("cocktail_ingredients").delete().eq("cocktail_id", cocktailId!);
+    if (ingIds.length > 0) {
+      const { error } = await sb.from("cocktail_ingredients").insert(
+        ingIds.map((r, i) => ({ ...r, cocktail_id: cocktailId!, position: i })),
+      );
+      if (error) throw new Error(error.message);
+    }
+
+    await sb.from("cocktail_tags").delete().eq("cocktail_id", cocktailId!);
+    if (data.tags.length > 0) {
+      const { error } = await sb
+        .from("cocktail_tags")
+        .insert(data.tags.map((tag) => ({ cocktail_id: cocktailId!, tag })));
+      if (error) throw new Error(error.message);
+    }
+
+    return { id: cocktailId };
   });
+
+export const deleteCocktail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase.from("cocktails").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setCocktailsOnMenu = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[]; onMenu: boolean }) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1), onMenu: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("cocktails")
+      .update({ on_menu: data.onMenu })
+      .in("id", data.ids);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const resetCocktailRating = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("cocktail_ratings")
+      .delete()
+      .eq("cocktail_id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reorderCocktails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: string[]) => z.array(z.string().uuid()).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    for (let i = 0; i < data.length; i++) {
+      await sb.from("cocktails").update({ position: i }).eq("id", data[i]);
+    }
+    return { ok: true };
+  });
+
+// =================== Categories ===================
+
+export const upsertCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(60),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await sb.from("categories").update({ name: data.name }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      if (data.oldName && data.oldName !== data.name) {
+        await sb.from("ingredients").update({ category: data.name }).eq("category", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await sb
+      .from("categories")
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteCategory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await sb.from("ingredients").update({ category: "Andet" }).eq("category", data.name);
+    const { error } = await sb.from("categories").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reorderCategories = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) => sb.from("categories").update({ position: i + 1 }).eq("id", id)),
+    );
+    return { ok: true };
+  });
+
+// =================== Tags ===================
+
+export const upsertTag = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(40),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await sb.from("tags").update({ name: data.name }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      if (data.oldName && data.oldName !== data.name) {
+        await sb.from("cocktail_tags").update({ tag: data.name }).eq("tag", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await sb
+      .from("tags")
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteTag = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await sb.from("cocktail_tags").delete().eq("tag", data.name);
+    const { error } = await sb.from("tags").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reorderTags = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) => sb.from("tags").update({ position: i + 1 }).eq("id", id)),
+    );
+    return { ok: true };
+  });
+
+// =================== Glasses ===================
+
+export const upsertGlass = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(80),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await sb.from("glasses").update({ name: data.name }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      if (data.oldName && data.oldName !== data.name) {
+        await sb.from("cocktails").update({ glass: data.name }).eq("glass", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await sb
+      .from("glasses")
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteGlass = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await sb.from("cocktails").update({ glass: null }).eq("glass", data.name);
+    const { error } = await sb.from("glasses").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Garnishes ===================
+
+export const upsertGarnish = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(120),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await sb.from("garnishes").update({ name: data.name }).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      if (data.oldName && data.oldName !== data.name) {
+        await sb.from("cocktails").update({ garnish: data.name }).eq("garnish", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await sb
+      .from("garnishes")
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteGarnish = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await sb.from("cocktails").update({ garnish: null }).eq("garnish", data.name);
+    const { error } = await sb.from("garnishes").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// =================== Users / admin grants ===================
+
+export type AdminUserRow = { id: string; email: string | null };
+
+export const listAdmins = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { data: roles, error } = await context.supabase
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    if (error) throw new Error(error.message);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Hent alle admin-brugeres email parallelt i stedet for sekventielt (N+1-waterfall).
+    const result = await Promise.all(
+      (roles ?? []).map(async (r: { user_id: string }) => {
+        const { data } = await supabaseAdmin.auth.admin.getUserById(r.user_id);
+        return { id: r.user_id, email: data.user?.email ?? null };
+      }),
+    );
+    return result as AdminUserRow[];
+  });
+
+async function findUserIdByEmail(email: string): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin.auth.admin.listUsers();
+  const user = (data?.users ?? []).find(
+    (u) => u.email?.toLowerCase() === email.toLowerCase(),
+  );
+  return user?.id ?? null;
+}
+
+export const grantAdminByEmail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { email: string }) => z.object({ email: z.string().email() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const target = await findUserIdByEmail(data.email);
+    if (!target)
+      throw new Error(
+        "Ingen bruger fundet med den email. Brugeren skal være oprettet først.",
+      );
+    const { error } = await context.supabase
+      .from("user_roles")
+      .upsert({ user_id: target, role: "admin" }, { onConflict: "user_id,role", ignoreDuplicates: true });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const revokeAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string }) => z.object({ userId: z.s
