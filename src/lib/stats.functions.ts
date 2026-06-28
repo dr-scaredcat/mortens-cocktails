@@ -166,6 +166,51 @@ export const getTopCocktails = createServerFn({ method: "GET" })
     return result;
   });
 
+// ── Populære cocktails til badges (OFFENTLIG) ──────────────────────────────
+// Bruges på det offentlige menukort, så den er bevidst uden auth-middleware.
+// Den udstiller kun hvilke cocktails der er populære (id + antal) — ingen
+// gæstenavne eller andet følsomt. Tæller efter quantity og matcher på
+// cocktail_id (robust over for omdøbninger).
+
+export type PopularBadge = "bestseller" | "popular";
+export type PopularCocktailRow = {
+  cocktail_id: string;
+  count: number;
+  rank: number;
+  badge: PopularBadge;
+};
+
+const POPULAR_THRESHOLD = 3; // mindst 3 bestillinger før et badge gives
+const POPULAR_LIMIT = 5;     // #1 = bestseller, #2-5 = populær
+
+export const getPopularCocktails = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PopularCocktailRow[]> => {
+    const sb = await getAdminClient();
+    const { data, error } = await sb
+      .from("order_log" as any)
+      .select("cocktail_id, quantity");
+    if (error) throw new Error(error.message);
+
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as Array<{ cocktail_id: string | null; quantity: number | null }>) {
+      if (!row.cocktail_id) continue;
+      counts.set(row.cocktail_id, (counts.get(row.cocktail_id) ?? 0) + (row.quantity ?? 1));
+    }
+
+    return Array.from(counts.entries())
+      .map(([cocktail_id, count]) => ({ cocktail_id, count }))
+      .filter((r) => r.count >= POPULAR_THRESHOLD)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, POPULAR_LIMIT)
+      .map((r, i) => ({
+        cocktail_id: r.cocktail_id,
+        count: r.count,
+        rank: i + 1,
+        badge: (i === 0 ? "bestseller" : "popular") as PopularBadge,
+      }));
+  },
+);
+
 // ── Statistik: Bestillinger over tid ──────────────────────────────────────
 
 export type OrderOverTimeRow = { bucket: string; count: number };
