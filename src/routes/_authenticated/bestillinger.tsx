@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CocktailCard } from "@/components/app/cocktail-card";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
-import { Check, Trash2, RotateCcw } from "lucide-react";
+import { Check, Trash2, RotateCcw, X } from "lucide-react";
 import {
   deleteAllOrders,
   deleteOrder,
@@ -37,17 +37,11 @@ function OrdersPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders"],
     queryFn: () => fetchOrders(),
-    // Realtime er den hurtige vej; pollingen er et langsomt sikkerhedsnet, der
-    // sikrer at listen altid konvergerer mod korrekt tilstand hvis en
-    // realtime-besked skulle gå tabt eller forbindelsen ryger.
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   });
 
   // ── Realtime: lyt efter ændringer på cocktail_orders ──────────────────────
-  // Ved enhver insert/update/delete invalideres ["orders"], så listen
-  // genhentes øjeblikkeligt. Ved (gen)tilkobling hentes også, så vi fanger
-  // op på alt der måtte være sket mens forbindelsen var nede.
   useEffect(() => {
     const channel = supabase
       .channel("cocktail_orders_changes")
@@ -117,6 +111,18 @@ function OrdersPage() {
     }
   }
 
+  // Annuller en afventende ordre — sletter UDEN at logge til statistik
+  async function cancel(id: string) {
+    if (!confirm("Annuller denne bestilling?")) return;
+    try {
+      await removeOrder({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Bestilling annulleret");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke annullere");
+    }
+  }
+
   async function remove(id: string) {
     if (!confirm("Slet denne bestilling?")) return;
     try {
@@ -182,7 +188,7 @@ function OrdersPage() {
                       key={o.id}
                       order={o}
                       onDone={() => mark(o.id, "done")}
-                      onDelete={() => remove(o.id)}
+                      onCancel={() => cancel(o.id)}
                       onOpen={o.cocktail_id ? () => openCard(o) : undefined}
                     />
                   ))}
@@ -257,12 +263,13 @@ type OrderItemProps = {
   };
   done?: boolean;
   onDone?: () => void;
+  onCancel?: () => void;   // Annuller — kun på pending, logger IKKE til statistik
   onReopen?: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onOpen?: () => void;
 };
 
-function OrderItem({ order, done, onDone, onReopen, onDelete, onOpen }: OrderItemProps) {
+function OrderItem({ order, done, onDone, onCancel, onReopen, onDelete, onOpen }: OrderItemProps) {
   const time = new Date(order.created_at).toLocaleString("da-DK", {
     dateStyle: "short",
     timeStyle: "short",
@@ -290,17 +297,36 @@ function OrderItem({ order, done, onDone, onReopen, onDelete, onOpen }: OrderIte
         </div>
         <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
           {done ? (
-            <Button size="sm" variant="ghost" onClick={onReopen} aria-label="Genåbn">
-              <RotateCcw className="h-4 w-4" />
-            </Button>
+            <>
+              <Button size="sm" variant="ghost" onClick={onReopen} aria-label="Genåbn">
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+              {onDelete && (
+                <Button size="sm" variant="ghost" onClick={onDelete} aria-label="Slet">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           ) : (
-            <Button size="sm" variant="ghost" onClick={onDone} aria-label="Markér færdig">
-              <Check className="h-4 w-4" />
-            </Button>
+            <>
+              {onDone && (
+                <Button size="sm" variant="ghost" onClick={onDone} aria-label="Markér færdig">
+                  <Check className="h-4 w-4" />
+                </Button>
+              )}
+              {onCancel && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCancel}
+                  aria-label="Annuller bestilling"
+                  className="text-destructive hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </>
           )}
-          <Button size="sm" variant="ghost" onClick={onDelete} aria-label="Slet">
-            <Trash2 className="h-4 w-4" />
-          </Button>
         </div>
       </div>
     </Card>
