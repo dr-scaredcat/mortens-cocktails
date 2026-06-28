@@ -1,15 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertAdmin } from "@/lib/supabase-shared";
 import { z } from "zod";
-
-async function assertAdmin(ctx: { supabase: any; userId: string }) {
-  const { data, error } = await ctx.supabase.rpc("has_role", {
-    _user_id: ctx.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Kun administratorer kan udføre denne handling");
-}
 
 export const isAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

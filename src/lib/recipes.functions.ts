@@ -1,15 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { publicClient, assertAdmin } from "@/lib/supabase-shared";
 import { z } from "zod";
-
-async function assertAdmin(ctx: { supabase: any; userId: string }) {
-  const { data, error } = await ctx.supabase.rpc("has_role", {
-    _user_id: ctx.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Kun administratorer kan udføre denne handling");
-}
 
 const recipeImageInput = z.object({
   url: z.string().url(),
@@ -127,18 +119,7 @@ export const deleteRecipe = createServerFn({ method: "POST" })
   });
 
 export const listRecipes = createServerFn({ method: "GET" }).handler(async () => {
-  const { createClient } = await import("@supabase/supabase-js");
-  const url =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
-    process.env.SUPABASE_URL ||
-    "https://dkvrwwpbaarfyqyrnhha.supabase.co";
-  const key =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    "sb_publishable_NsAPFaHuYb2mQbejaLy9WQ_BtLxx8ri";
-  const sb = createClient(url, key, {
-    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-  });
+  const sb = publicClient();
 
   const { data: recipes, error } = await sb
     .from("recipes")
