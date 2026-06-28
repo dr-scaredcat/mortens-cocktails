@@ -130,26 +130,50 @@ export const saveCocktail = createServerFn({ method: "POST" })
       throw new Error(`En cocktail med navnet "${data.name.trim()}" eksisterer allerede`);
     }
 
+    // ── Resolve / auto-create ingredienser — batch i stedet for sekventielt ──
+    // Hent alle eksisterende ingredienser én gang og match case-insensitivt i JS.
+    const names = data.ingredients.map((i) => i.name.trim()).filter((n) => n.length > 0);
+
+    const { data: allIngs, error: ingErr } = await sb.from("ingredients").select("id, name");
+    if (ingErr) throw new Error(ingErr.message);
+
+    const idByLowerName = new Map<string, string>(
+      (allIngs ?? []).map((i: { id: string; name: string }) => [i.name.trim().toLowerCase(), i.id]),
+    );
+
+    // Find unikke navne der mangler (dedup case-insensitivt), og opret dem i ÉT insert.
+    const missingByLower = new Map<string, string>(); // lower -> original visningsnavn
+    for (const n of names) {
+      const lower = n.toLowerCase();
+      if (!idByLowerName.has(lower) && !missingByLower.has(lower)) {
+        missingByLower.set(lower, n);
+      }
+    }
+    if (missingByLower.size > 0) {
+      const { data: created, error } = await sb
+        .from("ingredients")
+        .insert(
+          Array.from(missingByLower.values()).map((name) => ({
+            name,
+            category: "Andet",
+            available: false,
+          })),
+        )
+        .select("id, name");
+      if (error) throw new Error(error.message);
+      for (const row of (created ?? []) as Array<{ id: string; name: string }>) {
+        idByLowerName.set(row.name.trim().toLowerCase(), row.id);
+      }
+    }
+
+    // Byg ingrediens-rækker i samme rækkefølge som input (bevarer dubletter og mængder).
     const ingIds: { ingredient_id: string; amount: number | null; unit: string | null }[] = [];
     for (const item of data.ingredients) {
       const name = item.name.trim();
       if (!name) continue;
-      const { data: existingIng } = await sb
-        .from("ingredients")
-        .select("id")
-        .ilike("name", name)
-        .maybeSingle();
-      let id = existingIng?.id as string | undefined;
-      if (!id) {
-        const { data: created, error } = await sb
-          .from("ingredients")
-          .insert({ name, category: "Andet", available: false })
-          .select("id")
-          .single();
-        if (error) throw new Error(error.message);
-        id = created.id;
-      }
-      ingIds.push({ ingredient_id: id!, amount: item.amount ?? null, unit: item.unit ?? null });
+      const id = idByLowerName.get(name.toLowerCase());
+      if (!id) continue; // burde ikke ske — alle navne er nu oprettet
+      ingIds.push({ ingredient_id: id, amount: item.amount ?? null, unit: item.unit ?? null });
     }
 
     if (data.glass?.trim()) {
@@ -493,12 +517,15 @@ export const listAdmins = createServerFn({ method: "GET" })
       .eq("role", "admin");
     if (error) throw new Error(error.message);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const result: AdminUserRow[] = [];
-    for (const r of roles ?? []) {
-      const { data } = await supabaseAdmin.auth.admin.getUserById(r.user_id);
-      result.push({ id: r.user_id, email: data.user?.email ?? null });
-    }
-    return result;
+
+    // Hent alle admin-brugeres email parallelt i stedet for sekventielt (N+1-waterfall).
+    const result = await Promise.all(
+      (roles ?? []).map(async (r: { user_id: string }) => {
+        const { data } = await supabaseAdmin.auth.admin.getUserById(r.user_id);
+        return { id: r.user_id, email: data.user?.email ?? null };
+      }),
+    );
+    return result as AdminUserRow[];
   });
 
 async function findUserIdByEmail(email: string): Promise<string | null> {
