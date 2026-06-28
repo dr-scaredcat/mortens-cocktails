@@ -17,7 +17,7 @@ export const Route = createFileRoute("/cocktails")({
   validateSearch: searchSchema,
   head: () => ({
     meta: [
-      { title: "Cocktails — Barskab" },
+      { title: "Cocktails — Aston's Bar" },
       { name: "description", content: "Se hvilke cocktails du kan lave." },
     ],
   }),

@@ -23,7 +23,7 @@ import { AdminGarnishes } from "@/components/app/admin-garnishes";
 import { AdminStatistik } from "@/components/app/admin-statistik";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  head: () => ({ meta: [{ title: "Admin — Barskab" }] }),
+  head: () => ({ meta: [{ title: "Admin — Aston's Bar" }] }),
   component: AdminPage,
 });
 

@@ -145,7 +145,7 @@ export const setSignupEnabled = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// =================== Sidenavn ===================
+// =================== Site name ===================
 
 export const DEFAULT_SITE_NAME = "Barskab";
 
@@ -177,29 +177,22 @@ export const setSiteName = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// =================== Logostørrelse ===================
+// =================== Logo settings ===================
+
+export type LogoType = "barskab" | "martini" | "wine" | "custom";
+export type LogoAlign = "top" | "center" | "bottom";
 
 export const DEFAULT_LOGO_SIZE = 20;
-
-export const getLogoSize = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const sb = publicClient();
-    const { data, error } = await sb
-      .from("app_settings")
-      .select("value")
-      .eq("key", "logo_size")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return { size: DEFAULT_LOGO_SIZE };
-    const v = data.value;
-    const n = typeof v === "number" ? v : Number(v);
-    return { size: Number.isFinite(n) ? n : DEFAULT_LOGO_SIZE };
-  });
+export const DEFAULT_TEXT_SIZE = 20;
+export const DEFAULT_LOGO_GAP = 10;
+export const DEFAULT_LOGO_ALIGN: LogoAlign = "center";
+export const DEFAULT_LOGO_TYPE: LogoType = "barskab";
+export const DEFAULT_TEXT_OFFSET_Y = 0;
 
 export const setLogoSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { size: number }) =>
-    z.object({ size: z.number().int().min(8).max(100) }).parse(d),
+    z.object({ size: z.number().int().min(8).max(120) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
@@ -210,29 +203,10 @@ export const setLogoSize = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// =================== Tekststørrelse ===================
-
-export const DEFAULT_TEXT_SIZE = 18;
-
-export const getTextSize = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const sb = publicClient();
-    const { data, error } = await sb
-      .from("app_settings")
-      .select("value")
-      .eq("key", "text_size")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return { size: DEFAULT_TEXT_SIZE };
-    const v = data.value;
-    const n = typeof v === "number" ? v : Number(v);
-    return { size: Number.isFinite(n) ? n : DEFAULT_TEXT_SIZE };
-  });
-
 export const setTextSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { size: number }) =>
-    z.object({ size: z.number().int().min(8).max(100) }).parse(d),
+    z.object({ size: z.number().int().min(8).max(80) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
@@ -243,29 +217,10 @@ export const setTextSize = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// =================== Logo-tekst afstand ===================
-
-export const DEFAULT_LOGO_GAP = 8;
-
-export const getLogoGap = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const sb = publicClient();
-    const { data, error } = await sb
-      .from("app_settings")
-      .select("value")
-      .eq("key", "logo_gap")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return { gap: DEFAULT_LOGO_GAP };
-    const v = data.value;
-    const n = typeof v === "number" ? v : Number(v);
-    return { gap: Number.isFinite(n) ? n : DEFAULT_LOGO_GAP };
-  });
-
 export const setLogoGap = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { gap: number }) =>
-    z.object({ gap: z.number().int().min(0).max(48) }).parse(d),
+    z.object({ gap: z.number().int().min(0).max(60) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
@@ -274,26 +229,6 @@ export const setLogoGap = createServerFn({ method: "POST" })
       .upsert({ key: "logo_gap", value: data.gap as unknown as never });
     if (error) throw new Error(error.message);
     return { ok: true };
-  });
-
-// =================== Logo-tekst justering ===================
-
-export type LogoAlign = "top" | "center" | "bottom";
-export const DEFAULT_LOGO_ALIGN: LogoAlign = "center";
-
-export const getLogoAlign = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const sb = publicClient();
-    const { data, error } = await sb
-      .from("app_settings")
-      .select("value")
-      .eq("key", "logo_align")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return { align: DEFAULT_LOGO_ALIGN };
-    const v = data.value;
-    const valid: LogoAlign[] = ["top", "center", "bottom"];
-    return { align: valid.includes(v as LogoAlign) ? (v as LogoAlign) : DEFAULT_LOGO_ALIGN };
   });
 
 export const setLogoAlign = createServerFn({ method: "POST" })
@@ -310,36 +245,30 @@ export const setLogoAlign = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// =================== Logotype ===================
-
-export type LogoType = "barskab" | "martini" | "wine";
-export const DEFAULT_LOGO_TYPE: LogoType = "barskab";
-
-export const getLogoType = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const sb = publicClient();
-    const { data, error } = await sb
-      .from("app_settings")
-      .select("value")
-      .eq("key", "logo_type")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return { type: DEFAULT_LOGO_TYPE };
-    const v = data.value;
-    const valid: LogoType[] = ["barskab", "martini", "wine"];
-    return { type: valid.includes(v as LogoType) ? (v as LogoType) : DEFAULT_LOGO_TYPE };
-  });
-
 export const setLogoType = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { type: LogoType }) =>
-    z.object({ type: z.enum(["barskab", "martini", "wine"]) }).parse(d),
+    z.object({ type: z.enum(["barskab", "martini", "wine", "custom"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
       .from("app_settings")
       .upsert({ key: "logo_type", value: data.type as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setTextOffsetY = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { offset: number }) =>
+    z.object({ offset: z.number().int().min(-60).max(60) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "text_offset_y", value: data.offset as unknown as never });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -355,6 +284,7 @@ export type SiteSettings = {
   logoGap: number;
   logoAlign: LogoAlign;
   logoType: LogoType;
+  textOffsetY: number;
 };
 
 export const getSiteSettings = createServerFn({ method: "GET" }).handler(
@@ -363,7 +293,7 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const { data, error } = await sb
       .from("app_settings")
       .select("key, value")
-      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type"]);
+      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y"]);
     if (error) throw new Error(error.message);
 
     const map = new Map((data ?? []).map((r) => [r.key, r.value]));
@@ -376,7 +306,7 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const alignVal = map.get("logo_align");
     const typeVal = map.get("logo_type");
     const validAlign: LogoAlign[] = ["top", "center", "bottom"];
-    const validType: LogoType[] = ["barskab", "martini", "wine"];
+    const validType: LogoType[] = ["barskab", "martini", "wine", "custom"];
 
     return {
       name: typeof nameVal === "string" && nameVal.length > 0 ? nameVal : DEFAULT_SITE_NAME,
@@ -385,6 +315,7 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
       logoGap: num(map.get("logo_gap"), DEFAULT_LOGO_GAP),
       logoAlign: validAlign.includes(alignVal as LogoAlign) ? (alignVal as LogoAlign) : DEFAULT_LOGO_ALIGN,
       logoType: validType.includes(typeVal as LogoType) ? (typeVal as LogoType) : DEFAULT_LOGO_TYPE,
+      textOffsetY: num(map.get("text_offset_y"), DEFAULT_TEXT_OFFSET_Y),
     };
   },
 );

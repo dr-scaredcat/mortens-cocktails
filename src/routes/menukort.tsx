@@ -24,6 +24,7 @@ import {
   DEFAULT_LOGO_GAP,
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
+  DEFAULT_TEXT_OFFSET_Y,
 } from "@/lib/orders.functions";
 import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
@@ -34,7 +35,7 @@ import { Wine } from "lucide-react";
 export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Menukort" },
+      { title: "Menukort — Aston's Bar" },
       { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
@@ -63,6 +64,7 @@ function MenukortHeader() {
   const logoGap = data?.logoGap ?? DEFAULT_LOGO_GAP;
   const logoAlign = data?.logoAlign ?? DEFAULT_LOGO_ALIGN;
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
+  const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
   return (
     <header className="border-b border-border bg-background px-4 py-4">
@@ -72,7 +74,12 @@ function MenukortHeader() {
           style={{ gap: `${logoGap}px` }}
         >
           <SiteLogo size={logoSize} type={logoType} className="shrink-0 text-primary" />
-          <span className="font-serif" style={{ fontSize: `${textSize}px` }}>{siteName}</span>
+          <span
+            className="font-serif"
+            style={{ fontSize: `${textSize}px`, position: "relative", top: textOffsetY }}
+          >
+            {siteName}
+          </span>
         </div>
 
         {/* Hjem-knap — kun synlig for loggede brugere */}
