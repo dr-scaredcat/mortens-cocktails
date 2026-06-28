@@ -14,6 +14,7 @@ import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
 import { OrderButton } from "@/components/app/order-button";
+import { getPopularCocktails, type PopularBadge } from "@/lib/stats.functions";
 import {
   getOrderingEnabled,
   getSiteSettings,
@@ -87,22 +88,46 @@ function MenukortHeader() {
   );
 }
 
+// ── Bestseller/Populær-badge ────────────────────────────────────────────────
+function PopularityBadge({ badge }: { badge: PopularBadge }) {
+  if (badge === "bestseller") {
+    return (
+      <Badge className="gap-1 bg-primary text-primary-foreground shadow hover:bg-primary">
+        <Star className="h-3 w-3 fill-current" />
+        Bestseller
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="bg-background/90 text-foreground shadow hover:bg-background/90">
+      Populær
+    </Badge>
+  );
+}
+
 // ── Simpelt kort til gitteret — ingen mængder, ingen glas/pynt/fremgangsmåde ─
 function MenukortCocktailCard({
   cocktail,
   onOpen,
   orderingEnabled,
+  badge,
 }: {
   cocktail: CocktailWithDetails;
   onOpen: () => void;
   orderingEnabled: boolean;
+  badge?: PopularBadge;
 }) {
   return (
     <Card className="flex flex-col overflow-hidden border-border/70 bg-card cursor-pointer transition hover:border-primary/50">
       {/* Hele kortet åbner dialogen — undtagen bestil-knappen */}
       <div onClick={onOpen}>
         {/* Billede */}
-        <div className="aspect-[4/3] w-full bg-muted">
+        <div className="relative aspect-[4/3] w-full bg-muted">
+          {badge && (
+            <div className="absolute left-2 top-2 z-10">
+              <PopularityBadge badge={badge} />
+            </div>
+          )}
           {cocktail.image_url ? (
             <img
               src={cocktail.image_url}
@@ -191,6 +216,18 @@ function MenukortPage() {
     refetchInterval: 30_000,
   });
   const orderingEnabled = !!orderingData?.enabled;
+
+  const fetchPopular = useServerFn(getPopularCocktails);
+  const { data: popular } = useQuery({
+    queryKey: ["popular-cocktails"],
+    queryFn: () => fetchPopular(),
+    staleTime: 1000 * 60,
+  });
+  const badgeById = useMemo(() => {
+    const m = new Map<string, PopularBadge>();
+    for (const p of popular ?? []) m.set(p.cocktail_id, p.badge);
+    return m;
+  }, [popular]);
 
   const [tags, setTags] = useState<string[]>([]);
   const [q, setQ] = useState("");
@@ -289,6 +326,7 @@ function MenukortPage() {
                 cocktail={c}
                 onOpen={() => setOpenId(c.id)}
                 orderingEnabled={orderingEnabled}
+                badge={badgeById.get(c.id)}
               />
             ))}
           </div>
