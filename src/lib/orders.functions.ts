@@ -26,6 +26,7 @@ export const createOrder = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => orderInput.parse(d))
   .handler(async ({ data }) => {
     const sb = publicClient();
+    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
     const { error } = await (sb.from("cocktail_orders") as any).insert({
       cocktail_id: data.cocktailId,
       cocktail_name: data.cocktailName,
@@ -41,6 +42,7 @@ export const listOrders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
+    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
     const { data, error } = await (context.supabase.from("cocktail_orders") as any)
       .select("id, cocktail_id, cocktail_name, customer_name, note, status, created_at, quantity")
       .order("created_at", { ascending: false });
@@ -50,12 +52,13 @@ export const listOrders = createServerFn({ method: "GET" })
 
 export const setOrderStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; status: string }) =>
-    z.object({ id: z.string().uuid(), status: z.string() }).parse(d),
+  .inputValidator((d: { id: string; status: "pending" | "done" }) =>
+    z.object({ id: z.string().uuid(), status: z.enum(["pending", "done"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { error } = await (context.supabase.from("cocktail_orders") as any)
+    const { error } = await context.supabase
+      .from("cocktail_orders")
       .update({ status: data.status })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -67,7 +70,8 @@ export const deleteOrder = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { error } = await (context.supabase.from("cocktail_orders") as any)
+    const { error } = await context.supabase
+      .from("cocktail_orders")
       .delete()
       .eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -78,23 +82,32 @@ export const deleteAllOrders = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    const { error } = await (context.supabase.from("cocktail_orders") as any)
+    const { error } = await context.supabase
+      .from("cocktail_orders")
       .delete()
       .not("id", "is", null);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
-export const getOrderingEnabled = createServerFn({ method: "GET" }).handler(async () => {
-  const sb = publicClient();
-  const { data, error } = await sb.from("app_settings").select("value").eq("key", "ordering_enabled").maybeSingle();
-  if (error) throw new Error(error.message);
-  return { enabled: data ? (data.value as unknown as boolean) : true };
-});
+export const getOrderingEnabled = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "ordering_enabled")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const v = data?.value;
+    return { enabled: v === true || v === "true" };
+  });
 
 export const setOrderingEnabled = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { enabled: boolean }) => z.object({ enabled: z.boolean() }).parse(d))
+  .inputValidator((d: { enabled: boolean }) =>
+    z.object({ enabled: z.boolean() }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
@@ -104,13 +117,57 @@ export const setOrderingEnabled = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const getSignupEnabled = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "signup_enabled")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { enabled: true };
+    const v = data.value;
+    return { enabled: v !== false && v !== "false" };
+  });
+
+export const setSignupEnabled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { enabled: boolean }) =>
+    z.object({ enabled: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "signup_enabled", value: data.enabled as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // =================== Site name ===================
 
 export const DEFAULT_SITE_NAME = "Barskab";
 
+export const getSiteName = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "site_name")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return { name: DEFAULT_SITE_NAME };
+    const v = data.value;
+    return { name: typeof v === "string" && v.length > 0 ? v : DEFAULT_SITE_NAME };
+  });
+
 export const setSiteName = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { name: string }) => z.object({ name: z.string().min(1).max(60) }).parse(d))
+  .inputValidator((d: { name: string }) =>
+    z.object({ name: z.string().trim().min(1).max(60) }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
@@ -125,7 +182,7 @@ export const setSiteName = createServerFn({ method: "POST" })
 export type LogoType = "barskab" | "martini" | "wine" | "custom";
 export type LogoAlign = "top" | "center" | "bottom";
 
-export const DEFAULT_LOGO_SIZE = 32;
+export const DEFAULT_LOGO_SIZE = 20;
 export const DEFAULT_TEXT_SIZE = 20;
 export const DEFAULT_LOGO_GAP = 10;
 export const DEFAULT_LOGO_ALIGN: LogoAlign = "center";
@@ -134,7 +191,9 @@ export const DEFAULT_TEXT_OFFSET_Y = 0;
 
 export const setLogoSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { size: number }) => z.object({ size: z.number().int().min(8).max(120) }).parse(d))
+  .inputValidator((d: { size: number }) =>
+    z.object({ size: z.number().int().min(8).max(120) }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
@@ -146,7 +205,9 @@ export const setLogoSize = createServerFn({ method: "POST" })
 
 export const setTextSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { size: number }) => z.object({ size: z.number().int().min(8).max(80) }).parse(d))
+  .inputValidator((d: { size: number }) =>
+    z.object({ size: z.number().int().min(8).max(80) }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
@@ -158,7 +219,9 @@ export const setTextSize = createServerFn({ method: "POST" })
 
 export const setLogoGap = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { gap: number }) => z.object({ gap: z.number().int().min(0).max(60) }).parse(d))
+  .inputValidator((d: { gap: number }) =>
+    z.object({ gap: z.number().int().min(0).max(60) }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { error } = await context.supabase
@@ -211,6 +274,8 @@ export const setTextOffsetY = createServerFn({ method: "POST" })
   });
 
 // =================== Samlet header-konfiguration ===================
+// Ét DB-kald der henter alle header-/logo-indstillinger på én gang, så
+// headeren ikke laver seks separate round-trips pr. sideindlæsning.
 
 export type SiteSettings = {
   name: string;
