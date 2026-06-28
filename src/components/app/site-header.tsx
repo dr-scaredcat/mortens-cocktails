@@ -13,6 +13,7 @@ import {
   DEFAULT_LOGO_GAP,
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
+  DEFAULT_TEXT_OFFSET_Y,
 } from "@/lib/orders.functions";
 import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,6 @@ export function SiteHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
 
-  // Ét samlet kald i stedet for seks separate round-trips.
   const { data } = useQuery({
     queryKey: ["site-settings"],
     queryFn: () => fetchSettings(),
@@ -49,6 +49,7 @@ export function SiteHeader() {
   const logoGap = data?.logoGap ?? DEFAULT_LOGO_GAP;
   const logoAlign = data?.logoAlign ?? DEFAULT_LOGO_ALIGN;
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
+  const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
@@ -59,12 +60,18 @@ export function SiteHeader() {
           style={{ gap: logoGap }}
         >
           <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
-          <span className="leading-none" style={{ fontSize: textSize }}>
+          <span
+            className="leading-none"
+            style={{
+              fontSize: textSize,
+              position: "relative",
+              top: textOffsetY,
+            }}
+          >
             {siteName}
           </span>
         </Link>
 
-        {/* Log ud knap øverst til højre — kun når logget ind */}
         {session && (
           <Button
             size="sm"
@@ -76,7 +83,6 @@ export function SiteHeader() {
           </Button>
         )}
 
-        {/* Log ind knap — kun når ikke logget ind */}
         {!session && (
           <Button asChild size="sm" variant="ghost">
             <Link to="/auth">Log ind</Link>
@@ -84,7 +90,6 @@ export function SiteHeader() {
         )}
       </div>
 
-      {/* Scrollbar nav-række */}
       <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {publicNavItems.map((n) => (
           <Link
