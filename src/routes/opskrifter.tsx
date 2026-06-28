@@ -13,7 +13,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 export const Route = createFileRoute("/opskrifter")({
   head: () => ({
     meta: [
-      { title: "Opskrifter - Aston's Bar" },
+      { title: "Opskrifter — Aston's Bar" },
       { name: "description", content: "Opskrifter på siruper, mixere og andet til barskabet." },
     ],
   }),
