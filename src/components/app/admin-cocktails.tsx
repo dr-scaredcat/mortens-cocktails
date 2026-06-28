@@ -40,7 +40,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ImageDown, GripVertical, ArrowDownAZ, Star, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ImageDown, GripVertical, ArrowDownAZ, Star, Upload, Download } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -89,6 +89,178 @@ function emptyForm() {
     tags: [] as string[],
     ingredients: [{ _id: newId(), name: "", amount: "", unit: "ml" }] as Item[],
   };
+}
+
+// ── Eksport-dialog ────────────────────────────────────────────────────────────
+type ExportFormat = "csv" | "txt";
+type ExportContent = "names" | "with-ingredients";
+
+function ExportDialog({
+  open,
+  onOpenChange,
+  cocktails,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  cocktails: CocktailWithDetails[];
+}) {
+  const [format, setFormat] = useState<ExportFormat>("txt");
+  const [content, setContent] = useState<ExportContent>("names");
+
+  function formatIngredient(i: CocktailWithDetails["ingredients"][0]): string {
+    if (i.amount == null && !i.unit) return i.name;
+    const scaled = i.amount != null
+      ? Number(i.amount).toString().replace(".", ",")
+      : null;
+    const parts = [i.name, scaled, i.unit].filter(Boolean);
+    // Format: "Gin – 4 cl"
+    return i.amount != null || i.unit
+      ? `${i.name} – ${[scaled, i.unit].filter(Boolean).join(" ")}`
+      : i.name;
+  }
+
+  function generateTxt(): string {
+    const sorted = [...cocktails].sort((a, b) => a.name.localeCompare(b.name, "da"));
+    if (content === "names") {
+      return sorted.map((c) => c.name).join("\n");
+    }
+    return sorted
+      .map((c) => {
+        const lines = [c.name];
+        for (const ing of c.ingredients) {
+          lines.push(`  ${formatIngredient(ing)}`);
+        }
+        return lines.join("\n");
+      })
+      .join("\n\n");
+  }
+
+  function generateCsv(): string {
+    const sorted = [...cocktails].sort((a, b) => a.name.localeCompare(b.name, "da"));
+    const BOM = "\uFEFF"; // UTF-8 BOM for Excel
+
+    if (content === "names") {
+      const rows = [["Cocktail"], ...sorted.map((c) => [c.name])];
+      return BOM + rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(";")).join("\n");
+    }
+
+    // Med ingredienser: én linje per ingrediens, cocktailnavn gentages
+    const rows = [["Cocktail", "Ingrediens", "Mængde", "Enhed"]];
+    for (const c of sorted) {
+      if (c.ingredients.length === 0) {
+        rows.push([c.name, "", "", ""]);
+      } else {
+        for (const ing of c.ingredients) {
+          const amount = ing.amount != null ? String(ing.amount).replace(".", ",") : "";
+          rows.push([c.name, ing.name, amount, ing.unit ?? ""]);
+        }
+      }
+    }
+    return BOM + rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(";")).join("\n");
+  }
+
+  function handleExport() {
+    const isCSV = format === "csv";
+    const data = isCSV ? generateCsv() : generateTxt();
+    const mimeType = isCSV ? "text/csv;charset=utf-8;" : "text/plain;charset=utf-8;";
+    const fileName = isCSV ? "cocktails.csv" : "cocktails.txt";
+
+    const blob = new Blob([data], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    onOpenChange(false);
+    toast.success(`${cocktails.length} cocktails eksporteret som ${fileName}`);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Eksportér cocktailliste</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-muted-foreground">
+            Alle {cocktails.length} cocktails inkluderes, uanset om de er på menuen.
+          </p>
+
+          {/* Indhold */}
+          <div className="space-y-2">
+            <Label>Indhold</Label>
+            <div className="flex flex-col gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="export-content"
+                  value="names"
+                  checked={content === "names"}
+                  onChange={() => setContent("names")}
+                  className="accent-primary"
+                />
+                Kun cocktailnavn
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="export-content"
+                  value="with-ingredients"
+                  checked={content === "with-ingredients"}
+                  onChange={() => setContent("with-ingredients")}
+                  className="accent-primary"
+                />
+                Navn + ingredienser inkl. mængde
+              </label>
+            </div>
+          </div>
+
+          {/* Format */}
+          <div className="space-y-2">
+            <Label>Format</Label>
+            <div className="flex flex-col gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="export-format"
+                  value="txt"
+                  checked={format === "txt"}
+                  onChange={() => setFormat("txt")}
+                  className="accent-primary"
+                />
+                Ren tekst (.txt)
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="export-format"
+                  value="csv"
+                  checked={format === "csv"}
+                  onChange={() => setFormat("csv")}
+                  className="accent-primary"
+                />
+                CSV — åbner i Excel/Sheets (.csv)
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Annullér
+          </Button>
+          <Button onClick={handleExport}>
+            <Download className="mr-1 h-4 w-4" />
+            Eksportér
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ---- Sortable cocktail row in the admin list ----
@@ -175,6 +347,7 @@ export function AdminCocktails() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [localOrder, setLocalOrder] = useState<CocktailWithDetails[] | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const displayList = localOrder ?? (cocktails as CocktailWithDetails[] | undefined) ?? [];
 
@@ -266,7 +439,6 @@ export function AdminCocktails() {
       ingredients: c.ingredients.map((i) => ({
         _id: newId(),
         name: i.name,
-        // Konvertér decimal-punktum fra databasen til komma for visning
         amount: i.amount == null ? "" : toCommaDisplay(String(i.amount)),
         unit: i.unit ?? "",
       })),
@@ -309,6 +481,13 @@ export function AdminCocktails() {
         >
           <ImageDown className="mr-1 h-4 w-4" />
           {backfillM.isPending ? "Henter…" : "Hent manglende billeder"}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setExportOpen(true)}
+        >
+          <Download className="mr-1 h-4 w-4" />
+          Eksportér liste
         </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -394,6 +573,12 @@ export function AdminCocktails() {
           </div>
         </SortableContext>
       </DndContext>
+
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        cocktails={(cocktails as CocktailWithDetails[] | undefined) ?? []}
+      />
     </div>
   );
 }
@@ -539,43 +724,37 @@ function CocktailForm({
       {/* Pynt */}
       <div>
         <Label>Pynt</Label>
-        <Input list="garnish-names" value={form.garnish} onChange={(e) => patch("garnish", e.target.value)} placeholder="f.eks. Lime-skive" />
+        <Input list="garnish-names" value={form.garnish} onChange={(e) => patch("garnish", e.target.value)} placeholder="f.eks. Citronskive" />
         <datalist id="garnish-names">
           {garnishNames.map((n) => <option key={n} value={n} />)}
         </datalist>
       </div>
 
-      {/* Fremgangsmåde */}
-      <div>
-        <Label>Fremgangsmåde</Label>
-        <Textarea value={form.instructions} onChange={(e) => patch("instructions", e.target.value)} rows={4} placeholder="Trin-for-trin instruktioner..." />
-      </div>
-
       {/* Tags */}
-      <div>
-        <Label>Tags</Label>
-        <div className="mt-1 flex flex-wrap gap-1">
-          {tagNames.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => toggleTag(t)}
-            >
-              <Badge variant={form.tags.includes(t) ? "default" : "outline"}>{t}</Badge>
-            </button>
-          ))}
+      {tagNames.length > 0 && (
+        <div>
+          <Label>Tags</Label>
+          <div className="flex flex-wrap gap-1 pt-1">
+            {tagNames.map((t) => (
+              <Badge
+                key={t}
+                variant={form.tags.includes(t) ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => toggleTag(t)}
+              >
+                {t}
+              </Badge>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Ingredienser */}
       <div>
         <Label>Ingredienser</Label>
-        <p className="mb-2 text-xs text-muted-foreground">
-          Skriv navn på ingrediens. Nye navne tilføjes automatisk til biblioteket.
-        </p>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={form.ingredients.map((i) => i._id)} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-2">
+            <div className="mt-1 flex flex-col gap-2">
               {form.ingredients.map((item, idx) => (
                 <SortableIngredientRow
                   key={item._id}
@@ -591,6 +770,17 @@ function CocktailForm({
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addItem}>
           <Plus className="mr-1 h-3.5 w-3.5" /> Tilføj ingrediens
         </Button>
+      </div>
+
+      {/* Fremgangsmåde */}
+      <div>
+        <Label>Fremgangsmåde</Label>
+        <Textarea
+          value={form.instructions}
+          onChange={(e) => patch("instructions", e.target.value)}
+          rows={4}
+          placeholder="Beskriv hvordan cocktailen laves..."
+        />
       </div>
     </div>
   );
@@ -616,56 +806,44 @@ function SortableIngredientRow({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  function handleAmountChange(raw: string) {
-    // Tillad kun cifre, ét komma og ét punktum — konvertér punktum til komma løbende
-    // Fjern ugyldige tegn, erstat punktum med komma
+  function sanitizeAmount(raw: string): string {
     let val = raw.replace(/[^0-9.,]/g, "");
-    // Erstat alle punktummer med komma
     val = val.replace(/\./g, ",");
-    // Tillad kun ét komma
     const parts = val.split(",");
-    if (parts.length > 2) {
-      val = parts[0] + "," + parts.slice(1).join("");
-    }
-    onChange({ amount: val });
+    if (parts.length > 2) val = parts[0] + "," + parts.slice(1).join("");
+    return val;
   }
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="grid grid-cols-[auto_minmax(0,1fr)_5rem_6rem_auto] items-center gap-1.5"
-    >
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2">
       <button
         type="button"
-        className="cursor-grab touch-none text-muted-foreground"
+        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
         {...attributes}
         {...listeners}
+        aria-label="Træk for at ændre rækkefølge"
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <div>
-        <Input
-          list="ingredient-names"
-          placeholder="Ingrediens"
-          value={item.name}
-          onChange={(e) => onChange({ name: e.target.value })}
-        />
-        <datalist id="ingredient-names">
-          {ingredientNames.map((n) => <option key={n} value={n} />)}
-        </datalist>
-      </div>
       <Input
-        type="text"
-        inputMode="decimal"
-        placeholder="Mængde"
+        list="ingredient-names"
+        value={item.name}
+        onChange={(e) => onChange({ name: e.target.value })}
+        placeholder="Ingrediens"
+        className="flex-1"
+      />
+      <datalist id="ingredient-names">
+        {ingredientNames.map((n) => <option key={n} value={n} />)}
+      </datalist>
+      <Input
         value={item.amount}
-        onChange={(e) => handleAmountChange(e.target.value)}
-        className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        onChange={(e) => onChange({ amount: sanitizeAmount(e.target.value) })}
+        placeholder="Mængde"
+        className="w-20"
       />
       <Select value={item.unit} onValueChange={(v) => onChange({ unit: v })}>
-        <SelectTrigger>
-          <SelectValue placeholder="Enhed" />
+        <SelectTrigger className="w-20">
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {UNITS.map((u) => (
@@ -673,7 +851,7 @@ function SortableIngredientRow({
           ))}
         </SelectContent>
       </Select>
-      <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
+      <Button type="button" size="icon" variant="ghost" onClick={onRemove}>
         <X className="h-4 w-4" />
       </Button>
     </div>
