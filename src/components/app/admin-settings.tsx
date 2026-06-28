@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Wine, Martini, AlignStartVertical, AlignCenterVertical, AlignEndVertical } from "lucide-react";
+import { Wine, Martini, AlignStartVertical, AlignCenterVertical, AlignEndVertical, ImagePlus } from "lucide-react";
 import {
   getOrderingEnabled,
   setOrderingEnabled,
@@ -19,11 +19,13 @@ import {
   setLogoGap,
   setLogoAlign,
   setLogoType,
+  setTextOffsetY,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
   DEFAULT_LOGO_GAP,
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
+  DEFAULT_TEXT_OFFSET_Y,
   type LogoType,
   type LogoAlign,
 } from "@/lib/orders.functions";
@@ -38,6 +40,7 @@ const LOGO_OPTIONS: { type: LogoType; label: string }[] = [
   { type: "barskab", label: "Aston" },
   { type: "martini", label: "Martini" },
   { type: "wine", label: "Vinglas" },
+  { type: "custom", label: "PNG-fil" },
 ];
 
 const ALIGN_OPTIONS: { align: LogoAlign; label: string; icon: React.ReactNode }[] = [
@@ -106,6 +109,7 @@ export function AdminSettings() {
   const updateLogoGap = useServerFn(setLogoGap);
   const updateLogoAlign = useServerFn(setLogoAlign);
   const updateLogoType = useServerFn(setLogoType);
+  const updateTextOffsetY = useServerFn(setTextOffsetY);
   const qc = useQueryClient();
 
   const { data: orderingData, isLoading: orderingLoading } = useQuery({
@@ -113,7 +117,6 @@ export function AdminSettings() {
     queryFn: () => fetchSetting(),
   });
 
-  // Ét samlet kald i stedet for seks separate læsninger.
   const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ["site-settings"],
     queryFn: () => fetchSettings(),
@@ -132,8 +135,9 @@ export function AdminSettings() {
   const [logoAlignBusy, setLogoAlignBusy] = useState(false);
   const [logoType, setLogoTypeLocal] = useState<LogoType>(DEFAULT_LOGO_TYPE);
   const [logoTypeBusy, setLogoTypeBusy] = useState(false);
+  const [textOffsetY, setTextOffsetYLocal] = useState(DEFAULT_TEXT_OFFSET_Y);
+  const [textOffsetYBusy, setTextOffsetYBusy] = useState(false);
 
-  // Synk lokal formstate med det samlede settings-objekt når det loader.
   useEffect(() => {
     if (!settings) return;
     setSiteNameLocal(settings.name);
@@ -142,6 +146,7 @@ export function AdminSettings() {
     setLogoGapLocal(settings.logoGap);
     setLogoAlignLocal(settings.logoAlign);
     setLogoTypeLocal(settings.logoType);
+    setTextOffsetYLocal(settings.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y);
   }, [settings]);
 
   async function toggle(enabled: boolean) {
@@ -205,6 +210,19 @@ export function AdminSettings() {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
     } finally {
       setLogoGapBusy(false);
+    }
+  }
+
+  async function saveTextOffsetY() {
+    setTextOffsetYBusy(true);
+    try {
+      await updateTextOffsetY({ data: { offset: textOffsetY } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Vertikal afstand gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setTextOffsetYBusy(false);
     }
   }
 
@@ -276,7 +294,7 @@ export function AdminSettings() {
               <Label className="text-base">Logo</Label>
               <p className="text-sm text-muted-foreground">Vælg hvilket logo der vises i headeren.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {LOGO_OPTIONS.map(({ type, label }) => {
                 const isActive = logoType === type;
                 return (
@@ -288,27 +306,65 @@ export function AdminSettings() {
                       "flex flex-col items-center gap-1.5 rounded-lg border-2 px-4 py-3 transition-colors",
                       isActive
                         ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                        : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
                     )}
                   >
-                    {type === "barskab" && <BarskabLogo style={{ width: 24, height: 24 }} />}
                     {type === "martini" && <Martini className="h-6 w-6" />}
                     {type === "wine" && <Wine className="h-6 w-6" />}
+                    {type === "barskab" && <BarskabLogo className="h-6 w-6" />}
+                    {type === "custom" && <ImagePlus className="h-6 w-6" />}
                     <span className="text-xs font-medium">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* PNG-logo vejledning — vises kun når custom er valgt */}
+            {logoType === "custom" && (
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">Sådan bruger du et PNG-logo:</p>
+                <p>Upload din PNG-fil til GitHub-repositoriet og placer den her:</p>
+                <code className="block rounded bg-background px-2 py-1 text-xs font-mono text-foreground border border-border">
+                  public/custom-logo.png
+                </code>
+                <p>Filen vil automatisk blive vist som logo i headeren. Brug gerne en fil med transparent baggrund for bedste resultat.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Justering (vertikal alignment) */}
+          <div className="space-y-3 p-4">
+            <Label className="text-base">Lodrét justering</Label>
+            <div className="flex gap-2">
+              {ALIGN_OPTIONS.map(({ align, label, icon }) => {
+                const isActive = logoAlign === align;
+                return (
+                  <button
+                    key={align}
+                    onClick={() => selectLogoAlign(align)}
+                    disabled={logoAlignBusy}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2 text-xs transition-colors",
+                      isActive
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/40",
+                    )}
+                  >
+                    {icon}
+                    {label}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Størrelser + afstand */}
+          {/* Sliders */}
           <div className="space-y-5 p-4">
-            <Label className="text-base">Størrelse og afstand</Label>
             <SliderRow
               label="Logostørrelse"
               value={logoSize}
               min={8}
-              max={100}
+              max={120}
               onChange={setLogoSizeLocal}
               onSave={saveLogoSize}
               busy={logoSizeBusy}
@@ -317,64 +373,53 @@ export function AdminSettings() {
               label="Tekststørrelse"
               value={textSize}
               min={8}
-              max={100}
+              max={80}
               onChange={setTextSizeLocal}
               onSave={saveTextSize}
               busy={textSizeBusy}
             />
             <SliderRow
-              label="Afstand"
+              label="Afstand horisontalt"
               value={logoGap}
               min={0}
-              max={48}
+              max={60}
               onChange={setLogoGapLocal}
               onSave={saveLogoGap}
               busy={logoGapBusy}
             />
+            <SliderRow
+              label="Afstand vertikalt"
+              value={textOffsetY}
+              min={-60}
+              max={60}
+              onChange={setTextOffsetYLocal}
+              onSave={saveTextOffsetY}
+              busy={textOffsetYBusy}
+            />
           </div>
 
-          {/* Tekstjustering */}
-          <div className="space-y-3 p-4">
-            <div>
-              <Label className="text-base">Tekstjustering</Label>
-              <p className="text-sm text-muted-foreground">
-                Hvor teksten er placeret i forhold til logoet.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {ALIGN_OPTIONS.map(({ align, label, icon }) => (
-                <button
-                  key={align}
-                  onClick={() => selectLogoAlign(align)}
-                  disabled={logoAlignBusy}
-                  className={cn(
-                    "flex flex-col items-center gap-1.5 rounded-lg border-2 px-4 py-3 transition-colors",
-                    logoAlign === align
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                  )}
-                >
-                  {icon}
-                  <span className="text-xs font-medium">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Forhåndsvisning */}
+          {/* Live preview */}
           <div className="p-4">
-            <Label className="mb-2 block text-base">Forhåndsvisning</Label>
-            <div
-              className={cn("flex rounded-md border border-border bg-muted px-3 py-2", alignClass[logoAlign])}
-              style={{ gap: logoGap }}
-            >
-              <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
-              <span className="font-serif leading-none text-foreground" style={{ fontSize: textSize }}>
-                {siteName || "Barskab"}
-              </span>
+            <Label className="mb-3 block text-base">Forhåndsvisning</Label>
+            <div className="flex h-16 items-center rounded-lg border border-border bg-background px-4">
+              <div
+                className={cn("flex", alignClass[logoAlign])}
+                style={{ gap: `${logoGap}px` }}
+              >
+                <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
+                <span
+                  className="font-serif leading-none"
+                  style={{
+                    fontSize: `${textSize}px`,
+                    position: "relative",
+                    top: `${textOffsetY}px`,
+                  }}
+                >
+                  {siteName || "Barskab"}
+                </span>
+              </div>
             </div>
           </div>
-
         </Card>
       </section>
 
@@ -386,19 +431,26 @@ export function AdminSettings() {
         <Card className="p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="ordering-toggle" className="text-base">Bestillinger</Label>
+              <Label className="text-base">Tillad bestillinger</Label>
               <p className="text-sm text-muted-foreground">
-                Når slået fra, kan gæsterne ikke bestille fra menukortet.
+                Når slået til kan gæster bestille cocktails fra menukortet.
               </p>
             </div>
             <Switch
-              id="ordering-toggle"
-              checked={!!orderingData?.enabled}
-              disabled={orderingLoading}
+              checked={orderingData?.enabled ?? true}
               onCheckedChange={toggle}
+              disabled={orderingLoading}
             />
           </div>
         </Card>
+      </section>
+
+      {/* Temaer */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Tema
+        </h2>
+        <AdminThemes />
       </section>
 
       {/* Kategorier */}
@@ -415,14 +467,6 @@ export function AdminSettings() {
           Brugere
         </h2>
         <AdminUsers />
-      </section>
-
-      {/* Temaer */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Temaer
-        </h2>
-        <AdminThemes />
       </section>
     </div>
   );
