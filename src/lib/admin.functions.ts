@@ -151,54 +151,76 @@ export const saveCocktail = createServerFn({ method: "POST" })
     );
 
     // Find unikke navne der mangler (dedup case-insensitivt), og opret dem i ÉT insert.
-    const missingNames = [...new Set(names.filter((n) => !idByLowerName.has(n.toLowerCase())))];
-    if (missingNames.length > 0) {
-      const { data: newIngs, error: insertErr } = await sb
+    const missingByLower = new Map<string, string>(); // lower -> original visningsnavn
+    for (const n of names) {
+      const lower = n.toLowerCase();
+      if (!idByLowerName.has(lower) && !missingByLower.has(lower)) {
+        missingByLower.set(lower, n);
+      }
+    }
+    if (missingByLower.size > 0) {
+      const { data: created, error } = await sb
         .from("ingredients")
-        .insert(missingNames.map((n) => ({ name: n, category: "Andet" })))
+        .insert(
+          Array.from(missingByLower.values()).map((name) => ({
+            name,
+            category: "Andet",
+            available: false,
+          })),
+        )
         .select("id, name");
-      if (insertErr) throw new Error(insertErr.message);
-      for (const ing of newIngs ?? []) {
-        idByLowerName.set(ing.name.trim().toLowerCase(), ing.id);
+      if (error) throw new Error(error.message);
+      for (const row of (created ?? []) as Array<{ id: string; name: string }>) {
+        idByLowerName.set(row.name.trim().toLowerCase(), row.id);
       }
     }
 
-    const ingIds = data.ingredients
-      .filter((i) => i.name.trim().length > 0)
-      .map((i, pos) => ({
-        ingredient_id: idByLowerName.get(i.name.trim().toLowerCase())!,
-        amount: i.amount ?? null,
-        unit: i.unit ?? null,
-        position: pos,
-      }));
+    // Byg ingrediens-rækker i samme rækkefølge som input (bevarer dubletter og mængder).
+    const ingIds: { ingredient_id: string; amount: number | null; unit: string | null }[] = [];
+    for (const item of data.ingredients) {
+      const name = item.name.trim();
+      if (!name) continue;
+      const id = idByLowerName.get(name.toLowerCase());
+      if (!id) continue; // burde ikke ske — alle navne er nu oprettet
+      ingIds.push({ ingredient_id: id, amount: item.amount ?? null, unit: item.unit ?? null });
+    }
 
-    let cocktailId: string | undefined = data.id;
+    if (data.glass?.trim()) {
+      await sb
+        .from("glasses")
+        .upsert({ name: data.glass.trim() }, { onConflict: "name", ignoreDuplicates: true });
+    }
+    if (data.garnish?.trim()) {
+      await sb
+        .from("garnishes")
+        .upsert({ name: data.garnish.trim() }, { onConflict: "name", ignoreDuplicates: true });
+    }
 
-    if (data.id) {
-      const { error } = await sb
-        .from("cocktails")
-        .update({
-          name: data.name.trim(),
-          description: data.description ?? null,
-          image_url: data.image_url || null,
-          glass: data.glass ?? null,
-          garnish: data.garnish ?? null,
-          instructions: data.instructions ?? null,
-        })
-        .eq("id", data.id);
+    const payload = {
+      name: data.name,
+      description: data.description ?? null,
+      image_url: data.image_url && data.image_url.length > 0 ? data.image_url : null,
+      glass: data.glass ?? null,
+      garnish: data.garnish ?? null,
+      instructions: data.instructions ?? null,
+      created_by: context.userId,
+    };
+
+    let cocktailId = data.id;
+    if (cocktailId) {
+      const { error } = await sb.from("cocktails").update(payload).eq("id", cocktailId);
       if (error) throw new Error(error.message);
     } else {
+      const { data: maxRow } = await sb
+        .from("cocktails")
+        .select("position")
+        .order("position", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const nextPos = (maxRow?.position ?? 0) + 1;
       const { data: row, error } = await sb
         .from("cocktails")
-        .insert({
-          name: data.name.trim(),
-          description: data.description ?? null,
-          image_url: data.image_url || null,
-          glass: data.glass ?? null,
-          garnish: data.garnish ?? null,
-          instructions: data.instructions ?? null,
-          created_by: context.userId,
-        })
+        .insert({ ...payload, position: nextPos })
         .select("id")
         .single();
       if (error) throw new Error(error.message);
@@ -521,26 +543,4 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   const user = (data?.users ?? []).find(
     (u) => u.email?.toLowerCase() === email.toLowerCase(),
   );
-  return user?.id ?? null;
-}
-
-export const grantAdminByEmail = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { email: string }) => z.object({ email: z.string().email() }).parse(d))
-  .handler(async ({ data, context }) => {
-    await assertAdmin(context);
-    const target = await findUserIdByEmail(data.email);
-    if (!target)
-      throw new Error(
-        "Ingen bruger fundet med den email. Brugeren skal være oprettet først.",
-      );
-    const { error } = await context.supabase
-      .from("user_roles")
-      .upsert({ user_id: target, role: "admin" }, { onConflict: "user_id,role", ignoreDuplicates: true });
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
-
-export const revokeAdmin = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string }) => z.object({ userId: z.s
+  return user?.id
