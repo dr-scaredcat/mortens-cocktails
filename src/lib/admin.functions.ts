@@ -76,33 +76,36 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
     await assertAdmin(context);
     const sb = context.supabase;
 
-    // Hent alle brugte ingrediens-ID'er via en SECURITY DEFINER funktion, der
-    // omgår RLS og samler ID'er fra BÅDE cocktail_ingredients og
-    // recipe_ingredients. Se SQL-funktionen get_used_ingredient_ids i databasen.
+    // 1) Hent alle brugte ingrediens-ID'er via en SECURITY DEFINER funktion, der
+    //    omgår RLS og samler ID'er fra BÅDE cocktail_ingredients og
+    //    recipe_ingredients. Se SQL-funktionen get_used_ingredient_ids i databasen.
     const { data: usedRows, error: usedErr } = await sb.rpc("get_used_ingredient_ids" as any);
     if (usedErr) throw new Error(`Kunne ikke hente brugte ingredienser: ${usedErr.message}`);
 
-    const usedIds = Array.from(
-      new Set(
-        ((usedRows ?? []) as { ingredient_id: string }[])
-          .map((r) => r.ingredient_id)
-          .filter(Boolean),
-      ),
+    const usedIds = new Set(
+      ((usedRows ?? []) as { ingredient_id: string }[])
+        .map((r) => r.ingredient_id)
+        .filter(Boolean),
     );
 
-    if (usedIds.length === 0) {
-      const { error, count } = await (
-        sb.from("ingredients").delete().not("id", "is", null) as any
-      ).select("id");
-      if (error) throw new Error(error.message);
-      return { deleted: count ?? 0 };
+    // 2) Hent alle ingrediens-ID'er og beregn hvilke der er ubrugte i JS.
+    //    Dette undgår en skrøbelig "not in (...)"-streng med mange UUID'er.
+    const { data: allIngs, error: allErr } = await sb.from("ingredients").select("id");
+    if (allErr) throw new Error(allErr.message);
+
+    const unusedIds = ((allIngs ?? []) as { id: string }[])
+      .map((r) => r.id)
+      .filter((id) => id && !usedIds.has(id));
+
+    if (unusedIds.length === 0) {
+      return { deleted: 0 };
     }
 
-    const { error, count } = await (
-      sb.from("ingredients").delete().not("id", "in", `(${usedIds.join(",")})`) as any
-    ).select("id");
-    if (error) throw new Error(error.message);
-    return { deleted: count ?? 0 };
+    // 3) Slet kun de ubrugte ID'er via en eksplicit "in"-liste.
+    const { error: delErr } = await sb.from("ingredients").delete().in("id", unusedIds);
+    if (delErr) throw new Error(delErr.message);
+
+    return { deleted: unusedIds.length };
   });
 
 // =================== Cocktails ===================
