@@ -1,31 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { Database } from "@/integrations/supabase/types";
+import { publicClient, assertAdmin } from "@/lib/supabase-shared";
 import { z } from "zod";
-
-function publicClient() {
-  const url =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
-    process.env.SUPABASE_URL ||
-    "https://dkvrwwpbaarfyqyrnhha.supabase.co";
-  const key =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY) ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    "sb_publishable_NsAPFaHuYb2mQbejaLy9WQ_BtLxx8ri";
-  return createClient<Database>(url, key, {
-    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-  });
-}
-
-async function assertAdmin(ctx: { supabase: any; userId: string }) {
-  const { data, error } = await ctx.supabase.rpc("has_role", {
-    _user_id: ctx.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Kun administratorer kan udføre denne handling");
-}
 
 export type ThemeColors = {
   background: string;
