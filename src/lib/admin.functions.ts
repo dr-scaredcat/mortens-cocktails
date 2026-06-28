@@ -108,6 +108,27 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
     return { deleted: unusedIds.length };
   });
 
+// Returnér ID'er på alle ingredienser der bruges i cocktails ELLER opskrifter.
+// Bruges af frontend til at vise hvilke ingredienser der er ubrugte.
+export const listUsedIngredientIds = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+
+    const { data: usedRows, error } = await sb.rpc("get_used_ingredient_ids" as any);
+    if (error) throw new Error(`Kunne ikke hente brugte ingredienser: ${error.message}`);
+
+    const ids = Array.from(
+      new Set(
+        ((usedRows ?? []) as { ingredient_id: string }[])
+          .map((r) => r.ingredient_id)
+          .filter(Boolean),
+      ),
+    );
+    return { ids };
+  });
+
 // =================== Cocktails ===================
 
 const cocktailInput = z.object({
