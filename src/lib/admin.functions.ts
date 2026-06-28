@@ -543,4 +543,81 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   const user = (data?.users ?? []).find(
     (u) => u.email?.toLowerCase() === email.toLowerCase(),
   );
-  return user?.id
+  return user?.id ?? null;
+}
+ 
+export const grantAdminByEmail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { email: string }) => z.object({ email: z.string().email() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const target = await findUserIdByEmail(data.email);
+    if (!target)
+      throw new Error(
+        "Ingen bruger fundet med den email. Brugeren skal være oprettet først.",
+      );
+    const { error } = await context.supabase
+      .from("user_roles")
+      .upsert({ user_id: target, role: "admin" }, { onConflict: "user_id,role", ignoreDuplicates: true });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const revokeAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    if (data.userId === context.userId)
+      throw new Error("Du kan ikke fjerne dine egne admin-rettigheder");
+    const { error } = await context.supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .eq("role", "admin");
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+ 
+// =================== CocktailDB image helpers ===================
+
+async function lookupCocktailDbImage(name: string): Promise<string | null> {
+  const url = `https://www.thecocktaildb.com/api/json/v1/1/search.php?s=${encodeURIComponent(name)}`;
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.drinks?.length) return null;
+    const pick = json.drinks[0];
+    return pick.strDrinkThumb ?? null;
+  } catch {
+    return null;
+  }
+}
+ 
+export const fetchCocktailDbImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { name: string }) => z.object({ name: z.string().min(1).max(120) }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const image = await lookupCocktailDbImage(data.name);
+    return { image };
+  });
+
+export const backfillCocktailImages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    const { data: rows, error } = await sb.from("cocktails").select("id, name, image_url");
+    if (error) throw new Error(error.message);
+    let updated = 0;
+    let missing = 0;
+    for (const c of rows ?? []) {
+      if (c.image_url) continue;
+      const image = await lookupCocktailDbImage(c.name);
+      if (!image) { missing += 1; continue; }
+      const { error: upErr } = await sb.from("cocktails").update({ image_url: image }).eq("id", c.id);
+      if (!upErr) updated += 1;
+    }
+    return { updated, missing };
+  });
