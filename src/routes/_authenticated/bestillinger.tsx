@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { SiteHeader } from "@/components/app/site-header";
@@ -20,6 +20,7 @@ import {
   type OrderRow,
 } from "@/lib/orders.functions";
 import { logOrder } from "@/lib/stats.functions";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/bestillinger")({
   head: () => ({ meta: [{ title: "Bestillinger — Barskab" }] }),
@@ -36,8 +37,38 @@ function OrdersPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders"],
     queryFn: () => fetchOrders(),
-    refetchInterval: 10_000,
+    // Realtime er den hurtige vej; pollingen er et langsomt sikkerhedsnet, der
+    // sikrer at listen altid konvergerer mod korrekt tilstand hvis en
+    // realtime-besked skulle gå tabt eller forbindelsen ryger.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
+
+  // ── Realtime: lyt efter ændringer på cocktail_orders ──────────────────────
+  // Ved enhver insert/update/delete invalideres ["orders"], så listen
+  // genhentes øjeblikkeligt. Ved (gen)tilkobling hentes også, så vi fanger
+  // op på alt der måtte være sket mens forbindelsen var nede.
+  useEffect(() => {
+    const channel = supabase
+      .channel("cocktail_orders_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cocktail_orders" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["orders"] });
+        },
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          qc.invalidateQueries({ queryKey: ["orders"] });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+
   const fetchCocktails = useServerFn(listCocktails);
   const { data: cocktailsData } = useQuery({
     queryKey: ["cocktails"],

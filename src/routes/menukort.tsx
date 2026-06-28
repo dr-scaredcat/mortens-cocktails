@@ -88,7 +88,7 @@ function MenukortHeader() {
   );
 }
 
-// ── Bestseller/Populær-badge ────────────────────────────────────────────────
+// ── Bestseller/Populær-badge - teksen 6 linjer nede redigerer teksen i badget────────────────────────────────────────────────
 function PopularityBadge({ badge }: { badge: PopularBadge }) {
   if (badge === "bestseller") {
     return (
@@ -100,7 +100,8 @@ function PopularityBadge({ badge }: { badge: PopularBadge }) {
   }
   return (
     <Badge className="bg-background/90 text-foreground shadow hover:bg-background/90">
-      Populær
+      <Star className="h-3 w-3 fill-current" />
+      Bestseller
     </Badge>
   );
 }
