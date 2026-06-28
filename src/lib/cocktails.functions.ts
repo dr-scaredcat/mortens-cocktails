@@ -100,6 +100,23 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
   if (tagListRes.error) throw new Error(tagListRes.error.message);
 
   const tagOrder = new Map((tagListRes.data ?? []).map((t) => [t.name, t.position]));
+  const ingMap = new Map((ingRes.data ?? []).map((i) => [i.id, i]));
+
+  // Gruppér alle relationer i ét gennemløb hver i stedet for at filtrere
+  // hele arrayet på ny for hver cocktail.
+  const ingByCocktail = new Map<string, NonNullable<typeof ciRes.data>>();
+  for (const row of ciRes.data ?? []) {
+    const arr = ingByCocktail.get(row.cocktail_id);
+    if (arr) arr.push(row);
+    else ingByCocktail.set(row.cocktail_id, [row]);
+  }
+
+  const tagsByCocktail = new Map<string, string[]>();
+  for (const row of tagsRes.data ?? []) {
+    const arr = tagsByCocktail.get(row.cocktail_id);
+    if (arr) arr.push(row.tag);
+    else tagsByCocktail.set(row.cocktail_id, [row.tag]);
+  }
 
   const ratingMap = new Map<string, { sum: number; count: number }>();
   for (const r of ratingsRes.data ?? []) {
@@ -109,10 +126,9 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
     ratingMap.set(r.cocktail_id, e);
   }
 
-  const ingMap = new Map((ingRes.data ?? []).map((i) => [i.id, i]));
   const result: CocktailWithDetails[] = (cocktailsRes.data ?? []).map((c) => {
-    const items = (ciRes.data ?? [])
-      .filter((r) => r.cocktail_id === c.id)
+    const items = (ingByCocktail.get(c.id) ?? [])
+      .slice()
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .map((r) => {
         const ing = ingMap.get(r.ingredient_id);
@@ -125,9 +141,8 @@ export const listCocktails = createServerFn({ method: "GET" }).handler(async () 
         };
       });
     const missing = items.filter((i) => !i.available).map((i) => i.name);
-    const tags = (tagsRes.data ?? [])
-      .filter((t) => t.cocktail_id === c.id)
-      .map((t) => t.tag)
+    const tags = (tagsByCocktail.get(c.id) ?? [])
+      .slice()
       .sort((a, b) => (tagOrder.get(a) ?? 999) - (tagOrder.get(b) ?? 999));
     const agg = ratingMap.get(c.id);
     return {
@@ -165,14 +180,29 @@ export const listRecipes = createServerFn({ method: "GET" }).handler(async () =>
 
   const ingMap = new Map((ingRes.data ?? []).map((i) => [i.id, i]));
 
+  // Gruppér billeder og ingredienser pr. opskrift i ét gennemløb.
+  const imagesByRecipe = new Map<string, NonNullable<typeof imagesRes.data>>();
+  for (const img of imagesRes.data ?? []) {
+    const arr = imagesByRecipe.get(img.recipe_id);
+    if (arr) arr.push(img);
+    else imagesByRecipe.set(img.recipe_id, [img]);
+  }
+
+  const ingsByRecipe = new Map<string, NonNullable<typeof riRes.data>>();
+  for (const ri of riRes.data ?? []) {
+    const arr = ingsByRecipe.get(ri.recipe_id);
+    if (arr) arr.push(ri);
+    else ingsByRecipe.set(ri.recipe_id, [ri]);
+  }
+
   const result: RecipeWithDetails[] = (recipesRes.data ?? []).map((r) => {
-    const images = (imagesRes.data ?? [])
-      .filter((img) => img.recipe_id === r.id)
+    const images = (imagesByRecipe.get(r.id) ?? [])
+      .slice()
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .map((img) => ({ id: img.id, url: img.url, position: img.position }));
 
-    const items = (riRes.data ?? [])
-      .filter((ri) => ri.recipe_id === r.id)
+    const items = (ingsByRecipe.get(r.id) ?? [])
+      .slice()
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .map((ri) => {
         const ing = ingMap.get(ri.ingredient_id);
