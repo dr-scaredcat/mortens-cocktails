@@ -5,7 +5,7 @@ import { listIngredients, listCategories, type IngredientRow } from "@/lib/cockt
 import {
   upsertIngredient,
   deleteIngredient,
-  deleteUnusedIngredients,
+  listUsedIngredientIds,
   setIngredientAvailable,
 } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ function DeleteUnusedDialog({
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              Disse ingredienser indgår ikke i nogen cocktail. Markér dem du vil slette.
+              Disse ingredienser indgår hverken i en cocktail eller en opskrift. Markér dem du vil slette.
             </p>
 
             {/* Vælg alle */}
@@ -173,13 +173,20 @@ export function AdminIngredients() {
   const qc = useQueryClient();
   const fetchList = useServerFn(listIngredients);
   const fetchCats = useServerFn(listCategories);
+  const fetchUsedIds = useServerFn(listUsedIngredientIds);
   const upsert = useServerFn(upsertIngredient);
   const del = useServerFn(deleteIngredient);
-  const delUnused = useServerFn(deleteUnusedIngredients);
   const setAvail = useServerFn(setIngredientAvailable);
 
   const { data } = useQuery({ queryKey: ["ingredients"], queryFn: () => fetchList() });
   const { data: categories } = useQuery({ queryKey: ["categories"], queryFn: () => fetchCats() });
+
+  // Hent brugte ingrediens-ID'er fra serveren (dækker BÅDE cocktails og opskrifter)
+  const { data: usedIdsData } = useQuery({
+    queryKey: ["used-ingredient-ids"],
+    queryFn: () => fetchUsedIds(),
+  });
+
   const catNames = (categories ?? []).map((c) => c.name);
 
   const [name, setName] = useState("");
@@ -196,6 +203,7 @@ export function AdminIngredients() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["ingredients"] });
     qc.invalidateQueries({ queryKey: ["cocktails"] });
+    qc.invalidateQueries({ queryKey: ["used-ingredient-ids"] });
   };
 
   const addM = useMutation({
@@ -264,22 +272,13 @@ export function AdminIngredients() {
     return Array.from(map.entries());
   }, [data, categories]);
 
-  // Find alle ubrugte ingredienser (dem der ikke er knyttet til nogen cocktail)
-  // Vi bruger det faktum at deleteUnusedIngredients returnerer antallet —
-  // men vi har ikke listen. Vi finder dem via cocktail-data i cache eller
-  // viser alle ingredienser og lader serveren afvise dem der er i brug.
-  // Enklere: hent fra query-cache hvilke ingredient_ids der bruges i cocktails,
-  // og filtrér ingredienslisten.
+  // Ubrugte ingredienser = dem hvis ID hverken bruges i en cocktail eller en opskrift.
+  // Listen af brugte ID'er kommer fra serveren (get_used_ingredient_ids), så
+  // både cocktails OG opskrifter tjekkes — stemmer overens med sletningen.
   const unusedIngredients = useMemo(() => {
-    const cocktails = qc.getQueryData<{ ingredients: { ingredient_id: string }[] }[]>(["cocktails"]) ?? [];
-    const usedIds = new Set<string>();
-    for (const c of cocktails) {
-      for (const i of c.ingredients ?? []) {
-        usedIds.add(i.ingredient_id);
-      }
-    }
+    const usedIds = new Set(usedIdsData?.ids ?? []);
     return (data ?? []).filter((i) => !usedIds.has(i.id));
-  }, [data, qc]);
+  }, [data, usedIdsData]);
 
   return (
     <div className="space-y-6">
