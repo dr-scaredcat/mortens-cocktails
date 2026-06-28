@@ -34,7 +34,7 @@ import { Wine } from "lucide-react";
 export const Route = createFileRoute("/menukort")({
   head: () => ({
     meta: [
-      { title: "Menukort" },
+      { title: "Menukort — Aston's Bar" },
       { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
