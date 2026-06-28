@@ -119,11 +119,12 @@ function MenukortCocktailCard({
   badge?: PopularBadge;
 }) {
   return (
-    <Card className="flex flex-col overflow-hidden border-border/70 bg-card cursor-pointer transition hover:border-primary/50">
+    // h-full + flex flex-col sikrer at alle kort i en række strækker sig til samme højde
+    <Card className="flex h-full flex-col overflow-hidden border-border/70 bg-card cursor-pointer transition hover:border-primary/50">
       {/* Hele kortet åbner dialogen — undtagen bestil-knappen */}
-      <div onClick={onOpen}>
+      <div className="flex flex-1 flex-col" onClick={onOpen}>
         {/* Billede */}
-        <div className="relative aspect-[4/3] w-full bg-muted">
+        <div className="relative aspect-[4/3] w-full shrink-0 bg-muted">
           {badge && (
             <div className="absolute left-2 top-2 z-10">
               <PopularityBadge badge={badge} />
@@ -143,8 +144,8 @@ function MenukortCocktailCard({
           )}
         </div>
 
-        {/* Indhold */}
-        <div className="flex flex-col gap-2 p-4">
+        {/* Indhold — flex-1 så det vokser og skubber bestil-knappen til bunden */}
+        <div className="flex flex-1 flex-col gap-2 p-4">
           <h3 className="font-serif text-xl leading-tight">{cocktail.name}</h3>
           <RatingStars
             cocktailId={cocktail.id}
@@ -168,9 +169,9 @@ function MenukortCocktailCard({
         </div>
       </div>
 
-      {/* Bestil-knap — stopper klik fra at boble op til dialogen */}
+      {/* Bestil-knap — mt-auto skubber den til bunden, stopper klik fra at boble op */}
       {orderingEnabled && (
-        <div className="px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-auto px-4 pb-4" onClick={(e) => e.stopPropagation()}>
           <OrderButton cocktailId={cocktail.id} cocktailName={cocktail.name} />
         </div>
       )}
@@ -320,7 +321,8 @@ function MenukortPage() {
         ) : filtered.length === 0 ? (
           <p className="text-muted-foreground">Ingen cocktails matcher din søgning.</p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          // items-stretch sikrer at alle kort i en række er lige høje
+          <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
               <MenukortCocktailCard
                 key={c.id}
