@@ -74,7 +74,11 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    const sb = context.supabase;
+
+    // Brug service-role klienten der bypasser RLS, så vi med sikkerhed kan
+    // læse BÅDE cocktail_ingredients og recipe_ingredients uanset policies.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const sb = supabaseAdmin;
 
     // Hent ingredienser brugt i cocktails
     const { data: usedInCocktails, error: err1 } = await sb
@@ -82,30 +86,20 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
       .select("ingredient_id");
     if (err1) throw new Error(err1.message);
 
-    // Hent ingredienser brugt i opskrifter via rå SQL for at undgå typeproblemer
-    const { data: usedInRecipes, error: err2 } = await sb
-      .rpc("get_recipe_ingredient_ids" as any);
+    // Hent ingredienser brugt i opskrifter
+    const { data: usedInRecipes, error: err2 } = await (sb as any)
+      .from("recipe_ingredients")
+      .select("ingredient_id");
+    if (err2) throw new Error(err2.message);
 
-    // Hvis RPC ikke findes, prøv direkte tabelopslag
-    let recipeIngredientIds: string[] = [];
-    if (err2 || !usedInRecipes) {
-      const { data: fallback } = await (sb as any)
-        .from("recipe_ingredients")
-        .select("ingredient_id");
-      recipeIngredientIds = ((fallback ?? []) as { ingredient_id: string }[])
-        .map((r) => r.ingredient_id)
-        .filter(Boolean);
-    } else {
-      recipeIngredientIds = (usedInRecipes as { ingredient_id: string }[])
-        .map((r) => r.ingredient_id)
-        .filter(Boolean);
-    }
-
-    const cocktailIngredientIds = ((usedInCocktails ?? []) as { ingredient_id: string }[])
+    const cocktailIds = ((usedInCocktails ?? []) as { ingredient_id: string }[])
+      .map((r) => r.ingredient_id)
+      .filter(Boolean);
+    const recipeIds = ((usedInRecipes ?? []) as { ingredient_id: string }[])
       .map((r) => r.ingredient_id)
       .filter(Boolean);
 
-    const usedIds = Array.from(new Set([...cocktailIngredientIds, ...recipeIngredientIds]));
+    const usedIds = Array.from(new Set([...cocktailIds, ...recipeIds]));
 
     if (usedIds.length === 0) {
       const { error, count } = await (
