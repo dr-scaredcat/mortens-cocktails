@@ -74,32 +74,21 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
+    const sb = context.supabase;
 
-    // Brug service-role klienten der bypasser RLS, så vi med sikkerhed kan
-    // læse BÅDE cocktail_ingredients og recipe_ingredients uanset policies.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const sb = supabaseAdmin;
+    // Hent alle brugte ingrediens-ID'er via en SECURITY DEFINER funktion, der
+    // omgår RLS og samler ID'er fra BÅDE cocktail_ingredients og
+    // recipe_ingredients. Se SQL-funktionen get_used_ingredient_ids i databasen.
+    const { data: usedRows, error: usedErr } = await sb.rpc("get_used_ingredient_ids" as any);
+    if (usedErr) throw new Error(`Kunne ikke hente brugte ingredienser: ${usedErr.message}`);
 
-    // Hent ingredienser brugt i cocktails
-    const { data: usedInCocktails, error: err1 } = await sb
-      .from("cocktail_ingredients")
-      .select("ingredient_id");
-    if (err1) throw new Error(err1.message);
-
-    // Hent ingredienser brugt i opskrifter
-    const { data: usedInRecipes, error: err2 } = await (sb as any)
-      .from("recipe_ingredients")
-      .select("ingredient_id");
-    if (err2) throw new Error(err2.message);
-
-    const cocktailIds = ((usedInCocktails ?? []) as { ingredient_id: string }[])
-      .map((r) => r.ingredient_id)
-      .filter(Boolean);
-    const recipeIds = ((usedInRecipes ?? []) as { ingredient_id: string }[])
-      .map((r) => r.ingredient_id)
-      .filter(Boolean);
-
-    const usedIds = Array.from(new Set([...cocktailIds, ...recipeIds]));
+    const usedIds = Array.from(
+      new Set(
+        ((usedRows ?? []) as { ingredient_id: string }[])
+          .map((r) => r.ingredient_id)
+          .filter(Boolean),
+      ),
+    );
 
     if (usedIds.length === 0) {
       const { error, count } = await (
