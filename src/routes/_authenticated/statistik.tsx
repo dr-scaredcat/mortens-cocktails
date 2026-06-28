@@ -6,7 +6,7 @@ import { isAdmin } from "@/lib/admin.functions";
 import { AdminStatistik } from "@/components/app/admin-statistik";
 
 export const Route = createFileRoute("/_authenticated/statistik")({
-  head: () => ({ meta: [{ title: "Statistik — Barskab" }] }),
+  head: () => ({ meta: [{ title: "Statistik — Aston's Bar" }] }),
   component: StatistikPage,
 });
 

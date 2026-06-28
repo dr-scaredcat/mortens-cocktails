@@ -77,22 +77,44 @@ export const deleteUnusedIngredients = createServerFn({ method: "POST" })
     const sb = context.supabase;
 
     // Hent ingredienser brugt i cocktails
-    const { data: usedInCocktails } = await sb.from("cocktail_ingredients").select("ingredient_id");
-    // Hent ingredienser brugt i opskrifter
-    const { data: usedInRecipes } = await sb.from("recipe_ingredients" as any).select("ingredient_id");
+    const { data: usedInCocktails, error: err1 } = await sb
+      .from("cocktail_ingredients")
+      .select("ingredient_id");
+    if (err1) throw new Error(err1.message);
 
-    const usedIds = Array.from(
-      new Set([
-        ...((usedInCocktails ?? []) as { ingredient_id: string }[]).map((r) => r.ingredient_id),
-        ...((usedInRecipes ?? []) as { ingredient_id: string }[]).map((r) => r.ingredient_id),
-      ]),
-    );
+    // Hent ingredienser brugt i opskrifter via rå SQL for at undgå typeproblemer
+    const { data: usedInRecipes, error: err2 } = await sb
+      .rpc("get_recipe_ingredient_ids" as any);
+
+    // Hvis RPC ikke findes, prøv direkte tabelopslag
+    let recipeIngredientIds: string[] = [];
+    if (err2 || !usedInRecipes) {
+      const { data: fallback } = await (sb as any)
+        .from("recipe_ingredients")
+        .select("ingredient_id");
+      recipeIngredientIds = ((fallback ?? []) as { ingredient_id: string }[])
+        .map((r) => r.ingredient_id)
+        .filter(Boolean);
+    } else {
+      recipeIngredientIds = (usedInRecipes as { ingredient_id: string }[])
+        .map((r) => r.ingredient_id)
+        .filter(Boolean);
+    }
+
+    const cocktailIngredientIds = ((usedInCocktails ?? []) as { ingredient_id: string }[])
+      .map((r) => r.ingredient_id)
+      .filter(Boolean);
+
+    const usedIds = Array.from(new Set([...cocktailIngredientIds, ...recipeIngredientIds]));
 
     if (usedIds.length === 0) {
-      const { error, count } = await (sb.from("ingredients").delete().not("id", "is", null) as any).select("id");
+      const { error, count } = await (
+        sb.from("ingredients").delete().not("id", "is", null) as any
+      ).select("id");
       if (error) throw new Error(error.message);
       return { deleted: count ?? 0 };
     }
+
     const { error, count } = await (
       sb.from("ingredients").delete().not("id", "in", `(${usedIds.join(",")})`) as any
     ).select("id");
@@ -545,7 +567,7 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   );
   return user?.id ?? null;
 }
- 
+
 export const grantAdminByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { email: string }) => z.object({ email: z.string().email() }).parse(d))
@@ -578,7 +600,7 @@ export const revokeAdmin = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
- 
+
 // =================== CocktailDB image helpers ===================
 
 async function lookupCocktailDbImage(name: string): Promise<string | null> {
@@ -593,7 +615,7 @@ async function lookupCocktailDbImage(name: string): Promise<string | null> {
     return null;
   }
 }
- 
+
 export const fetchCocktailDbImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { name: string }) => z.object({ name: z.string().min(1).max(120) }).parse(d))
