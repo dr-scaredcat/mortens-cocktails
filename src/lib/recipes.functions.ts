@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { publicClient, assertAdmin } from "@/lib/supabase-shared";
+import { assertAdmin } from "@/lib/supabase-shared";
 import { z } from "zod";
 
 const recipeImageInput = z.object({
@@ -117,62 +117,3 @@ export const deleteRecipe = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
-
-export const listRecipes = createServerFn({ method: "GET" }).handler(async () => {
-  const sb = publicClient();
-
-  const { data: recipes, error } = await sb
-    .from("recipes")
-    .select("id, name, description, instructions")
-    .order("name");
-  if (error) throw new Error(error.message);
-
-  const { data: images } = await sb
-    .from("recipe_images")
-    .select("recipe_id, id, url, position")
-    .order("position");
-
-  const { data: recipeIngs } = await sb
-    .from("recipe_ingredients")
-    .select("recipe_id, ingredient_id, amount, unit, position")
-    .order("position");
-
-  const { data: ings } = await sb
-    .from("ingredients")
-    .select("id, name, available");
-
-  const ingMap = new Map((ings ?? []).map((i: any) => [i.id, i]));
-
-  return (recipes ?? []).map((r: any) => {
-    const imgs = (images ?? [])
-      .filter((img: any) => img.recipe_id === r.id)
-      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-      .map((img: any) => ({ id: img.id, url: img.url, position: img.position }));
-
-    const items = (recipeIngs ?? [])
-      .filter((ri: any) => ri.recipe_id === r.id)
-      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-      .map((ri: any) => {
-        const ing = ingMap.get(ri.ingredient_id) as any;
-        return {
-          ingredient_id: ri.ingredient_id,
-          name: ing?.name ?? "Ukendt",
-          amount: ri.amount,
-          unit: ri.unit,
-          available: !!ing?.available,
-        };
-      });
-
-    const missing = items.filter((i: any) => !i.available).map((i: any) => i.name);
-
-    return {
-      id: r.id,
-      name: r.name,
-      description: r.description,
-      instructions: r.instructions,
-      images: imgs,
-      ingredients: items,
-      missing,
-    };
-  });
-});
