@@ -23,7 +23,7 @@ import { logOrder } from "@/lib/stats.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/bestillinger")({
-  head: () => ({ meta: [{ title: "Bestillinger — Barskab" }] }),
+  head: () => ({ meta: [{ title: "Bestillinger — Aston's Bar" }] }),
   component: OrdersPage,
 });
 
