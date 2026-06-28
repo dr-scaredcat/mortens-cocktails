@@ -11,6 +11,7 @@ export type OrderRow = {
   note: string | null;
   status: string;
   created_at: string;
+  quantity: number;
 };
 
 const orderInput = z.object({
@@ -18,17 +19,20 @@ const orderInput = z.object({
   cocktailName: z.string().min(1).max(120),
   customerName: z.string().trim().min(1, "Skriv dit navn").max(60),
   note: z.string().trim().max(300).optional().nullable(),
+  quantity: z.number().int().min(1).max(99).optional().default(1),
 });
 
 export const createOrder = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => orderInput.parse(d))
   .handler(async ({ data }) => {
     const sb = publicClient();
-    const { error } = await sb.from("cocktail_orders").insert({
+    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
+    const { error } = await (sb.from("cocktail_orders") as any).insert({
       cocktail_id: data.cocktailId,
       cocktail_name: data.cocktailName,
       customer_name: data.customerName,
       note: data.note && data.note.length > 0 ? data.note : null,
+      quantity: data.quantity,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -38,9 +42,9 @@ export const listOrders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    const { data, error } = await context.supabase
-      .from("cocktail_orders")
-      .select("id, cocktail_id, cocktail_name, customer_name, note, status, created_at")
+    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
+    const { data, error } = await (context.supabase.from("cocktail_orders") as any)
+      .select("id, cocktail_id, cocktail_name, customer_name, note, status, created_at, quantity")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []) as OrderRow[];
