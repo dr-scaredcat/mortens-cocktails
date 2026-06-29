@@ -708,7 +708,19 @@ function CocktailForm({
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
         </div>
         {form.image_url && (
-          <img src={form.image_url} alt="Preview" className="mt-2 h-32 w-full rounded object-cover" />
+          <div className="relative mt-2">
+            <img src={form.image_url} alt="Preview" className="h-32 w-full rounded object-cover" />
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="absolute right-2 top-2 h-7 w-7 opacity-90"
+              onClick={() => patch("image_url", "")}
+              aria-label="Fjern billede"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         )}
       </div>
 

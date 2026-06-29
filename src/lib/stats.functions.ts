@@ -15,7 +15,9 @@ export const logOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     originalOrderId: string;
+    kind?: "cocktail" | "spirit";
     cocktailId: string | null;
+    spiritId?: string | null;
     cocktailName: string;
     customerName: string;
     note: string | null;
@@ -24,7 +26,9 @@ export const logOrder = createServerFn({ method: "POST" })
     quantity?: number;
   }) => z.object({
     originalOrderId: z.string(),
+    kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
     cocktailId: z.string().uuid().nullable(),
+    spiritId: z.string().uuid().nullable().optional().default(null),
     cocktailName: z.string(),
     customerName: z.string(),
     note: z.string().nullable(),
@@ -37,7 +41,9 @@ export const logOrder = createServerFn({ method: "POST" })
     const sb = await getAdminClient();
     const { error } = await sb.from("order_log" as any).insert({
       original_order_id: data.originalOrderId,
+      kind: data.kind,
       cocktail_id: data.cocktailId,
+      spirit_id: data.spiritId ?? null,
       cocktail_name: data.cocktailName,
       customer_name: data.customerName,
       note: data.note,
@@ -56,7 +62,9 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
   .inputValidator((d: {
     orders: Array<{
       originalOrderId: string;
+      kind?: "cocktail" | "spirit";
       cocktailId: string | null;
+      spiritId?: string | null;
       cocktailName: string;
       customerName: string;
       note: string | null;
@@ -67,7 +75,9 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
   }) => z.object({
     orders: z.array(z.object({
       originalOrderId: z.string(),
+      kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
       cocktailId: z.string().uuid().nullable(),
+      spiritId: z.string().uuid().nullable().optional().default(null),
       cocktailName: z.string(),
       customerName: z.string(),
       note: z.string().nullable(),
@@ -82,7 +92,9 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
     const sb = await getAdminClient();
     const rows = data.orders.map((o) => ({
       original_order_id: o.originalOrderId,
+      kind: o.kind ?? "cocktail",
       cocktail_id: o.cocktailId,
+      spirit_id: o.spiritId ?? null,
       cocktail_name: o.cocktailName,
       customer_name: o.customerName,
       note: o.note,
@@ -143,6 +155,7 @@ export const getRatingDistribution = createServerFn({ method: "GET" })
 
 // ── Statistik: Top 5 mest bestilte cocktails ──────────────────────────────
 // Tæller efter quantity, så en bestilling på ×3 tæller som 3 drinks.
+// Filtreret til kind='cocktail', så spiritus-bestillinger ikke tæller med.
 
 export type TopCocktailRow = { cocktail_name: string; count: number };
 
@@ -153,7 +166,8 @@ export const getTopCocktails = createServerFn({ method: "GET" })
     const sb = await getAdminClient();
     const { data, error } = await sb
       .from("order_log" as any)
-      .select("cocktail_name, quantity");
+      .select("cocktail_name, quantity")
+      .eq("kind", "cocktail");
     if (error) throw new Error(error.message);
     const counts = new Map<string, number>();
     for (const row of (data ?? []) as Array<{ cocktail_name: string; quantity: number | null }>) {
@@ -166,11 +180,38 @@ export const getTopCocktails = createServerFn({ method: "GET" })
     return result;
   });
 
+// ── Statistik: Top 5 mest bestilte spiritus ───────────────────────────────
+// Samme princip som getTopCocktails, men filtreret til kind='spirit'.
+// Vare-navnet ligger også her i cocktail_name-kolonnen (delt bestillingslog).
+
+export type TopSpiritRow = { spirit_name: string; count: number };
+
+export const getTopSpirits = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = await getAdminClient();
+    const { data, error } = await sb
+      .from("order_log" as any)
+      .select("cocktail_name, quantity")
+      .eq("kind", "spirit");
+    if (error) throw new Error(error.message);
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as Array<{ cocktail_name: string; quantity: number | null }>) {
+      counts.set(row.cocktail_name, (counts.get(row.cocktail_name) ?? 0) + (row.quantity ?? 1));
+    }
+    const result: TopSpiritRow[] = Array.from(counts.entries())
+      .map(([spirit_name, count]) => ({ spirit_name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    return result;
+  });
+
 // ── Populære cocktails til badges (OFFENTLIG) ──────────────────────────────
 // Bruges på det offentlige menukort, så den er bevidst uden auth-middleware.
 // Den udstiller kun hvilke cocktails der er populære (id + antal) — ingen
 // gæstenavne eller andet følsomt. Tæller efter quantity og matcher på
-// cocktail_id (robust over for omdøbninger).
+// cocktail_id (robust over for omdøbninger). Filtreret til kind='cocktail'.
 
 export type PopularBadge = "bestseller" | "popular";
 export type PopularCocktailRow = {
@@ -188,7 +229,8 @@ export const getPopularCocktails = createServerFn({ method: "GET" }).handler(
     const sb = await getAdminClient();
     const { data, error } = await sb
       .from("order_log" as any)
-      .select("cocktail_id, quantity");
+      .select("cocktail_id, quantity")
+      .eq("kind", "cocktail");
     if (error) throw new Error(error.message);
 
     const counts = new Map<string, number>();
@@ -204,6 +246,45 @@ export const getPopularCocktails = createServerFn({ method: "GET" }).handler(
       .slice(0, POPULAR_LIMIT)
       .map((r, i) => ({
         cocktail_id: r.cocktail_id,
+        count: r.count,
+        rank: i + 1,
+        badge: (i === 0 ? "bestseller" : "popular") as PopularBadge,
+      }));
+  },
+);
+
+// ── Populære spiritus til badges (OFFENTLIG) — spejler getPopularCocktails ─
+// Matcher på spirit_id og er filtreret til kind='spirit'.
+
+export type PopularSpiritRow = {
+  spirit_id: string;
+  count: number;
+  rank: number;
+  badge: PopularBadge;
+};
+
+export const getPopularSpirits = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PopularSpiritRow[]> => {
+    const sb = await getAdminClient();
+    const { data, error } = await sb
+      .from("order_log" as any)
+      .select("spirit_id, quantity")
+      .eq("kind", "spirit");
+    if (error) throw new Error(error.message);
+
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as Array<{ spirit_id: string | null; quantity: number | null }>) {
+      if (!row.spirit_id) continue;
+      counts.set(row.spirit_id, (counts.get(row.spirit_id) ?? 0) + (row.quantity ?? 1));
+    }
+
+    return Array.from(counts.entries())
+      .map(([spirit_id, count]) => ({ spirit_id, count }))
+      .filter((r) => r.count >= POPULAR_THRESHOLD)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, POPULAR_LIMIT)
+      .map((r, i) => ({
+        spirit_id: r.spirit_id,
         count: r.count,
         rank: i + 1,
         badge: (i === 0 ? "bestseller" : "popular") as PopularBadge,
