@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,9 +34,23 @@ const authNavItems = [
   { to: "/admin" as const, label: "Admin", exact: false },
 ] as const;
 
+function useScrolled(threshold = 0) {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > threshold);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [threshold]);
+
+  return scrolled;
+}
+
 export function SiteHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
+  const scrolled = useScrolled(0);
 
   const { data } = useQuery({
     queryKey: ["site-settings"],
@@ -51,19 +66,33 @@ export function SiteHeader() {
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
+  // Kompakt: logo/tekst skaleres til ~70% af original
+  const compactLogoSize = Math.round(logoSize * 0.5);
+  const compactTextSize = Math.round(textSize * 0.5);
+
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur transition-all duration-300">
+      {/* ── Top-række: logo + log ud ── */}
+      <div
+        className={cn(
+          "mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 transition-all duration-300",
+          scrolled ? "py-1.5" : "py-3",
+        )}
+      >
         <Link
           to="/cocktails"
-          className={cn("flex font-serif tracking-tight", alignClass[logoAlign])}
-          style={{ gap: logoGap }}
+          className={cn("flex font-serif tracking-tight", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
+          style={{ gap: scrolled ? Math.round(logoGap * 0.7) : logoGap }}
         >
-          <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
+          <SiteLogo
+            type={logoType}
+            size={scrolled ? compactLogoSize : logoSize}
+            className="shrink-0 text-primary transition-all duration-300"
+          />
           <span
-            className="leading-none"
+            className="leading-none transition-all duration-300"
             style={{
-              fontSize: textSize,
+              fontSize: scrolled ? compactTextSize : textSize,
               position: "relative",
               top: textOffsetY,
             }}
@@ -90,7 +119,13 @@ export function SiteHeader() {
         )}
       </div>
 
-      <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* ── Nav-links ── */}
+      <nav
+        className={cn(
+          "mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden transition-all duration-300",
+          scrolled ? "pb-1" : "pb-2",
+        )}
+      >
         {publicNavItems.map((n) => (
           <Link
             key={n.to}
