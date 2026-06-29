@@ -461,4 +461,37 @@ function IngredientsPage() {
                     </ul>
                     {session && (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Hak ma
+                        Hak markerer som købt og tilføjer til lageret. Kryds fjerner fra listen uden at tilføje til lager.
+                      </p>
+                    )}
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dialog: vis cocktails for valgt ingrediens */}
+        <Dialog open={!!openName} onOpenChange={(o) => !o && setOpenName(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{openName}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              {tab === "goer-klar"
+                ? "Disse cocktails bliver klar hvis du tilføjer ingrediensen:"
+                : "Disse cocktails indeholder ingrediensen:"}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {openRow?.cocktailNames.map((name) => (
+                <li key={name} className="text-sm">
+                  {name}
+                </li>
+              ))}
+            </ul>
+          </DialogContent>
+        </Dialog>
+      </main>
+    </div>
+  );
+}
