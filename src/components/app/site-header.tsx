@@ -67,8 +67,8 @@ export function SiteHeader() {
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
   // Kompakt: logo/tekst skaleres til ~70% af original
-  const compactLogoSize = Math.round(logoSize * 0.7);
-  const compactTextSize = Math.round(textSize * 0.7);
+  const compactLogoSize = Math.round(logoSize * 0.3);
+  const compactTextSize = Math.round(textSize * 0.3);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur transition-all duration-300">
