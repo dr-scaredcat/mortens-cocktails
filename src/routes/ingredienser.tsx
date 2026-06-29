@@ -463,24 +463,3 @@ function IngredientsPage() {
     </div>
   );
 }
-        <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Fane: Alle ── */}
-        {tab === "alle" && (
-          <div className="space-y-6">
-            {grouped.map(([
