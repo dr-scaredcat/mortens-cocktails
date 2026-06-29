@@ -495,7 +495,10 @@ export function AdminCocktails() {
               <Plus className="mr-1 h-4 w-4" /> Ny cocktail
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogContent
+            className="max-h-[90vh] max-w-2xl overflow-y-auto"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>{form.id ? "Rediger cocktail" : "Ny cocktail"}</DialogTitle>
             </DialogHeader>
