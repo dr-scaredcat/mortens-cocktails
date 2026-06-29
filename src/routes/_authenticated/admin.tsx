@@ -21,6 +21,8 @@ import { AdminMenukort } from "@/components/app/admin-menukort";
 import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
 import { AdminStatistik } from "@/components/app/admin-statistik";
+import { AdminSpirits } from "@/components/app/admin-spirits";
+import { AdminSpiritTypes } from "@/components/app/admin-spirit-types";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Aston's Bar" }] }),
@@ -33,14 +35,16 @@ function AdminPage() {
   const [tab, setTab] = useState("menukort");
 
   const TABS = [
-    { value: "menukort",     label: "Menukort" },
-    { value: "cocktails",    label: "Cocktails" },
-    { value: "opskrifter",   label: "Opskrifter" },
-    { value: "ingredients",  label: "Ingredienser" },
-    { value: "tags",         label: "Tags" },
-    { value: "glasses",      label: "Glas" },
-    { value: "garnishes",    label: "Pynt" },
-    { value: "settings",     label: "Indstillinger" },
+    { value: "menukort",      label: "Menukort" },
+    { value: "cocktails",     label: "Cocktails" },
+    { value: "opskrifter",    label: "Opskrifter" },
+    { value: "spiritus",      label: "Spiritus" },
+    { value: "ingredients",   label: "Ingredienser" },
+    { value: "tags",          label: "Tags" },
+    { value: "spiritustyper", label: "Spiritus typer" },
+    { value: "glasses",       label: "Glas" },
+    { value: "garnishes",     label: "Pynt" },
+    { value: "settings",      label: "Indstillinger" },
   ];
 
   return (
@@ -83,11 +87,17 @@ function AdminPage() {
             <TabsContent value="opskrifter">
               <AdminRecipes />
             </TabsContent>
+            <TabsContent value="spiritus">
+              <AdminSpirits />
+            </TabsContent>
             <TabsContent value="ingredients">
               <AdminIngredients />
             </TabsContent>
             <TabsContent value="tags">
               <AdminTags />
+            </TabsContent>
+            <TabsContent value="spiritustyper">
+              <AdminSpiritTypes />
             </TabsContent>
             <TabsContent value="glasses">
               <AdminGlasses />

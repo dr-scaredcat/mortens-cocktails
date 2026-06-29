@@ -23,9 +23,13 @@ const MAX_QUANTITY = 10;
 export function OrderButton({
   cocktailId,
   cocktailName,
+  kind = "cocktail",
+  spiritId,
 }: {
-  cocktailId: string;
+  cocktailId?: string;
   cocktailName: string;
+  kind?: "cocktail" | "spirit";
+  spiritId?: string;
 }) {
   const submit = useServerFn(createOrder);
   const [open, setOpen] = useState(false);
@@ -42,7 +46,9 @@ export function OrderButton({
     try {
       await submit({
         data: {
-          cocktailId,
+          kind,
+          cocktailId: kind === "cocktail" ? cocktailId ?? null : null,
+          spiritId: kind === "spirit" ? spiritId ?? null : null,
           cocktailName,
           customerName: name.trim(),
           note: note.trim() || null,
