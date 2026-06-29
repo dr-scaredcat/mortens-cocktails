@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listSpirits, listSpiritTypes, type SpiritWithDetails } from "@/lib/spirits.functions";
@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, GripVertical, ArrowDownAZ, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, ArrowDownAZ, Star, Upload, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -50,6 +50,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { getSpiritSort, setSpiritSort, type SortMode } from "@/lib/sort-settings.functions";
 
 const NO_TYPE = "__none__";
 
@@ -133,17 +134,40 @@ export function AdminSpirits() {
   const del = useServerFn(deleteSpirit);
   const reorder = useServerFn(reorderSpirits);
   const resetRating = useServerFn(resetSpiritRating);
+  const fetchSort = useServerFn(getSpiritSort);
+  const saveSort = useServerFn(setSpiritSort);
 
   const { data: spirits } = useQuery({ queryKey: ["spirits"], queryFn: () => fetchSpirits() });
   const { data: types } = useQuery({ queryKey: ["spirit-types"], queryFn: () => fetchTypes() });
+  const { data: sortData } = useQuery({ queryKey: ["spirits-sort"], queryFn: () => fetchSort() });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [localOrder, setLocalOrder] = useState<SpiritWithDetails[] | null>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState("");
+  const [sortChoice, setSortChoice] = useState<SortMode | null>(null);
+  const sortMode: SortMode = sortChoice ?? sortData?.mode ?? "manual";
 
-  const displayList = localOrder ?? (spirits as SpiritWithDetails[] | undefined) ?? [];
+  // alpha/rating beregnes klientside; manual = serverens position-rækkefølge.
+  const sortedList = useMemo(() => {
+    const list = (spirits as SpiritWithDetails[] | undefined) ?? [];
+    if (sortMode === "alpha") {
+      return [...list].sort((a, b) => a.name.localeCompare(b.name, "da"));
+    }
+    if (sortMode === "rating") {
+      return [...list].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
+    }
+    return list;
+  }, [spirits, sortMode]);
+
+  const orderedList = localOrder ?? sortedList;
+
+  const query = search.trim().toLowerCase();
+  const visibleList = query
+    ? orderedList.filter((s) => s.name.toLowerCase().includes(query))
+    : orderedList;
 
   const invalidate = () => {
     setLocalOrder(null);
@@ -188,6 +212,12 @@ export function AdminSpirits() {
     },
   });
 
+  const saveSortM = useMutation({
+    mutationFn: (mode: SortMode) => saveSort({ data: { mode } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["spirits-sort"] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const resetRatingM = useMutation({
     mutationFn: (id: string) => resetRating({ data: { id } }),
     onSuccess: () => {
@@ -206,17 +236,26 @@ export function AdminSpirits() {
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = displayList.findIndex((s) => s.id === active.id);
-    const newIndex = displayList.findIndex((s) => s.id === over.id);
-    const reordered = arrayMove(displayList, oldIndex, newIndex);
+    const oldIndex = orderedList.findIndex((s) => s.id === active.id);
+    const newIndex = orderedList.findIndex((s) => s.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(orderedList, oldIndex, newIndex);
     setLocalOrder(reordered);
     reorderM.mutate(reordered.map((s) => s.id));
+    setSortChoice("manual");
+    saveSortM.mutate("manual");
   }
 
   function sortAlpha() {
-    const sorted = [...displayList].sort((a, b) => a.name.localeCompare(b.name, "da"));
-    setLocalOrder(sorted);
-    reorderM.mutate(sorted.map((s) => s.id));
+    setSortChoice("alpha");
+    setLocalOrder(null);
+    saveSortM.mutate("alpha");
+  }
+
+  function sortByRating() {
+    setSortChoice("rating");
+    setLocalOrder(null);
+    saveSortM.mutate("rating");
   }
 
   function openNew() {
@@ -400,34 +439,108 @@ export function AdminSpirits() {
         </Dialog>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={sortAlpha} disabled={reorderM.isPending}>
-          <ArrowDownAZ className="mr-1 h-4 w-4" />
-          Sortér A-Z
-        </Button>
+      {/* Søgning + sortering */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søg efter spiritus..."
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={sortMode === "alpha" ? "default" : "outline"}
+            size="sm"
+            onClick={sortAlpha}
+            disabled={saveSortM.isPending}
+          >
+            <ArrowDownAZ className="mr-1 h-4 w-4" />
+            Sortér A-Z
+          </Button>
+          <Button
+            variant={sortMode === "rating" ? "default" : "outline"}
+            size="sm"
+            onClick={sortByRating}
+            disabled={saveSortM.isPending}
+          >
+            <Star className="mr-1 h-4 w-4" />
+            Sortér efter rating
+          </Button>
+          {query && (
+            <span className="text-xs text-muted-foreground">
+              Træk-og-slip er slået fra mens du søger
+            </span>
+          )}
+        </div>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={displayList.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-3">
-            {displayList.length === 0 && (
-              <p className="rounded-lg border border-border bg-card px-3 py-4 text-sm text-muted-foreground">
-                Ingen spiritus endnu — opret en med "Ny spiritus".
-              </p>
-            )}
-            {displayList.map((s) => (
-              <SortableSpiritRow
-                key={s.id}
-                spirit={s}
-                onEdit={() => openEdit(s)}
-                onDelete={() => {
-                  if (confirm(`Slet ${s.name}?`)) delM.mutate(s.id);
-                }}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      {visibleList.length === 0 ? (
+        <p className="rounded-lg border border-border bg-card px-3 py-4 text-sm text-muted-foreground">
+          {query ? "Ingen spiritus matcher søgningen." : 'Ingen spiritus endnu — opret en med "Ny spiritus".'}
+        </p>
+      ) : query ? (
+        <div className="flex flex-col gap-3">
+          {visibleList.map((s) => (
+            <Card
+              key={s.id}
+              className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3"
+            >
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
+                {s.image_url && (
+                  <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-medium">{s.name}</span>
+                  {!s.available && (
+                    <Badge variant="outline" className="shrink-0 text-xs text-muted-foreground">
+                      ikke tilgængelig
+                    </Badge>
+                  )}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {s.spirit_type ?? "Ingen type"}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button size="icon" variant="ghost" onClick={() => openEdit(s)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    if (confirm(`Slet ${s.name}?`)) delM.mutate(s.id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={orderedList.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-3">
+              {orderedList.map((s) => (
+                <SortableSpiritRow
+                  key={s.id}
+                  spirit={s}
+                  onEdit={() => openEdit(s)}
+                  onDelete={() => {
+                    if (confirm(`Slet ${s.name}?`)) delM.mutate(s.id);
+                  }}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
     </div>
   );
 }
