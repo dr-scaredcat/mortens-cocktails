@@ -40,7 +40,7 @@ import {
 import { UNITS } from "@/lib/constants";
 import { listTags } from "@/lib/cocktails.functions";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ImageDown, GripVertical, ArrowDownAZ, Star, Upload, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ImageDown, GripVertical, ArrowDownAZ, Star, Upload, Download, Search } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -60,6 +60,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/integrations/supabase/client";
+import { getCocktailSort, setCocktailSort, type SortMode } from "@/lib/sort-settings.functions";
 
 type Item = { _id: string; name: string; amount: string; unit: string };
 
@@ -331,6 +332,8 @@ export function AdminCocktails() {
   const backfill = useServerFn(backfillCocktailImages);
   const resetRating = useServerFn(resetCocktailRating);
   const reorder = useServerFn(reorderCocktails);
+  const fetchSort = useServerFn(getCocktailSort);
+  const saveSort = useServerFn(setCocktailSort);
 
   const { data: cocktails } = useQuery({
     queryKey: ["cocktails"],
@@ -343,13 +346,38 @@ export function AdminCocktails() {
   const { data: tags } = useQuery({ queryKey: ["tags"], queryFn: () => fetchTags() });
   const { data: glasses } = useQuery({ queryKey: ["glasses"], queryFn: () => fetchGlasses() });
   const { data: garnishes } = useQuery({ queryKey: ["garnishes"], queryFn: () => fetchGarnishes() });
+  const { data: sortData } = useQuery({ queryKey: ["cocktails-sort"], queryFn: () => fetchSort() });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [localOrder, setLocalOrder] = useState<CocktailWithDetails[] | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  // Lokalt valg vinder over serverens, så knappen reagerer med det samme.
+  const [sortChoice, setSortChoice] = useState<SortMode | null>(null);
+  const sortMode: SortMode = sortChoice ?? sortData?.mode ?? "manual";
 
-  const displayList = localOrder ?? (cocktails as CocktailWithDetails[] | undefined) ?? [];
+  // Fuld liste sorteret efter det valgte princip. "manual" = serverens
+  // position-rækkefølge; alpha/rating beregnes her, så de overlever genindlæsning
+  // uafhængigt af position-kolonnen.
+  const sortedList = useMemo(() => {
+    const list = (cocktails as CocktailWithDetails[] | undefined) ?? [];
+    if (sortMode === "alpha") {
+      return [...list].sort((a, b) => a.name.localeCompare(b.name, "da"));
+    }
+    if (sortMode === "rating") {
+      return [...list].sort((a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1));
+    }
+    return list;
+  }, [cocktails, sortMode]);
+
+  // localOrder giver øjeblikkelig feedback under træk-og-slip.
+  const orderedList = localOrder ?? sortedList;
+
+  const query = search.trim().toLowerCase();
+  const visibleList = query
+    ? orderedList.filter((c) => c.name.toLowerCase().includes(query))
+    : orderedList;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -397,28 +425,36 @@ export function AdminCocktails() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const saveSortM = useMutation({
+    mutationFn: (mode: SortMode) => saveSort({ data: { mode } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cocktails-sort"] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = displayList.findIndex((c) => c.id === active.id);
-    const newIndex = displayList.findIndex((c) => c.id === over.id);
-    const next = arrayMove(displayList, oldIndex, newIndex);
+    const oldIndex = orderedList.findIndex((c) => c.id === active.id);
+    const newIndex = orderedList.findIndex((c) => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const next = arrayMove(orderedList, oldIndex, newIndex);
     setLocalOrder(next);
     reorderM.mutate(next.map((c) => c.id));
+    // Træk-og-slip definerer en manuel rækkefølge — lås princippet til "manual".
+    setSortChoice("manual");
+    saveSortM.mutate("manual");
   }
 
   function sortAlpha() {
-    const sorted = [...displayList].sort((a, b) => a.name.localeCompare(b.name, "da"));
-    setLocalOrder(sorted);
-    reorderM.mutate(sorted.map((c) => c.id));
+    setSortChoice("alpha");
+    setLocalOrder(null);
+    saveSortM.mutate("alpha");
   }
 
   function sortByRating() {
-    const sorted = [...displayList].sort(
-      (a, b) => (b.avg_rating ?? -1) - (a.avg_rating ?? -1),
-    );
-    setLocalOrder(sorted);
-    reorderM.mutate(sorted.map((c) => c.id));
+    setSortChoice("rating");
+    setLocalOrder(null);
+    saveSortM.mutate("rating");
   }
 
   function openNew() {
@@ -536,46 +572,104 @@ export function AdminCocktails() {
         </Dialog>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={sortAlpha}
-          disabled={reorderM.isPending}
-        >
-          <ArrowDownAZ className="mr-1 h-4 w-4" />
-          Sortér A-Z
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={sortByRating}
-          disabled={reorderM.isPending}
-        >
-          <Star className="mr-1 h-4 w-4" />
-          Sortér efter rating
-        </Button>
+      {/* Søgning + sortering */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søg efter cocktail..."
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={sortMode === "alpha" ? "default" : "outline"}
+            size="sm"
+            onClick={sortAlpha}
+            disabled={saveSortM.isPending}
+          >
+            <ArrowDownAZ className="mr-1 h-4 w-4" />
+            Sortér A-Z
+          </Button>
+          <Button
+            variant={sortMode === "rating" ? "default" : "outline"}
+            size="sm"
+            onClick={sortByRating}
+            disabled={saveSortM.isPending}
+          >
+            <Star className="mr-1 h-4 w-4" />
+            Sortér efter rating
+          </Button>
+          {query && (
+            <span className="text-xs text-muted-foreground">
+              Træk-og-slip er slået fra mens du søger
+            </span>
+          )}
+        </div>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext
-          items={displayList.map((c) => c.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="flex flex-col gap-3">
-            {displayList.map((c) => (
-              <SortableCocktailRow
-                key={c.id}
-                cocktail={c}
-                onEdit={() => openEdit(c)}
-                onDelete={() => {
-                  if (confirm(`Slet ${c.name}?`)) delM.mutate(c.id);
-                }}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      {visibleList.length === 0 ? (
+        <p className="rounded-lg border border-border bg-card px-3 py-4 text-sm text-muted-foreground">
+          {query ? "Ingen cocktails matcher søgningen." : "Ingen cocktails endnu."}
+        </p>
+      ) : query ? (
+        <div className="flex flex-col gap-3">
+          {visibleList.map((c) => (
+            <Card
+              key={c.id}
+              className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3"
+            >
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
+                {c.image_url && (
+                  <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate font-medium">{c.name}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {c.ingredients.map((i) => i.name).join(", ")}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    if (confirm(`Slet ${c.name}?`)) delM.mutate(c.id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext
+            items={orderedList.map((c) => c.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="flex flex-col gap-3">
+              {orderedList.map((c) => (
+                <SortableCocktailRow
+                  key={c.id}
+                  cocktail={c}
+                  onEdit={() => openEdit(c)}
+                  onDelete={() => {
+                    if (confirm(`Slet ${c.name}?`)) delM.mutate(c.id);
+                  }}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
 
       <ExportDialog
         open={exportOpen}

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { UNITS } from "@/lib/constants";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, Upload, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type IngItem = { _id: string; name: string; amount: string; unit: string };
@@ -142,6 +142,7 @@ export function AdminRecipes() {
   const [saving, setSaving] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function patch<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
@@ -268,6 +269,12 @@ export function AdminRecipes() {
     delMut.mutate(r.id);
   }
 
+  const recipeQuery = search.trim().toLowerCase();
+  const visibleRecipes = ((recipes ?? []) as RecipeWithDetails[])
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "da"))
+    .filter((r) => (recipeQuery ? r.name.toLowerCase().includes(recipeQuery) : true));
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -276,14 +283,23 @@ export function AdminRecipes() {
         </Button>
       </div>
 
-      {(recipes ?? []).length === 0 ? (
-        <p className="text-sm text-muted-foreground">Ingen opskrifter endnu.</p>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Søg efter opskrift..."
+          className="pl-9"
+        />
+      </div>
+
+      {visibleRecipes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {recipeQuery ? "Ingen opskrifter matcher søgningen." : "Ingen opskrifter endnu."}
+        </p>
       ) : (
         <div className="space-y-2">
-          {((recipes ?? []) as RecipeWithDetails[])
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name, "da"))
-            .map((r) => (
+          {visibleRecipes.map((r) => (
               <Card key={r.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3">
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted">
                   {r.images[0] && (

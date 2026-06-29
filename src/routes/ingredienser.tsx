@@ -6,6 +6,8 @@ import { SiteHeader } from "@/components/app/site-header";
 import { listIngredients, listCocktails, listCategories } from "@/lib/cocktails.functions";
 import { setIngredientAvailable } from "@/lib/admin.functions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { useSession } from "@/hooks/use-session";
 import { isAdmin as isAdminFn } from "@/lib/admin.functions";
 import { toast } from "sonner";
@@ -46,6 +48,7 @@ function IngredientsPage() {
 
   const [tab, setTab] = useState<Tab>("alle");
   const [openName, setOpenName] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: ingredients } = useQuery({
     queryKey: ["ingredients"],
@@ -138,6 +141,26 @@ function IngredientsPage() {
       ? goerKlarRows.find((r) => r.name === openName) ?? null
       : indgaarFlestRows.find((r) => r.name === openName) ?? null;
 
+  // ── Søgning på ingrediensnavn — gælder alle tre faner ──
+  const q = search.trim().toLowerCase();
+  const filteredGrouped = q
+    ? grouped
+        .map(
+          ([cat, items]) =>
+            [cat, (items as any[]).filter((ing) => ing.name.toLowerCase().includes(q))] as [
+              string,
+              any[],
+            ],
+        )
+        .filter(([, items]) => items.length > 0)
+    : grouped;
+  const filteredGoerKlar = q
+    ? goerKlarRows.filter((r) => r.name.toLowerCase().includes(q))
+    : goerKlarRows;
+  const filteredIndgaar = q
+    ? indgaarFlestRows.filter((r) => r.name.toLowerCase().includes(q))
+    : indgaarFlestRows;
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -148,6 +171,17 @@ function IngredientsPage() {
             ? "Marker hvad du har på lager. Ændringer slår igennem med det samme."
             : "Oversigt over ingredienser. Log ind som admin for at redigere lager."}
         </p>
+
+        {/* Søgefelt */}
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søg efter ingrediens..."
+            className="pl-9"
+          />
+        </div>
 
         {/* Fane-vælger */}
         <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
@@ -170,7 +204,7 @@ function IngredientsPage() {
         {/* ── Fane: Alle ── */}
         {tab === "alle" && (
           <div className="space-y-6">
-            {grouped.map(([cat, items]) => (
+            {filteredGrouped.map(([cat, items]) => (
               <section key={cat}>
                 <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-primary">
                   {cat}
@@ -195,8 +229,10 @@ function IngredientsPage() {
                 </ul>
               </section>
             ))}
-            {grouped.length === 0 && (
-              <p className="text-muted-foreground">Ingen ingredienser endnu.</p>
+            {filteredGrouped.length === 0 && (
+              <p className="text-muted-foreground">
+                {q ? "Ingen ingredienser matcher søgningen." : "Ingen ingredienser endnu."}
+              </p>
             )}
           </div>
         )}
@@ -207,13 +243,15 @@ function IngredientsPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Ingredienser der mangler præcis én gang for at en cocktail bliver klar, sorteret efter flest cocktails.
             </p>
-            {goerKlarRows.length === 0 ? (
+            {filteredGoerKlar.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-                Ingen ingredienser ville gøre en cocktail klar med det samme.
+                {q
+                  ? "Ingen ingredienser matcher søgningen."
+                  : "Ingen ingredienser ville gøre en cocktail klar med det samme."}
               </div>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {goerKlarRows.map((r) => (
+                {filteredGoerKlar.map((r) => (
                   <li key={r.name} className="flex items-center gap-3 px-4 py-3">
                     {r.ingredient && (
                       <Checkbox
@@ -250,13 +288,15 @@ function IngredientsPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Ikke-tilgængelige ingredienser sorteret efter hvor mange cocktails de indgår i.
             </p>
-            {indgaarFlestRows.length === 0 ? (
+            {filteredIndgaar.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-                Alle ingredienser er markeret som tilgængelige.
+                {q
+                  ? "Ingen ingredienser matcher søgningen."
+                  : "Alle ingredienser er markeret som tilgængelige."}
               </div>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                {indgaarFlestRows.map((r) => (
+                {filteredIndgaar.map((r) => (
                   <li key={r.name} className="flex items-center gap-3 px-4 py-3">
                     {r.ingredient && (
                       <Checkbox
