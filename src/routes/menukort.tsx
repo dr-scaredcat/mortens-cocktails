@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Shuffle, ArrowDownAZ, Star, Share2, Check, Wine } from "lucide-react";
+import { Shuffle, ArrowDownAZ, Star, Share2, Check } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -79,8 +79,13 @@ function MenukortCocktailCard({
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <Wine className="h-10 w-10" />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+              <img
+                src="/placeholder-cocktail.png"
+                alt="Billede mangler"
+                className="h-1/2 w-auto object-contain opacity-60"
+              />
+              <span className="text-xs text-muted-foreground">Billede er på vej...</span>
             </div>
           )}
         </div>
@@ -196,6 +201,34 @@ function MenukortPage() {
     return [...f].sort((a, b) => a.name.localeCompare(b.name, "da"));
   }, [data, tags, q, sortMode]);
 
+  // Beregn tag-counts dynamisk fra den filtrerede base (med søgning, uden tag-filter)
+  // — så hvert tag viser antal cocktails der matcher det, givet de aktive tags + søgning.
+  const tagCounts = useMemo(() => {
+    const list = (data ?? []) as CocktailWithDetails[];
+    let base = list.filter((c) => c.missing.length === 0 && c.on_menu !== false);
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      base = base.filter(
+        (c) =>
+          c.name.toLowerCase().includes(s) ||
+          c.ingredients.some((i) => i.name.toLowerCase().includes(s)) ||
+          c.tags.some((t) => t.toLowerCase().includes(s)),
+      );
+    }
+    // Tæl fra den aktive filtrerede liste (dvs. med valgte tags inkluderet)
+    const activeBase = tags.length > 0
+      ? base.filter((c) => tags.every((t) => c.tags.includes(t)))
+      : base;
+
+    const counts = new Map<string, number>();
+    for (const c of activeBase) {
+      for (const tag of c.tags) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [data, tags, q]);
+
   return (
     <div className="min-h-screen bg-background">
       <GuestHeader active="cocktails" />
@@ -234,6 +267,7 @@ function MenukortPage() {
               setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
             }
             onClear={() => setTags([])}
+            tagCounts={tagCounts}
           />
           <div className="flex gap-2">
             <Button
