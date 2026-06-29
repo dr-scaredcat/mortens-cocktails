@@ -61,6 +61,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/integrations/supabase/client";
 import { getCocktailSort, setCocktailSort, type SortMode } from "@/lib/sort-settings.functions";
+import { compressImage } from "@/lib/image-utils";
 
 type Item = { _id: string; name: string; amount: string; unit: string };
 
@@ -758,11 +759,11 @@ function CocktailForm({
     if (file.size > 10 * 1024 * 1024) { toast.error("Filen er for stor — maks 10 MB"); return; }
     setUploadingImg(true);
     try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const fileName = `cocktail_${Date.now()}.${ext}`;
+      const compressed = await compressImage(file);
+      const fileName = `cocktail_${Date.now()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from("cocktail-images")
-        .upload(fileName, file, { upsert: false, contentType: file.type });
+        .upload(fileName, compressed, { upsert: false, contentType: "image/jpeg" });
       if (uploadError) throw new Error(uploadError.message);
       const { data: urlData } = supabase.storage.from("cocktail-images").getPublicUrl(fileName);
       patch("image_url", urlData.publicUrl);

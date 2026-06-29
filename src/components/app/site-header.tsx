@@ -50,7 +50,7 @@ function useScrolled(threshold = 0) {
 export function SiteHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
-  const scrolled = useScrolled(0);
+  const scrolled = useScrolled(4);
 
   const { data } = useQuery({
     queryKey: ["site-settings"],
@@ -66,66 +66,56 @@ export function SiteHeader() {
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
-  // Kompakt: logo/tekst skaleres til ~70% af original
-  const compactLogoSize = Math.round(logoSize * 0.5);
-  const compactTextSize = Math.round(textSize * 0.5);
-
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur transition-all duration-300">
-      {/* ── Top-række: logo + log ud ── */}
+    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
+      {/* ── Logo-række — glider OP ud af syne ved scroll ── */}
       <div
-        className={cn(
-          "mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 transition-all duration-300",
-          scrolled ? "py-1.5" : "py-3",
-        )}
+        className="overflow-hidden transition-all duration-300 ease-in-out"
+        style={{ maxHeight: scrolled ? 0 : 200 }}
       >
-        <Link
-          to="/cocktails"
-          className={cn("flex font-serif tracking-tight", alignClass[logoAlign as keyof typeof alignClass] ?? "items-center")}
-          style={{ gap: scrolled ? Math.round(logoGap * 0.7) : logoGap }}
-        >
-          <SiteLogo
-            type={logoType}
-            size={scrolled ? compactLogoSize : logoSize}
-            className="shrink-0 text-primary transition-all duration-300"
-          />
-          <span
-            className="leading-none transition-all duration-300"
-            style={{
-              fontSize: scrolled ? compactTextSize : textSize,
-              position: "relative",
-              top: textOffsetY,
-            }}
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+          <Link
+            to="/cocktails"
+            className={cn(
+              "flex font-serif tracking-tight",
+              alignClass[logoAlign as keyof typeof alignClass] ?? "items-center",
+            )}
+            style={{ gap: logoGap }}
           >
-            {siteName}
-          </span>
-        </Link>
+            <SiteLogo
+              type={logoType}
+              size={logoSize}
+              className="shrink-0 text-primary"
+            />
+            <span
+              className="leading-none"
+              style={{ fontSize: textSize, position: "relative", top: textOffsetY }}
+            >
+              {siteName}
+            </span>
+          </Link>
 
-        {session && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => supabase.auth.signOut()}
-            aria-label="Log ud"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        )}
+          {session && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => supabase.auth.signOut()}
+              aria-label="Log ud"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          )}
 
-        {!session && (
-          <Button asChild size="sm" variant="ghost">
-            <Link to="/auth">Log ind</Link>
-          </Button>
-        )}
+          {!session && (
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/auth">Log ind</Link>
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* ── Nav-links ── */}
-      <nav
-        className={cn(
-          "mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden transition-all duration-300",
-          scrolled ? "pb-1" : "pb-2",
-        )}
-      >
+      {/* ── Nav-bar — altid synlig, sticky ── */}
+      <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2 pt-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {publicNavItems.map((n) => (
           <Link
             key={n.to}

@@ -51,6 +51,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { getSpiritSort, setSpiritSort, type SortMode } from "@/lib/sort-settings.functions";
+import { compressImage } from "@/lib/image-utils";
 
 const NO_TYPE = "__none__";
 
@@ -295,11 +296,11 @@ export function AdminSpirits() {
     }
     setUploadingImg(true);
     try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const fileName = `spirit_${Date.now()}.${ext}`;
+      const compressed = await compressImage(file);
+      const fileName = `spirit_${Date.now()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from("cocktail-images")
-        .upload(fileName, file, { upsert: false, contentType: file.type });
+        .upload(fileName, compressed, { upsert: false, contentType: "image/jpeg" });
       if (uploadError) throw new Error(uploadError.message);
       const { data: urlData } = supabase.storage.from("cocktail-images").getPublicUrl(fileName);
       patch("image_url", urlData.publicUrl);
@@ -323,7 +324,10 @@ export function AdminSpirits() {
               <Plus className="mr-1 h-4 w-4" /> Ny spiritus
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogContent
+            className="max-h-[90vh] max-w-2xl overflow-y-auto"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>{form.id ? "Rediger spiritus" : "Ny spiritus"}</DialogTitle>
             </DialogHeader>
