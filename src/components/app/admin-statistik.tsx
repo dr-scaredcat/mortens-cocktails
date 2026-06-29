@@ -588,16 +588,34 @@ function OrdersOverTimeChart() {
   );
 }
 
+// Valgmuligheder for antal gæster i "hvem bestiller mest".
+const GUEST_LIMITS = [5, 10, 15, 20] as const;
+const GUEST_LIMIT_MAX = 50; // skal matche serverens clamp i getGuestSeries
+
+// Distinkte farver til et vilkårligt antal gæst-linjer: jævnt fordelte nuancer
+// rundt i farvehjulet, med vekslende lyshed så nabolinjer adskiller sig ekstra.
+function guestColors(n: number): string[] {
+  if (n <= 0) return [];
+  return Array.from({ length: n }, (_, i) => {
+    const hue = Math.round((i * 360) / n);
+    const light = i % 2 === 0 ? 55 : 42;
+    return `hsl(${hue}, 68%, ${light}%)`;
+  });
+}
+
 // ── 5. Gæster — kumuleret linjediagram ─────────────────────────────────────
 function GuestSeriesChart() {
   const [period, setPeriod] = useState<Period>("all");
+  const [limit, setLimit] = useState<number>(10);
+  const [customActive, setCustomActive] = useState<boolean>(false);
+  const [customValue, setCustomValue] = useState<string>("");
   const range = useMemo(() => periodToRange(period), [period]);
   const fn = useServerFn(getGuestSeries);
   const clearFn = useServerFn(clearOrderLog);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: ["stat-guests", period],
-    queryFn: () => fn({ data: { from: range.from, to: range.to } }),
+    queryKey: ["stat-guests", period, limit],
+    queryFn: () => fn({ data: { from: range.from, to: range.to, limit } }),
   });
 
   async function handleReset() {
@@ -635,6 +653,8 @@ function GuestSeriesChart() {
     return `${d}/${m}`;
   };
 
+  const colors = useMemo(() => guestColors(guests.length), [guests.length]);
+
   const total = data?.reduce((s, g) => s + g.total, 0) ?? 0;
 
   return (
@@ -644,6 +664,58 @@ function GuestSeriesChart() {
           {total} bestilling{total === 1 ? "" : "er"} · viser top {guests.length} gæst{guests.length === 1 ? "" : "er"}
         </p>
         <PeriodButtons value={period} onChange={setPeriod} />
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-sm text-muted-foreground">Antal gæster:</span>
+        {GUEST_LIMITS.map((n) => (
+          <Button
+            key={n}
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setLimit(n);
+              setCustomActive(false);
+            }}
+            className={
+              !customActive && limit === n
+                ? "border-primary/60 bg-primary/10 text-primary"
+                : "text-muted-foreground"
+            }
+          >
+            {n}
+          </Button>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCustomActive(true)}
+          className={
+            customActive
+              ? "border-primary/60 bg-primary/10 text-primary"
+              : "text-muted-foreground"
+          }
+        >
+          Indtast selv
+        </Button>
+        {customActive && (
+          <input
+            type="number"
+            min={1}
+            max={GUEST_LIMIT_MAX}
+            value={customValue}
+            placeholder="antal"
+            autoFocus
+            onChange={(e) => {
+              setCustomValue(e.target.value);
+              const n = parseInt(e.target.value, 10);
+              if (!Number.isNaN(n)) {
+                setLimit(Math.min(GUEST_LIMIT_MAX, Math.max(1, n)));
+              }
+            }}
+            className="h-9 w-20 rounded-md border border-border bg-background px-2 text-sm outline-none focus:border-primary/60"
+          />
+        )}
       </div>
 
       {isLoading ? (
@@ -680,7 +752,7 @@ function GuestSeriesChart() {
                 key={name}
                 type="monotone"
                 dataKey={name}
-                stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                stroke={colors[i] ?? "#8b5cf6"}
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
