@@ -32,7 +32,7 @@ export function TagFilter({
               {tag}
               {tagCounts !== undefined && (
                 <span className={active ? "ml-1 opacity-75" : "ml-1 text-muted-foreground"}>
-                  {count ?? 0}
+                  ({count ?? 0})
                 </span>
               )}
             </Badge>
