@@ -326,7 +326,10 @@ export function AdminRecipes() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogContent
+          className="max-h-[90vh] max-w-2xl overflow-y-auto"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>{form.id ? "Rediger opskrift" : "Ny opskrift"}</DialogTitle>
           </DialogHeader>
