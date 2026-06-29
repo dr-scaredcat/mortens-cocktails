@@ -33,12 +33,10 @@ function useScrolled(threshold = 0) {
   return scrolled;
 }
 
-// Minimal header til gæster — kun navigation mellem Cocktails og Spiritus.
-// Knappen øverst til højre fører til /cocktails og vises kun når man er logget ind.
 export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
-  const scrolled = useScrolled(0);
+  const scrolled = useScrolled(4);
 
   const { data } = useQuery({
     queryKey: ["site-settings"],
@@ -54,10 +52,6 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
-  // Kompakt: logo/tekst skaleres til ~70% af original
-  const compactLogoSize = Math.round(logoSize * 0.5);
-  const compactTextSize = Math.round(textSize * 0.5);
-
   const navItem = (to: string, label: string, isActive: boolean) => (
     <Link
       to={to}
@@ -71,56 +65,47 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
   );
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur px-4 transition-all duration-300",
-        scrolled ? "py-1.5" : "py-4",
-      )}
-    >
+    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur px-4">
       <div className="mx-auto max-w-5xl">
-        {/* ── Logo + hjem-knap ── */}
-        <div className="flex items-center justify-between">
-          <div
-            className={cn(
-              "flex transition-all duration-300",
-              alignClass[logoAlign as keyof typeof alignClass] ?? "items-center",
-            )}
-            style={{ gap: scrolled ? Math.round(logoGap * 0.7) : logoGap }}
-          >
-            <SiteLogo
-              size={scrolled ? compactLogoSize : logoSize}
-              type={logoType}
-              className="shrink-0 text-primary transition-all duration-300"
-            />
-            <span
-              className="font-serif transition-all duration-300"
-              style={{
-                fontSize: scrolled ? compactTextSize : textSize,
-                position: "relative",
-                top: textOffsetY,
-              }}
+        {/* ── Logo-række — glider OP ud af syne ved scroll ── */}
+        <div
+          className="overflow-hidden transition-all duration-300 ease-in-out"
+          style={{ maxHeight: scrolled ? 0 : 200 }}
+        >
+          <div className="flex items-center justify-between py-4">
+            <div
+              className={cn(
+                "flex",
+                alignClass[logoAlign as keyof typeof alignClass] ?? "items-center",
+              )}
+              style={{ gap: logoGap }}
             >
-              {siteName}
-            </span>
-          </div>
+              <SiteLogo
+                size={logoSize}
+                type={logoType}
+                className="shrink-0 text-primary"
+              />
+              <span
+                className="font-serif"
+                style={{ fontSize: textSize, position: "relative", top: textOffsetY }}
+              >
+                {siteName}
+              </span>
+            </div>
 
-          {/* Hjem-knap — kun synlig for loggede brugere */}
-          {session && (
-            <Button asChild size="sm" variant="ghost" aria-label="Gå til forsiden">
-              <Link to="/cocktails">
-                <Home className="h-4 w-4" />
-              </Link>
-            </Button>
-          )}
+            {/* Hjem-knap — kun synlig for loggede brugere */}
+            {session && (
+              <Button asChild size="sm" variant="ghost" aria-label="Gå til forsiden">
+                <Link to="/cocktails">
+                  <Home className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* ── Nav-bar: Cocktails | Spiritus ── */}
-        <nav
-          className={cn(
-            "flex justify-center transition-all duration-300",
-            scrolled ? "mt-1.5" : "mt-3",
-          )}
-        >
+        {/* ── Nav-bar: Cocktails | Spiritus — altid synlig ── */}
+        <nav className="flex justify-center py-2">
           <div className="flex w-full max-w-xs gap-1 rounded-xl border border-border bg-card p-1">
             {navItem("/menukort", "Cocktails", active === "cocktails")}
             {navItem("/spiritus", "Spiritus", active === "spiritus")}
