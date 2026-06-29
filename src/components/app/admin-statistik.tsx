@@ -21,6 +21,7 @@ import {
   getTagStats,
   getRatingDistribution,
   getTopCocktails,
+  getTopSpirits,
   getOrdersOverTime,
   getGuestSeries,
   clearOrderLog,
@@ -31,6 +32,14 @@ const LINE_COLORS = [
   "#8b5cf6", "#ec4899", "#f59e0b", "#10b981",
   "#3b82f6", "#ef4444", "#14b8a6", "#f97316",
 ];
+
+// Query-nøgler der skal opdateres når statistik nulstilles.
+const STAT_KEYS = [
+  ["stat-top-cocktails"],
+  ["stat-top-spirits"],
+  ["stat-orders-time"],
+  ["stat-guests"],
+] as const;
 
 // ── Periodeknapper ───────────────────────────────────────────────────────────
 type Period = "today" | "yesterday" | "week" | "month" | "all";
@@ -174,7 +183,52 @@ function RatingChart() {
   );
 }
 
-// ── 3. Top 5 mest bestilte ──────────────────────────────────────────────────
+// ── Genbrugt: vandret "top liste" med søjler ────────────────────────────────
+function TopBars({ rows }: { rows: { name: string; count: number }[] }) {
+  if (rows.length === 0) return <Empty />;
+  const max = rows[0].count;
+  return (
+    <div className="space-y-3">
+      {rows.map((row, i) => {
+        const pct = max > 0 ? (row.count / max) * 100 : 0;
+        return (
+          <div key={row.name} className="flex items-center gap-3">
+            <span className="w-5 shrink-0 text-right text-sm font-medium text-muted-foreground">
+              {i + 1}.
+            </span>
+            <div className="flex-1">
+              <div className="mb-1 flex items-center justify-between text-sm">
+                <span className="font-medium">{row.name}</span>
+                <span className="text-muted-foreground">
+                  {row.count} bestilling{row.count === 1 ? "" : "er"}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ResetButton({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="mt-4 flex justify-end">
+      <Button variant="outline" size="sm" onClick={onReset} className="text-muted-foreground">
+        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+        Nulstil data
+      </Button>
+    </div>
+  );
+}
+
+// ── 3a. Top 5 mest bestilte cocktails ───────────────────────────────────────
 function TopCocktailsChart() {
   const fn = useServerFn(getTopCocktails);
   const clearFn = useServerFn(clearOrderLog);
@@ -185,9 +239,7 @@ function TopCocktailsChart() {
     if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
     try {
       await clearFn();
-      qc.invalidateQueries({ queryKey: ["stat-top-cocktails"] });
-      qc.invalidateQueries({ queryKey: ["stat-orders-time"] });
-      qc.invalidateQueries({ queryKey: ["stat-guests"] });
+      for (const k of STAT_KEYS) qc.invalidateQueries({ queryKey: k });
       toast.success("Statistikdata nulstillet");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
@@ -198,43 +250,36 @@ function TopCocktailsChart() {
 
   return (
     <div>
-      {!data || data.length === 0 ? (
-        <Empty />
-      ) : (
-        <div className="space-y-3">
-          {data.map((row, i) => {
-            const max = data[0].count;
-            const pct = max > 0 ? (row.count / max) * 100 : 0;
-            return (
-              <div key={row.cocktail_name} className="flex items-center gap-3">
-                <span className="w-5 shrink-0 text-right text-sm font-medium text-muted-foreground">
-                  {i + 1}.
-                </span>
-                <div className="flex-1">
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium">{row.cocktail_name}</span>
-                    <span className="text-muted-foreground">
-                      {row.count} bestilling{row.count === 1 ? "" : "er"}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <div className="mt-4 flex justify-end">
-        <Button variant="outline" size="sm" onClick={handleReset} className="text-muted-foreground">
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          Nulstil data
-        </Button>
-      </div>
+      <TopBars rows={(data ?? []).map((r) => ({ name: r.cocktail_name, count: r.count }))} />
+      <ResetButton onReset={handleReset} />
+    </div>
+  );
+}
+
+// ── 3b. Top 5 mest bestilte spiritus ────────────────────────────────────────
+function TopSpiritsChart() {
+  const fn = useServerFn(getTopSpirits);
+  const clearFn = useServerFn(clearOrderLog);
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["stat-top-spirits"], queryFn: () => fn() });
+
+  async function handleReset() {
+    if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
+    try {
+      await clearFn();
+      for (const k of STAT_KEYS) qc.invalidateQueries({ queryKey: k });
+      toast.success("Statistikdata nulstillet");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
+    }
+  }
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Indlæser...</p>;
+
+  return (
+    <div>
+      <TopBars rows={(data ?? []).map((r) => ({ name: r.spirit_name, count: r.count }))} />
+      <ResetButton onReset={handleReset} />
     </div>
   );
 }
@@ -255,9 +300,7 @@ function OrdersOverTimeChart() {
     if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
     try {
       await clearFn();
-      qc.invalidateQueries({ queryKey: ["stat-top-cocktails"] });
-      qc.invalidateQueries({ queryKey: ["stat-orders-time"] });
-      qc.invalidateQueries({ queryKey: ["stat-guests"] });
+      for (const k of STAT_KEYS) qc.invalidateQueries({ queryKey: k });
       toast.success("Statistikdata nulstillet");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
@@ -316,12 +359,7 @@ function OrdersOverTimeChart() {
           </BarChart>
         </ResponsiveContainer>
       )}
-      <div className="mt-4 flex justify-end">
-        <Button variant="outline" size="sm" onClick={handleReset} className="text-muted-foreground">
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          Nulstil data
-        </Button>
-      </div>
+      <ResetButton onReset={handleReset} />
     </div>
   );
 }
@@ -342,9 +380,7 @@ function GuestSeriesChart() {
     if (!confirm("Nulstil al statistikdata? Dette sletter alle gemte bestillinger fra loggen og kan ikke fortrydes.")) return;
     try {
       await clearFn();
-      qc.invalidateQueries({ queryKey: ["stat-top-cocktails"] });
-      qc.invalidateQueries({ queryKey: ["stat-orders-time"] });
-      qc.invalidateQueries({ queryKey: ["stat-guests"] });
+      for (const k of STAT_KEYS) qc.invalidateQueries({ queryKey: k });
       toast.success("Statistikdata nulstillet");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke nulstille");
@@ -429,12 +465,7 @@ function GuestSeriesChart() {
           </LineChart>
         </ResponsiveContainer>
       )}
-      <div className="mt-4 flex justify-end">
-        <Button variant="outline" size="sm" onClick={handleReset} className="text-muted-foreground">
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          Nulstil data
-        </Button>
-      </div>
+      <ResetButton onReset={handleReset} />
     </div>
   );
 }
@@ -455,8 +486,12 @@ export function AdminStatistik() {
         <RatingChart />
       </Section>
 
-      <Section title="Top 5 mest bestilte">
+      <Section title="Top 5 mest bestilte cocktails">
         <TopCocktailsChart />
+      </Section>
+
+      <Section title="Top 5 mest bestilte spiritus">
+        <TopSpiritsChart />
       </Section>
 
       <Section title="Bestillinger over tid">
