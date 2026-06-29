@@ -293,8 +293,11 @@ export const getPopularSpirits = createServerFn({ method: "GET" }).handler(
 );
 
 // ── Statistik: Bestillinger over tid ──────────────────────────────────────
+// Returnerer RÅ bestillingspunkter (tidsstempel + antal). Al gruppering,
+// "bar-døgn"-logik og positionering på tidsaksen sker i klienten, så det kan
+// regnes i lokal tid (Europe/Copenhagen) frem for UTC.
 
-export type OrderOverTimeRow = { bucket: string; count: number };
+export type OrderPoint = { t: string; q: number };
 
 const rangeInput = z.object({
   from: z.string().optional().nullable(),
@@ -316,26 +319,9 @@ export const getOrdersOverTime = createServerFn({ method: "POST" })
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
 
-    // Gruppér efter dag (YYYY-MM-DD), tæl efter quantity
-    const counts = new Map<string, number>();
-    for (const row of (rows ?? []) as Array<{ logged_at: string; quantity: number | null }>) {
-      const day = row.logged_at.slice(0, 10); // YYYY-MM-DD
-      counts.set(day, (counts.get(day) ?? 0) + (row.quantity ?? 1));
-    }
-
-    // Fyld huller i datoer
-    if (counts.size === 0) return [];
-    const days = Array.from(counts.keys()).sort();
-    const start = new Date(days[0]);
-    const end = new Date(days[days.length - 1]);
-    const result: OrderOverTimeRow[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      const key = cur.toISOString().slice(0, 10);
-      result.push({ bucket: key, count: counts.get(key) ?? 0 });
-      cur.setDate(cur.getDate() + 1);
-    }
-    return result;
+    return ((rows ?? []) as Array<{ logged_at: string; quantity: number | null }>).map(
+      (r): OrderPoint => ({ t: r.logged_at, q: r.quantity ?? 1 }),
+    );
   });
 
 // ── Statistik: Gæster der bestiller mest (med tidsserie) ──────────────────
