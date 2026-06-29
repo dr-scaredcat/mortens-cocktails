@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Shuffle, ArrowDownAZ, Star, Wine } from "lucide-react";
+import { Shuffle, ArrowDownAZ, Star } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -78,8 +78,13 @@ function MenukortSpiritCard({
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <Wine className="h-10 w-10" />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+              <img
+                src="/placeholder-spiritus.png"
+                alt="Billede mangler"
+                className="h-1/2 w-auto object-contain opacity-60"
+              />
+              <span className="text-xs text-muted-foreground">Billede er på vej...</span>
             </div>
           )}
         </div>
@@ -285,7 +290,10 @@ function SpiritusPage() {
                     variant={active ? "default" : "outline"}
                     className={active ? "bg-primary text-primary-foreground" : ""}
                   >
-                    {tn} ({countByType.get(tn) ?? 0})
+                    {tn}{" "}
+                    <span className={active ? "opacity-75" : "text-muted-foreground"}>
+                      ({countByType.get(tn) ?? 0})
+                    </span>
                   </Badge>
                 </button>
               );
@@ -298,7 +306,10 @@ function SpiritusPage() {
                     selectedTypes.includes(OTHER_LABEL) ? "bg-primary text-primary-foreground" : ""
                   }
                 >
-                  {OTHER_LABEL} ({otherCount})
+                  {OTHER_LABEL}{" "}
+                  <span className={selectedTypes.includes(OTHER_LABEL) ? "opacity-75" : "text-muted-foreground"}>
+                    ({otherCount})
+                  </span>
                 </Badge>
               </button>
             )}
