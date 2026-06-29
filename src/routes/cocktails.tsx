@@ -1,12 +1,15 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
 import { CocktailCard } from "@/components/app/cocktail-card";
 import { TagFilter } from "@/components/app/tag-filter";
 import { Input } from "@/components/ui/input";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
+import { getShoppingList, addManyToShoppingList } from "@/lib/shopping-list.functions";
+import { useSession } from "@/hooks/use-session";
+import { toast } from "sonner";
 import { z } from "zod";
 
 const searchSchema = z.object({
@@ -36,9 +39,33 @@ function CocktailsPage() {
   const { tab } = useSearch({ from: "/cocktails" });
   const navigate = useNavigate({ from: "/cocktails" });
   const fetchCocktails = useServerFn(listCocktails);
+  const fetchShoppingList = useServerFn(getShoppingList);
+  const addMany = useServerFn(addManyToShoppingList);
+  const qc = useQueryClient();
+  const { session } = useSession();
+
   const { data, isLoading } = useQuery({
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
+  });
+
+  const { data: shoppingList } = useQuery({
+    queryKey: ["shopping-list"],
+    queryFn: () => fetchShoppingList(),
+  });
+
+  const shoppingListIds = useMemo(
+    () => new Set((shoppingList ?? []).map((r) => r.ingredient_id)),
+    [shoppingList],
+  );
+
+  const addManyM = useMutation({
+    mutationFn: (ids: string[]) => addMany({ data: { ingredientIds: ids } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["shopping-list"] });
+      toast.success("Tilføjet til indkøbsliste");
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const [tags, setTags] = useState<string[]>([]);
@@ -129,7 +156,12 @@ function CocktailsPage() {
             </p>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((c) => (
-                <CocktailCard key={c.id} cocktail={c} />
+                <CocktailCard
+                  key={c.id}
+                  cocktail={c}
+                  shoppingListIds={session ? shoppingListIds : undefined}
+                  onAddToShoppingList={session ? (ids) => addManyM.mutate(ids) : undefined}
+                />
               ))}
             </div>
           </>
