@@ -332,6 +332,44 @@ export function AdminSettings() {
 
   return (
     <div className="space-y-10">
+      {/* Bestillinger */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Bestillinger
+        </h2>
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label className="text-base">Tillad bestillinger</Label>
+              <p className="text-sm text-muted-foreground">
+                Når slået til kan gæster bestille cocktails fra menukortet.
+              </p>
+            </div>
+            <Switch
+              checked={orderingData?.enabled ?? true}
+              onCheckedChange={toggle}
+              disabled={orderingLoading}
+            />
+          </div>
+        </Card>
+      </section>
+
+      {/* Kategorier */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Kategorier
+        </h2>
+        <AdminCategories />
+      </section>
+
+      {/* Temaer */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Tema
+        </h2>
+        <AdminThemes />
+      </section>
+
       {/* Sidenavn + logo-indstillinger */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
@@ -499,42 +537,32 @@ export function AdminSettings() {
         </Card>
       </section>
 
-      {/* Bestillinger */}
+      {/* Billeder */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Bestillinger
+          Billeder
         </h2>
         <Card className="p-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="space-y-3">
             <div>
-              <Label className="text-base">Tillad bestillinger</Label>
+              <Label className="text-base">Komprimer eksisterende billeder</Label>
               <p className="text-sm text-muted-foreground">
-                Når slået til kan gæster bestille cocktails fra menukortet.
+                Henter alle billeder fra Supabase, komprimerer dem til maks 1200×1200px og uploader dem tilbage.
+                Billeder der allerede er optimerede springes over automatisk.
               </p>
             </div>
-            <Switch
-              checked={orderingData?.enabled ?? true}
-              onCheckedChange={toggle}
-              disabled={orderingLoading}
-            />
+            {compressProgress && (
+              <p className="text-sm text-muted-foreground">{compressProgress}</p>
+            )}
+            <Button
+              variant="outline"
+              onClick={compressAllImages}
+              disabled={compressing}
+            >
+              {compressing ? "Komprimerer…" : "Komprimer alle billeder"}
+            </Button>
           </div>
         </Card>
-      </section>
-
-      {/* Temaer */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Tema
-        </h2>
-        <AdminThemes />
-      </section>
-
-      {/* Kategorier */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Kategorier
-        </h2>
-        <AdminCategories />
       </section>
 
       {/* Brugere */}
@@ -574,4 +602,3 @@ export function AdminSettings() {
       </section>
     </div>
   );
-}
