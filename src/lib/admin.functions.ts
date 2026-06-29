@@ -650,3 +650,211 @@ export const backfillCocktailImages = createServerFn({ method: "POST" })
     }
     return { updated, missing };
   });
+
+// =====================================================================
+//  Indsæt dette i BUNDEN af src/lib/admin.functions.ts
+//  Alle imports (createServerFn, requireSupabaseAuth, assertAdmin, z)
+//  findes allerede i filen — ingen ændringer i toppen er nødvendige.
+// =====================================================================
+
+// =================== Spiritus typer ===================
+
+export const upsertSpiritType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id?: string; name: string; oldName?: string }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(60),
+        oldName: z.string().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    if (data.id) {
+      const { error } = await (sb.from("spirit_types") as any)
+        .update({ name: data.name })
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+      // Omdøb typen på alle spiritus der bruger den.
+      if (data.oldName && data.oldName !== data.name) {
+        await (sb.from("spirits") as any)
+          .update({ spirit_type: data.name })
+          .eq("spirit_type", data.oldName);
+      }
+      return { id: data.id };
+    }
+    const { data: row, error } = await (sb.from("spirit_types") as any)
+      .insert({ name: data.name })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteSpiritType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; name: string }) =>
+    z.object({ id: z.string().uuid(), name: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    // Spiritus med denne type mister deres type (sættes til null → vises under "Øvrige").
+    await (sb.from("spirits") as any).update({ spirit_type: null }).eq("spirit_type", data.name);
+    const { error } = await (sb.from("spirit_types") as any).delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reorderSpiritTypes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) =>
+        (sb.from("spirit_types") as any).update({ position: i + 1 }).eq("id", id),
+      ),
+    );
+    return { ok: true };
+  });
+
+// =================== Spiritus ===================
+
+export const upsertSpirit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: {
+    id?: string;
+    name: string;
+    description?: string | null;
+    image_url?: string | null;
+    spiritType?: string | null;
+  }) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().min(1).max(120),
+        description: z.string().nullable().optional(),
+        image_url: z.string().nullable().optional(),
+        spiritType: z.string().nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    const name = data.name.trim();
+
+    // ── Find eller opret den tilknyttede ingrediens ────────────────────────
+    // Findes en ingrediens med dette navn (case-insensitivt) → link til den.
+    // Ellers, hvis vi redigerer og spiritussen allerede har en ingrediens →
+    // omdøb den (følg navnet). Ellers opret en ny i kategori "Andet" med
+    // available=true.
+    const { data: existingIng, error: findErr } = await sb
+      .from("ingredients")
+      .select("id")
+      .ilike("name", name)
+      .maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+
+    let currentIngredientId: string | null = null;
+    if (data.id) {
+      const { data: cur } = await (sb.from("spirits") as any)
+        .select("ingredient_id")
+        .eq("id", data.id)
+        .maybeSingle();
+      currentIngredientId = (cur?.ingredient_id as string | null) ?? null;
+    }
+
+    let ingredientId: string;
+    if (existingIng) {
+      ingredientId = existingIng.id as string;
+    } else if (data.id && currentIngredientId) {
+      const { error: renErr } = await sb
+        .from("ingredients")
+        .update({ name })
+        .eq("id", currentIngredientId);
+      if (renErr) throw new Error(renErr.message);
+      ingredientId = currentIngredientId;
+    } else {
+      const { data: createdIng, error: insErr } = await sb
+        .from("ingredients")
+        .insert({ name, category: "Andet", available: true })
+        .select("id")
+        .single();
+      if (insErr) throw new Error(insErr.message);
+      ingredientId = createdIng.id as string;
+    }
+
+    const payload = {
+      name,
+      description: data.description?.trim() ? data.description.trim() : null,
+      image_url: data.image_url && data.image_url.length > 0 ? data.image_url : null,
+      spirit_type: data.spiritType && data.spiritType.length > 0 ? data.spiritType : null,
+      ingredient_id: ingredientId,
+    };
+
+    if (data.id) {
+      const { error } = await (sb.from("spirits") as any).update(payload).eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { id: data.id };
+    }
+
+    // Ny spiritus — placér sidst.
+    const { data: maxRow } = await (sb.from("spirits") as any)
+      .select("position")
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextPos = ((maxRow?.position as number | undefined) ?? 0) + 1;
+
+    const { data: row, error } = await (sb.from("spirits") as any)
+      .insert({ ...payload, position: nextPos, created_by: context.userId })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row.id };
+  });
+
+export const deleteSpirit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    // Ingrediensen røres ikke — den kan bruges i cocktails/opskrifter.
+    const { error } = await (context.supabase.from("spirits") as any).delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reorderSpirits = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: string[] }) =>
+    z.object({ ids: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase;
+    await Promise.all(
+      data.ids.map((id, i) => (sb.from("spirits") as any).update({ position: i + 1 }).eq("id", id)),
+    );
+    return { ok: true };
+  });
+
+export const resetSpiritRating = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await (context.supabase.from("spirit_ratings") as any)
+      .delete()
+      .eq("spirit_id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
