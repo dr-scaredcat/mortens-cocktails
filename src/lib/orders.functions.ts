@@ -5,8 +5,10 @@ import { z } from "zod";
 
 export type OrderRow = {
   id: string;
+  kind: string;                 // NY: 'cocktail' | 'spirit'
   cocktail_id: string | null;
-  cocktail_name: string;
+  spirit_id: string | null;     // NY
+  cocktail_name: string;        // bruges som vare-navn for begge typer
   customer_name: string;
   note: string | null;
   status: string;
@@ -15,7 +17,9 @@ export type OrderRow = {
 };
 
 const orderInput = z.object({
-  cocktailId: z.string().uuid(),
+  kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
+  cocktailId: z.string().uuid().nullable().optional(),
+  spiritId: z.string().uuid().nullable().optional(),
   cocktailName: z.string().min(1).max(120),
   customerName: z.string().trim().min(1, "Skriv dit navn").max(60),
   note: z.string().trim().max(300).optional().nullable(),
@@ -26,9 +30,10 @@ export const createOrder = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => orderInput.parse(d))
   .handler(async ({ data }) => {
     const sb = publicClient();
-    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
     const { error } = await (sb.from("cocktail_orders") as any).insert({
-      cocktail_id: data.cocktailId,
+      kind: data.kind,
+      cocktail_id: data.kind === "cocktail" ? data.cocktailId ?? null : null,
+      spirit_id: data.kind === "spirit" ? data.spiritId ?? null : null,
       cocktail_name: data.cocktailName,
       customer_name: data.customerName,
       note: data.note && data.note.length > 0 ? data.note : null,
@@ -44,7 +49,7 @@ export const listOrders = createServerFn({ method: "GET" })
     await assertAdmin(context);
     // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
     const { data, error } = await (context.supabase.from("cocktail_orders") as any)
-      .select("id, cocktail_id, cocktail_name, customer_name, note, status, created_at, quantity")
+      .select("id, kind, cocktail_id, spirit_id, cocktail_name, customer_name, note, status, created_at, quantity")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []) as OrderRow[];
