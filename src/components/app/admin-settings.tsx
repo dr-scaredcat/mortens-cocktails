@@ -148,6 +148,7 @@ export function AdminSettings() {
     setCompressing(true);
     setCompressProgress("Henter billedeliste...");
     try {
+      // List alle filer i bucketet
       const { data: files, error: listErr } = await supabase.storage
         .from("cocktail-images")
         .list("", { limit: 1000 });
@@ -167,22 +168,32 @@ export function AdminSettings() {
       let failed = 0;
 
       for (const file of imageFiles) {
-        setCompressProgress(`Komprimerer ${done + skipped + failed + 1} / ${imageFiles.length}: ${file.name}`);
+        setCompressProgress(`Komprimerer ${done + 1} / ${imageFiles.length}: ${file.name}`);
         try {
+          // Hent billedet som blob
           const { data: dlData, error: dlErr } = await supabase.storage
             .from("cocktail-images")
             .download(file.name);
           if (dlErr || !dlData) { failed++; continue; }
 
           const originalSize = dlData.size;
+
+          // Konvertér til File-objekt så compressImage kan bruge det
           const originalFile = new File([dlData], file.name, { type: dlData.type || "image/jpeg" });
+
+          // Komprimer
           const compressed = await compressImage(originalFile);
 
+          // Spring over hvis ikke mindst 10% mindre (undgå at re-uploade allerede komprimerede)
           if (compressed.size >= originalSize * 0.9) { skipped++; continue; }
 
+          // Upload tilbage med samme filnavn (upsert)
           const { error: upErr } = await supabase.storage
             .from("cocktail-images")
-            .upload(file.name, compressed, { upsert: true, contentType: "image/jpeg" });
+            .upload(file.name, compressed, {
+              upsert: true,
+              contentType: "image/jpeg",
+            });
           if (upErr) { failed++; continue; }
 
           done++;
@@ -560,6 +571,34 @@ export function AdminSettings() {
           Brugere
         </h2>
         <AdminUsers />
+      </section>
+
+      {/* Billedkomprimering */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Billeder
+        </h2>
+        <Card className="p-4">
+          <div className="space-y-3">
+            <div>
+              <Label className="text-base">Komprimer eksisterende billeder</Label>
+              <p className="text-sm text-muted-foreground">
+                Henter alle billeder fra Supabase, komprimerer dem til maks 1200×1200px og uploader dem tilbage.
+                Billeder der allerede er optimerede springes over automatisk.
+              </p>
+            </div>
+            {compressProgress && (
+              <p className="text-sm text-muted-foreground">{compressProgress}</p>
+            )}
+            <Button
+              variant="outline"
+              onClick={compressAllImages}
+              disabled={compressing}
+            >
+              {compressing ? "Komprimerer…" : "Komprimer alle billeder"}
+            </Button>
+          </div>
+        </Card>
       </section>
     </div>
   );
