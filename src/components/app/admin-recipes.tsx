@@ -27,6 +27,7 @@ import { UNITS } from "@/lib/constants";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, Upload, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/image-utils";
 
 type IngItem = { _id: string; name: string; amount: string; unit: string };
 type ImgItem = { _id: string; url: string };
@@ -191,11 +192,11 @@ export function AdminRecipes() {
     if (file.size > 10 * 1024 * 1024) { toast.error("Filen er for stor — maks 10 MB"); return; }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const fileName = `recipe_${Date.now()}.${ext}`;
+      const compressed = await compressImage(file);
+      const fileName = `recipe_${Date.now()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from("cocktail-images")
-        .upload(fileName, file, { upsert: false, contentType: file.type });
+        .upload(fileName, compressed, { upsert: false, contentType: "image/jpeg" });
       if (uploadError) throw new Error(uploadError.message);
       const { data: urlData } = supabase.storage.from("cocktail-images").getPublicUrl(fileName);
       patch("images", [...form.images, { _id: newId(), url: urlData.publicUrl }]);
