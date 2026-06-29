@@ -10,7 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { CocktailCard } from "@/components/app/cocktail-card";
+import { SpiritCard } from "@/components/app/spirit-card";
 import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functions";
+import { listSpirits, type SpiritWithDetails } from "@/lib/spirits.functions";
 import { Check, Trash2, RotateCcw, X } from "lucide-react";
 import {
   deleteAllOrders,
@@ -68,16 +70,30 @@ function OrdersPage() {
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
   });
-  const [openCocktailId, setOpenCocktailId] = useState<string | null>(null);
-  const [openQuantity, setOpenQuantity] = useState(1);
-  const openCocktail = (cocktailsData ?? []).find(
-    (c: CocktailWithDetails) => c.id === openCocktailId,
-  );
+  const fetchSpirits = useServerFn(listSpirits);
+  const { data: spiritsData } = useQuery({
+    queryKey: ["spirits"],
+    queryFn: () => fetchSpirits(),
+  });
+
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const openOrder = (data ?? []).find((o) => o.id === openOrderId) ?? null;
+  const openCocktail =
+    openOrder && openOrder.kind !== "spirit"
+      ? (cocktailsData ?? []).find((c: CocktailWithDetails) => c.id === openOrder.cocktail_id)
+      : undefined;
+  const openSpirit =
+    openOrder && openOrder.kind === "spirit"
+      ? (spiritsData ?? []).find((s: SpiritWithDetails) => s.id === openOrder.spirit_id)
+      : undefined;
+
+  function canOpen(o: OrderRow) {
+    return o.kind === "spirit" ? !!o.spirit_id : !!o.cocktail_id;
+  }
 
   function openCard(o: OrderRow) {
-    if (!o.cocktail_id) return;
-    setOpenCocktailId(o.cocktail_id);
-    setOpenQuantity(o.quantity);
+    if (!canOpen(o)) return;
+    setOpenOrderId(o.id);
   }
 
   async function mark(id: string, status: "pending" | "done") {
@@ -89,7 +105,9 @@ function OrdersPage() {
           await writeLog({
             data: {
               originalOrderId: order.id,
+              kind: order.kind === "spirit" ? "spirit" : "cocktail",
               cocktailId: order.cocktail_id,
+              spiritId: order.spirit_id,
               cocktailName: order.cocktail_name,
               customerName: order.customer_name,
               note: order.note,
@@ -189,7 +207,7 @@ function OrdersPage() {
                       order={o}
                       onDone={() => mark(o.id, "done")}
                       onCancel={() => cancel(o.id)}
-                      onOpen={o.cocktail_id ? () => openCard(o) : undefined}
+                      onOpen={canOpen(o) ? () => openCard(o) : undefined}
                     />
                   ))}
                 </ul>
@@ -206,7 +224,7 @@ function OrdersPage() {
                       done
                       onReopen={() => mark(o.id, "pending")}
                       onDelete={() => remove(o.id)}
-                      onOpen={o.cocktail_id ? () => openCard(o) : undefined}
+                      onOpen={canOpen(o) ? () => openCard(o) : undefined}
                     />
                   ))}
                 </ul>
@@ -215,31 +233,40 @@ function OrdersPage() {
           </div>
         )}
       </main>
-      <Dialog
-        open={!!openCocktailId}
-        onOpenChange={(o) => !o && setOpenCocktailId(null)}
-      >
+      <Dialog open={!!openOrder} onOpenChange={(o) => !o && setOpenOrderId(null)}>
         <DialogPortal>
           <DialogOverlay />
           <DialogPrimitive.Content
             className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border-0 bg-transparent p-0 shadow-none outline-none sm:max-w-md"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            {openCocktail ? (
+            {openSpirit ? (
+              <>
+                <DialogPrimitive.Title className="sr-only">
+                  {openSpirit.name}
+                </DialogPrimitive.Title>
+                <div
+                  className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                  onClick={() => setOpenOrderId(null)}
+                >
+                  <SpiritCard spirit={openSpirit} />
+                </div>
+              </>
+            ) : openCocktail ? (
               <>
                 <DialogPrimitive.Title className="sr-only">
                   {openCocktail.name}
                 </DialogPrimitive.Title>
                 <div
                   className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
-                  onClick={() => setOpenCocktailId(null)}
+                  onClick={() => setOpenOrderId(null)}
                 >
                   <CocktailCard
-                    key={`${openCocktailId}-${openQuantity}`}
+                    key={`${openOrder?.id}-${openOrder?.quantity}`}
                     cocktail={openCocktail}
                     showAvailabilityBadge={false}
                     showMultiplier
-                    initialMultiplier={openQuantity}
+                    initialMultiplier={openOrder?.quantity ?? 1}
                   />
                 </div>
               </>
@@ -254,7 +281,9 @@ function OrdersPage() {
 type OrderItemProps = {
   order: {
     id: string;
+    kind: string;
     cocktail_id: string | null;
+    spirit_id: string | null;
     cocktail_name: string;
     customer_name: string;
     note: string | null;
@@ -263,7 +292,7 @@ type OrderItemProps = {
   };
   done?: boolean;
   onDone?: () => void;
-  onCancel?: () => void;   // Annuller — kun på pending, logger IKKE til statistik
+  onCancel?: () => void; // Annuller — kun på pending, logger IKKE til statistik
   onReopen?: () => void;
   onDelete?: () => void;
   onOpen?: () => void;
@@ -274,6 +303,7 @@ function OrderItem({ order, done, onDone, onCancel, onReopen, onDelete, onOpen }
     dateStyle: "short",
     timeStyle: "short",
   });
+  const isSpirit = order.kind === "spirit";
   return (
     <Card
       className={`p-3 ${done ? "opacity-70" : ""} ${onOpen ? "cursor-pointer" : ""}`}
@@ -283,6 +313,11 @@ function OrderItem({ order, done, onDone, onCancel, onReopen, onDelete, onOpen }
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-serif text-lg">{order.cocktail_name}</span>
+            {isSpirit && (
+              <Badge variant="outline" className="text-xs">
+                Spiritus
+              </Badge>
+            )}
             {order.quantity > 1 && (
               <Badge className="bg-primary/20 text-primary hover:bg-primary/20">
                 ×{order.quantity}
@@ -290,9 +325,7 @@ function OrderItem({ order, done, onDone, onCancel, onReopen, onDelete, onOpen }
             )}
             <span className="text-sm text-muted-foreground">til {order.customer_name}</span>
           </div>
-          {order.note && (
-            <p className="mt-1 text-sm text-foreground/80">"{order.note}"</p>
-          )}
+          {order.note && <p className="mt-1 text-sm text-foreground/80">"{order.note}"</p>}
           <p className="mt-1 text-xs text-muted-foreground">{time}</p>
         </div>
         <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
