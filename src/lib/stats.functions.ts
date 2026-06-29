@@ -129,6 +129,32 @@ export const getTagStats = createServerFn({ method: "GET" })
     return result;
   });
 
+// ── Statistik: Spiritus efter type ─────────────────────────────────────────
+// Tæller antal spiritus pr. spirit_type. Spiritus uden type grupperes som
+// "Øvrige" (samme konvention som resten af appen).
+
+export type SpiritTypeStatRow = { type: string; count: number };
+
+const SPIRIT_TYPE_FALLBACK = "Øvrige";
+
+export const getSpiritTypeStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const { data, error } = await (context.supabase.from("spirits" as any))
+      .select("spirit_type");
+    if (error) throw new Error(error.message);
+    const counts = new Map<string, number>();
+    for (const row of (data ?? []) as Array<{ spirit_type: string | null }>) {
+      const key = row.spirit_type?.trim() ? row.spirit_type.trim() : SPIRIT_TYPE_FALLBACK;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const result: SpiritTypeStatRow[] = Array.from(counts.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+    return result;
+  });
+
 // ── Statistik: Rating-fordeling ────────────────────────────────────────────
 
 export type RatingDistRow = { rating: number; count: number };

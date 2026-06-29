@@ -19,6 +19,7 @@ import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getTagStats,
+  getSpiritTypeStats,
   getRatingDistribution,
   getTopCocktails,
   getTopSpirits,
@@ -126,13 +127,46 @@ function TagsChart() {
   if (isLoading) return <p className="text-sm text-muted-foreground">Indlæser...</p>;
   if (!data || data.length === 0) return <Empty />;
 
+  // Dynamisk højde, så alle tags får plads (mindst 200px).
+  const height = Math.max(200, data.length * 30 + 20);
+
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-        <YAxis type="category" dataKey="tag" tick={{ fontSize: 12 }} width={72} />
+        <YAxis type="category" dataKey="tag" tick={{ fontSize: 12 }} width={72} interval={0} />
         <Tooltip
           formatter={(v: number) => [`${v} cocktail${v === 1 ? "" : "s"}`, "Antal"]}
+          contentStyle={{ fontSize: 13 }}
+        />
+        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+          {data.map((_, i) => (
+            <Cell key={i} fill={LINE_COLORS[i % LINE_COLORS.length]} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── 1b. Spiritus efter type ──────────────────────────────────────────────────
+function SpiritTypesChart() {
+  const fn = useServerFn(getSpiritTypeStats);
+  const { data, isLoading } = useQuery({ queryKey: ["stat-spirit-types"], queryFn: () => fn() });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Indlæser...</p>;
+  if (!data || data.length === 0) return <Empty />;
+
+  // Dynamisk højde, så alle typer får plads (mindst 200px).
+  const height = Math.max(200, data.length * 30 + 20);
+
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+        <YAxis type="category" dataKey="type" tick={{ fontSize: 12 }} width={72} interval={0} />
+        <Tooltip
+          formatter={(v: number) => [`${v} spiritus`, "Antal"]}
           contentStyle={{ fontSize: 13 }}
         />
         <Bar dataKey="count" radius={[0, 4, 4, 0]}>
@@ -375,8 +409,13 @@ function dayTicks(minMs: number, maxMs: number): number[] {
 }
 
 // ── 4. Bestillinger over tid ────────────────────────────────────────────────
+type HourMode = "rate" | "cumulative";
+
 function OrdersOverTimeChart() {
   const [period, setPeriod] = useState<Period>("all");
+  // Kun relevant på I dag / I går: vis antal pr. bestilling ("rate") eller
+  // en løbende, kumuleret total hen over aftenen ("cumulative").
+  const [hourMode, setHourMode] = useState<HourMode>("rate");
   const range = useMemo(() => ordersPeriodToRange(period), [period]);
   const fn = useServerFn(getOrdersOverTime);
   const clearFn = useServerFn(clearOrderLog);
@@ -410,6 +449,14 @@ function OrdersOverTimeChart() {
       const pts = rows
         .map((r) => ({ t: new Date(r.t).getTime(), y: r.q }))
         .sort((a, b) => a.t - b.t);
+      // Kumuleret: erstat y med den løbende sum hen over aftenen.
+      if (hourMode === "cumulative") {
+        let cum = 0;
+        for (const p of pts) {
+          cum += p.y;
+          p.y = cum;
+        }
+      }
       let min = pts[0].t;
       let max = pts[pts.length - 1].t;
       if (min === max) {
@@ -448,7 +495,7 @@ function OrdersOverTimeChart() {
       max = new Date(range.to!).getTime();
     }
     return { points: pts, domain: [min, max] as [number, number], ticks: dayTicks(min, max) };
-  }, [data, isHourly, period, range.from, range.to]);
+  }, [data, isHourly, period, range.from, range.to, hourMode]);
 
   const fmtTick = (ms: number) => {
     const d = new Date(ms);
@@ -458,6 +505,7 @@ function OrdersOverTimeChart() {
   };
 
   const total = ((data ?? []) as { q: number }[]).reduce((s, r) => s + r.q, 0);
+  const cumulative = isHourly && hourMode === "cumulative";
 
   return (
     <div>
@@ -467,6 +515,29 @@ function OrdersOverTimeChart() {
         </p>
         <PeriodButtons value={period} onChange={setPeriod} />
       </div>
+
+      {isHourly && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {([
+            { id: "rate", label: "Antal" },
+            { id: "cumulative", label: "Kumuleret" },
+          ] as { id: HourMode; label: string }[]).map((m) => (
+            <Button
+              key={m.id}
+              variant="outline"
+              size="sm"
+              onClick={() => setHourMode(m.id)}
+              className={
+                hourMode === m.id
+                  ? "border-primary/60 bg-primary/10 text-primary"
+                  : "text-muted-foreground"
+              }
+            >
+              {m.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Indlæser...</p>
@@ -494,11 +565,15 @@ function OrdersOverTimeChart() {
                 const date = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
                 return isHourly ? `${date} kl. ${pad(d.getHours())}:${pad(d.getMinutes())}` : date;
               }}
-              formatter={(v: number) => [`${v} bestilling${v === 1 ? "" : "er"}`, "Antal"]}
+              formatter={(v: number) =>
+                cumulative
+                  ? [`${v} bestilling${v === 1 ? "" : "er"} i alt`, "Kumuleret"]
+                  : [`${v} bestilling${v === 1 ? "" : "er"}`, "Antal"]
+              }
               contentStyle={{ fontSize: 13 }}
             />
             <Line
-              type="linear"
+              type={cumulative ? "monotone" : "linear"}
               dataKey="y"
               stroke="#8b5cf6"
               strokeWidth={2}
@@ -629,6 +704,10 @@ export function AdminStatistik() {
 
       <Section title="Cocktails pr. tag">
         <TagsChart />
+      </Section>
+
+      <Section title="Spiritus efter type">
+        <SpiritTypesChart />
       </Section>
 
       <Section title="Rating-fordeling">
