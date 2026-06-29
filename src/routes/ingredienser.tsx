@@ -461,4 +461,4 @@ function IngredientsPage() {
                     </ul>
                     {session && (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        ✓ mark
+                        Hak ma
