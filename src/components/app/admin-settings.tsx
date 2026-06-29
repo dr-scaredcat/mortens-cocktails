@@ -35,6 +35,8 @@ import { AdminThemes } from "@/components/app/admin-themes";
 import { BarskabLogo } from "@/components/app/barskab-logo";
 import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/image-utils";
 
 const LOGO_OPTIONS: { type: LogoType; label: string }[] = [
   { type: "barskab", label: "Aston" },
@@ -137,6 +139,80 @@ export function AdminSettings() {
   const [logoTypeBusy, setLogoTypeBusy] = useState(false);
   const [textOffsetY, setTextOffsetYLocal] = useState(DEFAULT_TEXT_OFFSET_Y);
   const [textOffsetYBusy, setTextOffsetYBusy] = useState(false);
+
+  // ── Billedkomprimering ──────────────────────────────────────────────────
+  const [compressing, setCompressing] = useState(false);
+  const [compressProgress, setCompressProgress] = useState<string | null>(null);
+
+  async function compressAllImages() {
+    setCompressing(true);
+    setCompressProgress("Henter billedeliste...");
+    try {
+      // List alle filer i bucketet
+      const { data: files, error: listErr } = await supabase.storage
+        .from("cocktail-images")
+        .list("", { limit: 1000 });
+      if (listErr) throw new Error(listErr.message);
+
+      const imageFiles = (files ?? []).filter((f) =>
+        /\.(jpe?g|png|webp|gif|heic|avif)$/i.test(f.name),
+      );
+
+      if (imageFiles.length === 0) {
+        toast.success("Ingen billeder fundet i bucketet");
+        return;
+      }
+
+      let done = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const file of imageFiles) {
+        setCompressProgress(`Komprimerer ${done + 1} / ${imageFiles.length}: ${file.name}`);
+        try {
+          // Hent billedet som blob
+          const { data: dlData, error: dlErr } = await supabase.storage
+            .from("cocktail-images")
+            .download(file.name);
+          if (dlErr || !dlData) { failed++; continue; }
+
+          const originalSize = dlData.size;
+
+          // Konvertér til File-objekt så compressImage kan bruge det
+          const originalFile = new File([dlData], file.name, { type: dlData.type || "image/jpeg" });
+
+          // Komprimer
+          const compressed = await compressImage(originalFile);
+
+          // Spring over hvis ikke mindst 10% mindre (undgå at re-uploade allerede komprimerede)
+          if (compressed.size >= originalSize * 0.9) { skipped++; continue; }
+
+          // Upload tilbage med samme filnavn (upsert)
+          const { error: upErr } = await supabase.storage
+            .from("cocktail-images")
+            .upload(file.name, compressed, {
+              upsert: true,
+              contentType: "image/jpeg",
+            });
+          if (upErr) { failed++; continue; }
+
+          done++;
+        } catch {
+          failed++;
+        }
+      }
+
+      const parts = [`${done} billeder komprimeret`];
+      if (skipped > 0) parts.push(`${skipped} allerede optimerede`);
+      if (failed > 0) parts.push(`${failed} fejlede`);
+      toast.success(parts.join(" · "));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Komprimering fejlede");
+    } finally {
+      setCompressing(false);
+      setCompressProgress(null);
+    }
+  }
 
   useEffect(() => {
     if (!settings) return;
@@ -467,6 +543,34 @@ export function AdminSettings() {
           Brugere
         </h2>
         <AdminUsers />
+      </section>
+
+      {/* Billedkomprimering */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Billeder
+        </h2>
+        <Card className="p-4">
+          <div className="space-y-3">
+            <div>
+              <Label className="text-base">Komprimer eksisterende billeder</Label>
+              <p className="text-sm text-muted-foreground">
+                Henter alle billeder fra Supabase, komprimerer dem til maks 1200×1200px og uploader dem tilbage.
+                Billeder der allerede er optimerede springes over automatisk.
+              </p>
+            </div>
+            {compressProgress && (
+              <p className="text-sm text-muted-foreground">{compressProgress}</p>
+            )}
+            <Button
+              variant="outline"
+              onClick={compressAllImages}
+              disabled={compressing}
+            >
+              {compressing ? "Komprimerer…" : "Komprimer alle billeder"}
+            </Button>
+          </div>
+        </Card>
       </section>
     </div>
   );
