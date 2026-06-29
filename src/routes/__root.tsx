@@ -81,9 +81,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Barskab — Hvilke cocktails kan du lave?" },
+      { title: "Aston's Bar — Hvilke cocktails kan du lave?" },
       { name: "description", content: "Hold styr på dine ingredienser og se hvilke cocktails du kan lave lige nu." },
-      { property: "og:title", content: "Barskab" },
+      { property: "og:title", content: "Aston's Bar" },
       { property: "og:description", content: "Dit personlige cocktail-bibliotek." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -91,7 +91,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#09090b" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-      { name: "apple-mobile-web-app-title", content: "Barskab" },
+      { name: "apple-mobile-web-app-title", content: "Aston's Bar" },
     ],
     links: [
       {
@@ -105,6 +105,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap",
       },
       // Favicon
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       { rel: "icon", type: "image/png", sizes: "96x96", href: "/favicon-96x96.png" },
       // iOS hjemmeskærm
