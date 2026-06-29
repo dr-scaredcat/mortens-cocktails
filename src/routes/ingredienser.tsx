@@ -5,13 +5,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
 import { listIngredients, listCocktails, listCategories } from "@/lib/cocktails.functions";
 import { setIngredientAvailable } from "@/lib/admin.functions";
-import { getShoppingList, addToShoppingList, removeFromShoppingList } from "@/lib/shopping-list.functions";
+import { getShoppingList, addToShoppingList, removeFromShoppingList, removeFromShoppingListOnly } from "@/lib/shopping-list.functions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/use-session";
 import { isAdmin as isAdminFn } from "@/lib/admin.functions";
 import { toast } from "sonner";
-import { Search, ShoppingCart, Check } from "lucide-react";
+import { Search, ShoppingCart, Check, X } from "lucide-react";
 import type { CocktailWithDetails } from "@/lib/cocktails.functions";
 import { ShoppingListButton } from "@/components/app/shopping-list-button";
 import {
@@ -51,6 +51,7 @@ function IngredientsPage() {
   const fetchShoppingList = useServerFn(getShoppingList);
   const addToList = useServerFn(addToShoppingList);
   const removeFromList = useServerFn(removeFromShoppingList);
+  const removeFromListOnly = useServerFn(removeFromShoppingListOnly);
 
   const [tab, setTab] = useState<Tab>("alle");
   const [openName, setOpenName] = useState<string | null>(null);
@@ -98,6 +99,12 @@ function IngredientsPage() {
       qc.invalidateQueries({ queryKey: ["ingredients"] });
       qc.invalidateQueries({ queryKey: ["cocktails"] });
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeOnlyM = useMutation({
+    mutationFn: (ingredientId: string) => removeFromListOnly({ data: { ingredientId } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shopping-list"] }),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -227,27 +234,42 @@ function IngredientsPage() {
           </div>
         )}
 
-        {/* Fane-vælger */}
-        <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => { setTab(t.id); setSearch(""); }}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-              {t.id === "indkoebsliste" && (shoppingListData ?? []).length > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs text-primary">
-                  {(shoppingListData ?? []).length}
-                </span>
-              )}
-            </button>
-          ))}
+        {/* Fane-vælger — select på mobil, pills på større skærme */}
+        <div className="mb-6">
+          {/* Mobil: dropdown */}
+          <select
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium sm:hidden"
+            value={tab}
+            onChange={(e) => { setTab(e.target.value as Tab); setSearch(""); }}
+          >
+            {TABS.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}{t.id === "indkoebsliste" && (shoppingListData ?? []).length > 0 ? ` (${(shoppingListData ?? []).length})` : ""}
+              </option>
+            ))}
+          </select>
+          {/* Større skærme: pill-knapper */}
+          <div className="hidden sm:flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setTab(t.id); setSearch(""); }}
+                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  tab === t.id
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+                {t.id === "indkoebsliste" && (shoppingListData ?? []).length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs text-primary">
+                    {(shoppingListData ?? []).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── Fane: Alle ── */}
@@ -418,48 +440,25 @@ function IngredientsPage() {
                             disabled={removeM.isPending || !session}
                             onClick={() => session && removeM.mutate(row.ingredient_id)}
                             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-primary hover:bg-primary/10 hover:text-primary disabled:opacity-40"
-                            title="Marker som købt"
+                            title="Marker som købt og tilføj til lager"
                             aria-label="Marker som købt"
                           >
                             <Check className="h-4 w-4" />
                           </button>
                           <span className="flex-1 text-sm">{row.ingredients?.name}</span>
+                          <button
+                            type="button"
+                            disabled={removeOnlyM.isPending || !session}
+                            onClick={() => session && removeOnlyM.mutate(row.ingredient_id)}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:text-destructive disabled:opacity-40"
+                            title="Fjern fra liste (uden at tilføje til lager)"
+                            aria-label="Fjern fra liste"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
                         </li>
                       ))}
                     </ul>
                     {session && (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Tryk ✓ for at markere som købt — ingrediensen tilføjes automatisk til lageret.
-                      </p>
-                    )}
-                  </section>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Dialog: vis cocktails for valgt ingrediens */}
-        <Dialog open={!!openName} onOpenChange={(o) => !o && setOpenName(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{openName}</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              {tab === "goer-klar"
-                ? "Disse cocktails bliver klar hvis du tilføjer ingrediensen:"
-                : "Disse cocktails indeholder ingrediensen:"}
-            </p>
-            <ul className="mt-2 space-y-1">
-              {openRow?.cocktailNames.map((name) => (
-                <li key={name} className="text-sm">
-                  {name}
-                </li>
-              ))}
-            </ul>
-          </DialogContent>
-        </Dialog>
-      </main>
-    </div>
-  );
-}
+                        ✓ mark
