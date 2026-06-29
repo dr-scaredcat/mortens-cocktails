@@ -284,10 +284,100 @@ function TopSpiritsChart() {
   );
 }
 
+// ── Hjælpere til "Bestillinger over tid" ────────────────────────────────────
+// Et "bar-døgn" skifter rent kl. 05:00 lokal tid: alt før kl. 05:00 hører til
+// aftenen før. Så kl. 02:00/04:00 ser man stadig aftenen i går, en aften der
+// løber til kl. 04:00 holdes samlet, og visningen skifter først efter kl. 05:00.
+const BAR_DAY_CUTOFF_HOUR = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const MIN_MS = 60 * 1000;
+
+// Starten (kl. 00:00 lokal) på det kalenderdøgn, et bar-døgn "hører til".
+function barDayStart(d: Date): Date {
+  const x = new Date(d);
+  if (x.getHours() < BAR_DAY_CUTOFF_HOUR) x.setDate(x.getDate() - 1);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function barDayKey(d: Date): string {
+  const s = barDayStart(d);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${s.getFullYear()}-${pad(s.getMonth() + 1)}-${pad(s.getDate())}`;
+}
+
+// Absolut [from, to) for et bar-døgn ud fra dets dato (kl. 00:00 lokal).
+function barDayWindow(dayStart: Date): { from: Date; to: Date } {
+  const from = new Date(dayStart.getTime() + BAR_DAY_CUTOFF_HOUR * HOUR_MS);
+  const to = new Date(from.getTime() + DAY_MS);
+  return { from, to };
+}
+
+// Range til serveren (absolutte instant'er). Bruges KUN af bestillinger-over-tid.
+function ordersPeriodToRange(p: Period): { from: string | null; to: string | null } {
+  const todayStart = barDayStart(new Date());
+  const minus = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() - n);
+    return x;
+  };
+  switch (p) {
+    case "today": {
+      const w = barDayWindow(todayStart);
+      return { from: w.from.toISOString(), to: w.to.toISOString() };
+    }
+    case "yesterday": {
+      const w = barDayWindow(minus(todayStart, 1));
+      return { from: w.from.toISOString(), to: w.to.toISOString() };
+    }
+    case "week": {
+      const w0 = barDayWindow(minus(todayStart, 6));
+      const w1 = barDayWindow(todayStart);
+      return { from: w0.from.toISOString(), to: w1.to.toISOString() };
+    }
+    case "month": {
+      const w0 = barDayWindow(minus(todayStart, 29));
+      const w1 = barDayWindow(todayStart);
+      return { from: w0.from.toISOString(), to: w1.to.toISOString() };
+    }
+    case "all":
+    default:
+      return { from: null, to: null };
+  }
+}
+
+// X-akse-streger i hele/halve timer (I dag / I går).
+function hourTicks(minMs: number, maxMs: number): number[] {
+  const spanH = (maxMs - minMs) / HOUR_MS;
+  const stepMin = spanH <= 4 ? 30 : spanH <= 8 ? 60 : 120;
+  const step = stepMin * MIN_MS;
+  const base = new Date(minMs);
+  base.setMinutes(stepMin === 30 ? (base.getMinutes() < 30 ? 0 : 30) : 0, 0, 0);
+  const ticks: number[] = [];
+  for (let t = base.getTime(); t <= maxMs; t += step) {
+    if (t >= minMs) ticks.push(t);
+  }
+  return ticks;
+}
+
+// X-akse-streger i hele dage (7 dage / 30 dage / al tid), ca. 7 streger.
+function dayTicks(minMs: number, maxMs: number): number[] {
+  const spanDays = Math.max(1, Math.round((maxMs - minMs) / DAY_MS));
+  const stepDays = Math.max(1, Math.ceil(spanDays / 7));
+  const start = new Date(minMs);
+  start.setHours(12, 0, 0, 0);
+  let t = start.getTime();
+  if (t < minMs) t += DAY_MS;
+  const ticks: number[] = [];
+  for (; t <= maxMs; t += stepDays * DAY_MS) ticks.push(t);
+  return ticks;
+}
+
 // ── 4. Bestillinger over tid ────────────────────────────────────────────────
 function OrdersOverTimeChart() {
   const [period, setPeriod] = useState<Period>("all");
-  const range = useMemo(() => periodToRange(period), [period]);
+  const range = useMemo(() => ordersPeriodToRange(period), [period]);
   const fn = useServerFn(getOrdersOverTime);
   const clearFn = useServerFn(clearOrderLog);
   const qc = useQueryClient();
@@ -307,17 +397,67 @@ function OrdersOverTimeChart() {
     }
   }
 
-  const formatX = (key: string) => {
-    // key er enten YYYY-MM-DD eller YYYY-MM-DDTHH:00
-    if (key.includes("T")) {
-      // Time-format
-      return key.slice(11, 16); // HH:MM
+  const isHourly = period === "today" || period === "yesterday";
+
+  const { points, domain, ticks } = useMemo(() => {
+    const rows = (data ?? []) as { t: string; q: number }[];
+    if (rows.length === 0) {
+      return { points: [], domain: [0, 1] as [number, number], ticks: [] as number[] };
     }
-    const [, m, d] = key.split("-");
-    return `${d}/${m}`;
+
+    if (isHourly) {
+      // Ét punkt pr. bestilling, på dens eksakte tid.
+      const pts = rows
+        .map((r) => ({ t: new Date(r.t).getTime(), y: r.q }))
+        .sort((a, b) => a.t - b.t);
+      let min = pts[0].t;
+      let max = pts[pts.length - 1].t;
+      if (min === max) {
+        min -= 30 * MIN_MS;
+        max += 30 * MIN_MS;
+      }
+      return { points: pts, domain: [min, max] as [number, number], ticks: hourTicks(min, max) };
+    }
+
+    // 7 dage / 30 dage / al tid: ét punkt pr. bar-døgn med bestillinger.
+    const byDay = new Map<string, number>();
+    for (const r of rows) {
+      const k = barDayKey(new Date(r.t));
+      byDay.set(k, (byDay.get(k) ?? 0) + r.q);
+    }
+    const pts = Array.from(byDay.entries())
+      .map(([key, y]) => {
+        const [yy, mm, dd] = key.split("-").map(Number);
+        const noon = new Date(yy, mm - 1, dd, 12, 0, 0, 0).getTime();
+        return { t: noon, y };
+      })
+      .sort((a, b) => a.t - b.t);
+
+    let min: number;
+    let max: number;
+    if (period === "all") {
+      min = pts[0].t;
+      max = pts[pts.length - 1].t;
+      if (min === max) {
+        min -= 12 * HOUR_MS;
+        max += 12 * HOUR_MS;
+      }
+    } else {
+      // Fast vindue, så 1 dag = 1/7 (uge) hhv. 1/30 (måned) af aksen.
+      min = new Date(range.from!).getTime();
+      max = new Date(range.to!).getTime();
+    }
+    return { points: pts, domain: [min, max] as [number, number], ticks: dayTicks(min, max) };
+  }, [data, isHourly, period, range.from, range.to]);
+
+  const fmtTick = (ms: number) => {
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    if (isHourly) return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getDate()}/${d.getMonth() + 1}`;
   };
 
-  const total = (data ?? []).reduce((s, d) => s + d.count, 0);
+  const total = ((data ?? []) as { q: number }[]).reduce((s, r) => s + r.q, 0);
 
   return (
     <div>
@@ -330,33 +470,42 @@ function OrdersOverTimeChart() {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Indlæser...</p>
-      ) : !data || data.length === 0 ? (
+      ) : points.length === 0 ? (
         <Empty />
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={data} margin={{ left: 0, right: 16, top: 4, bottom: 4 }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={points} margin={{ left: 0, right: 16, top: 8, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
-              dataKey="bucket"
-              tickFormatter={formatX}
+              dataKey="t"
+              type="number"
+              scale="time"
+              domain={domain}
+              ticks={ticks}
+              tickFormatter={fmtTick}
               tick={{ fontSize: 11 }}
-              interval="preserveStartEnd"
+              allowDataOverflow
             />
-            <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 12 }} width={28} />
             <Tooltip
-              labelFormatter={(l: string) => {
-                if (l.includes("T")) {
-                  const [date, time] = l.split("T");
-                  const [y, m, d] = date.split("-");
-                  return `${d}/${m}/${y} kl. ${time.slice(0, 5)}`;
-                }
-                const [y, m, d] = l.split("-");
-                return `${d}/${m}/${y}`;
+              labelFormatter={(ms: number) => {
+                const d = new Date(Number(ms));
+                const pad = (n: number) => String(n).padStart(2, "0");
+                const date = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+                return isHourly ? `${date} kl. ${pad(d.getHours())}:${pad(d.getMinutes())}` : date;
               }}
               formatter={(v: number) => [`${v} bestilling${v === 1 ? "" : "er"}`, "Antal"]}
               contentStyle={{ fontSize: 13 }}
             />
-            <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-          </BarChart>
+            <Line
+              type="linear"
+              dataKey="y"
+              stroke="#8b5cf6"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+            />
+          </LineChart>
         </ResponsiveContainer>
       )}
       <ResetButton onReset={handleReset} />
