@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import type { CocktailWithDetails } from "@/lib/cocktails.functions";
-import { Wine } from "lucide-react";
 import { RatingStars } from "@/components/app/rating-stars";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
@@ -66,8 +65,13 @@ export function CocktailCard({
             loading="lazy"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <Wine className="h-10 w-10" />
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+            <img
+              src="/placeholder-cocktail.png"
+              alt="Billede mangler"
+              className="h-1/2 w-auto object-contain opacity-60"
+            />
+            <span className="text-xs text-muted-foreground">Billede er på vej...</span>
           </div>
         )}
       </div>
@@ -79,126 +83,111 @@ export function CocktailCard({
           <h3 className="font-serif text-xl leading-tight">{cocktail.name}</h3>
           {showAvailabilityBadge && (
             missing === 0 ? (
-              <Badge className="bg-primary/20 text-primary hover:bg-primary/20">Klar</Badge>
+              <Badge className="shrink-0 bg-primary/15 text-primary hover:bg-primary/20">Klar</Badge>
             ) : (
-              <Badge variant="secondary">Mangler {missing}</Badge>
+              <Badge variant="outline" className="shrink-0 text-muted-foreground">
+                Mangler {missing}
+              </Badge>
             )
           )}
         </div>
+
         {cocktail.description && (
-          <p className="text-sm text-muted-foreground">{cocktail.description}</p>
+          <p
+            className={cn(
+              "text-sm text-muted-foreground",
+              clickable && "cursor-pointer",
+            )}
+            onClick={onClick}
+          >
+            {cocktail.description}
+          </p>
         )}
-        <RatingStars
-          cocktailId={cocktail.id}
-          avg={cocktail.avg_rating}
-          count={cocktail.rating_count}
-        />
+
         {cocktail.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div
+            className={cn("flex flex-wrap gap-1", clickable && "cursor-pointer")}
+            onClick={onClick}
+          >
             {cocktail.tags.map((t) => (
-              <Badge key={t} variant="outline" className="text-xs">
+              <Badge key={t} variant="secondary" className="text-xs">
                 {t}
               </Badge>
             ))}
           </div>
         )}
 
-        {/* Multiplier — kun i bartender-visning (showMultiplier) */}
-        {showMultiplier && !compact && (
-          <div
-            className="flex flex-wrap items-center gap-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span className="text-xs font-medium text-muted-foreground">Antal:</span>
-            {PRESETS.map((n) => (
+        {showMultiplier && (
+          <div className="flex flex-wrap items-center gap-2">
+            {PRESETS.map((p) => (
               <button
-                key={n}
+                key={p}
                 type="button"
                 onClick={() => {
-                  setMultiplier(n);
+                  setMultiplier(p);
                   setCustomText("");
                 }}
                 className={cn(
-                  "rounded-md border px-2.5 py-1 text-sm transition",
-                  multiplier === n && customText === ""
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground",
+                  "rounded border px-2 py-0.5 text-xs transition",
+                  multiplier === p && customText === ""
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground hover:border-primary/50",
                 )}
               >
-                ×{n}
+                {p}×
               </button>
             ))}
             <Input
               type="text"
               inputMode="numeric"
+              placeholder="Andet"
               value={customText}
               onChange={(e) => {
                 const raw = e.target.value.replace(/[^0-9]/g, "");
                 setCustomText(raw);
-                if (raw === "") {
-                  setMultiplier(1);
-                  return;
-                }
-                const v = parseInt(raw, 10);
-                if (Number.isFinite(v) && v >= 1) setMultiplier(Math.min(v, MAX_MULTIPLIER));
+                const n = Number(raw);
+                if (raw && n >= 1 && n <= MAX_MULTIPLIER) setMultiplier(n);
               }}
-              placeholder="Andet"
-              aria-label="Andet antal"
-              className="h-8 w-16"
+              className="h-6 w-16 px-2 text-xs"
             />
           </div>
         )}
 
-        {compact ? (
-          <p className="text-sm text-foreground/90">
-            {cocktail.ingredients.map((i) => i.name).join(", ")}
-          </p>
-        ) : (
-          <ul className="space-y-1 text-sm">
-            {cocktail.ingredients.map((i) => (
-              <li
-                key={i.ingredient_id}
-                className={
-                  i.available
-                    ? "flex justify-between text-foreground/90"
-                    : "flex justify-between text-muted-foreground line-through"
-                }
-              >
-                <span>{i.name}</span>
-                <span className="tabular-nums">
-                  {fmt(i.amount, i.unit, showMultiplier ? multiplier : 1)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {missing > 0 && (
-          <p className="text-xs text-accent">
-            Mangler: {cocktail.missing.join(", ")}
-          </p>
-        )}
-        {!compact && (cocktail.glass || cocktail.garnish) && (
-          <div className="grid grid-cols-2 gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
-            {cocktail.glass && (
-              <div>
-                <div className="font-medium text-foreground/70">Glas</div>
-                <div>{cocktail.glass}</div>
-              </div>
-            )}
-            {cocktail.garnish && (
-              <div>
-                <div className="font-medium text-foreground/70">Pynt</div>
-                <div>{cocktail.garnish}</div>
-              </div>
-            )}
-          </div>
-        )}
-        {!compact && cocktail.instructions && (
-          <p className="whitespace-pre-line border-t border-border pt-2 text-sm text-foreground/80">
-            {cocktail.instructions}
-          </p>
-        )}
-        {footerSlot && <div className="mt-auto pt-1">{footerSlot}</div>}
+        <div className="mt-auto space-y-2">
+          {cocktail.ingredients.length > 0 && (
+            <ul
+              className={cn("space-y-0.5 text-sm", clickable && "cursor-pointer")}
+              onClick={onClick}
+            >
+              {cocktail.ingredients.map((i) => (
+                <li
+                  key={i.ingredient_id}
+                  className={cn(
+                    "flex justify-between gap-2",
+                    !i.available && "text-muted-foreground line-through",
+                  )}
+                >
+                  <span>{i.name}</span>
+                  {(i.amount != null || i.unit) && (
+                    <span className="shrink-0 text-muted-foreground">
+                      {fmt(i.amount, i.unit, multiplier)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!compact && (
+            <RatingStars
+              cocktailId={cocktail.id}
+              avg={cocktail.avg_rating}
+              count={cocktail.rating_count}
+            />
+          )}
+
+          {footerSlot}
+        </div>
       </div>
     </Card>
   );
