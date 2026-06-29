@@ -69,7 +69,7 @@ export function CocktailCard({
             <img
               src="/placeholder-cocktail.png"
               alt="Billede mangler"
-              className="h-1/2 w-auto object-contain opacity-60"
+              className="h-2/3 w-auto object-contain opacity-100"
             />
             <span className="text-xs text-muted-foreground">Billede er på vej...</span>
           </div>

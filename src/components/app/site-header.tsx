@@ -34,7 +34,7 @@ const authNavItems = [
   { to: "/admin" as const, label: "Admin", exact: false },
 ] as const;
 
-function useScrolled(threshold = 60) {
+function useScrolled(threshold = 0) {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -50,7 +50,7 @@ function useScrolled(threshold = 60) {
 export function SiteHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
-  const scrolled = useScrolled(60);
+  const scrolled = useScrolled(0);
 
   const { data } = useQuery({
     queryKey: ["site-settings"],
@@ -67,8 +67,8 @@ export function SiteHeader() {
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
   // Kompakt: logo/tekst skaleres til ~70% af original
-  const compactLogoSize = Math.round(logoSize * 0.7);
-  const compactTextSize = Math.round(textSize * 0.7);
+  const compactLogoSize = Math.round(logoSize * 0.5);
+  const compactTextSize = Math.round(textSize * 0.5);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur transition-all duration-300">
