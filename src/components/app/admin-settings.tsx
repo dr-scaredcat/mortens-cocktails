@@ -148,7 +148,6 @@ export function AdminSettings() {
     setCompressing(true);
     setCompressProgress("Henter billedeliste...");
     try {
-      // List alle filer i bucketet
       const { data: files, error: listErr } = await supabase.storage
         .from("cocktail-images")
         .list("", { limit: 1000 });
@@ -168,32 +167,22 @@ export function AdminSettings() {
       let failed = 0;
 
       for (const file of imageFiles) {
-        setCompressProgress(`Komprimerer ${done + 1} / ${imageFiles.length}: ${file.name}`);
+        setCompressProgress(`Komprimerer ${done + skipped + failed + 1} / ${imageFiles.length}: ${file.name}`);
         try {
-          // Hent billedet som blob
           const { data: dlData, error: dlErr } = await supabase.storage
             .from("cocktail-images")
             .download(file.name);
           if (dlErr || !dlData) { failed++; continue; }
 
           const originalSize = dlData.size;
-
-          // Konvertér til File-objekt så compressImage kan bruge det
           const originalFile = new File([dlData], file.name, { type: dlData.type || "image/jpeg" });
-
-          // Komprimer
           const compressed = await compressImage(originalFile);
 
-          // Spring over hvis ikke mindst 10% mindre (undgå at re-uploade allerede komprimerede)
           if (compressed.size >= originalSize * 0.9) { skipped++; continue; }
 
-          // Upload tilbage med samme filnavn (upsert)
           const { error: upErr } = await supabase.storage
             .from("cocktail-images")
-            .upload(file.name, compressed, {
-              upsert: true,
-              contentType: "image/jpeg",
-            });
+            .upload(file.name, compressed, { upsert: true, contentType: "image/jpeg" });
           if (upErr) { failed++; continue; }
 
           done++;
@@ -332,6 +321,44 @@ export function AdminSettings() {
 
   return (
     <div className="space-y-10">
+      {/* Bestillinger */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Bestillinger
+        </h2>
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label className="text-base">Tillad bestillinger</Label>
+              <p className="text-sm text-muted-foreground">
+                Når slået til kan gæster bestille cocktails fra menukortet.
+              </p>
+            </div>
+            <Switch
+              checked={orderingData?.enabled ?? true}
+              onCheckedChange={toggle}
+              disabled={orderingLoading}
+            />
+          </div>
+        </Card>
+      </section>
+
+      {/* Kategorier */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Kategorier
+        </h2>
+        <AdminCategories />
+      </section>
+
+      {/* Temaer */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Tema
+        </h2>
+        <AdminThemes />
+      </section>
+
       {/* Sidenavn + logo-indstillinger */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
@@ -499,53 +526,7 @@ export function AdminSettings() {
         </Card>
       </section>
 
-      {/* Bestillinger */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Bestillinger
-        </h2>
-        <Card className="p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Label className="text-base">Tillad bestillinger</Label>
-              <p className="text-sm text-muted-foreground">
-                Når slået til kan gæster bestille cocktails fra menukortet.
-              </p>
-            </div>
-            <Switch
-              checked={orderingData?.enabled ?? true}
-              onCheckedChange={toggle}
-              disabled={orderingLoading}
-            />
-          </div>
-        </Card>
-      </section>
-
-      {/* Temaer */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Tema
-        </h2>
-        <AdminThemes />
-      </section>
-
-      {/* Kategorier */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Kategorier
-        </h2>
-        <AdminCategories />
-      </section>
-
-      {/* Brugere */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Brugere
-        </h2>
-        <AdminUsers />
-      </section>
-
-      {/* Billedkomprimering */}
+      {/* Billeder */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
           Billeder
@@ -572,6 +553,13 @@ export function AdminSettings() {
           </div>
         </Card>
       </section>
+
+      {/* Brugere */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Brugere
+        </h2>
+        <AdminUsers />
+      </section>
     </div>
   );
-}
