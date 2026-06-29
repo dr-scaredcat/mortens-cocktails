@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,23 +33,9 @@ const authNavItems = [
   { to: "/admin" as const, label: "Admin", exact: false },
 ] as const;
 
-function useScrolled(threshold = 0) {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > threshold);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [threshold]);
-
-  return scrolled;
-}
-
 export function SiteHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
-  const scrolled = useScrolled(4);
 
   const { data } = useQuery({
     queryKey: ["site-settings"],
@@ -67,12 +52,9 @@ export function SiteHeader() {
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
-      {/* ── Logo-række — glider OP ud af syne ved scroll ── */}
-      <div
-        className="overflow-hidden transition-all duration-300 ease-in-out"
-        style={{ maxHeight: scrolled ? 0 : 200 }}
-      >
+    <>
+      {/* ── Logo-række — scroller væk naturligt ── */}
+      <div className="border-b border-border bg-background">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <Link
             to="/cocktails"
@@ -114,35 +96,37 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* ── Nav-bar — altid synlig, sticky ── */}
-      <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2 pt-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {publicNavItems.map((n) => (
-          <Link
-            key={n.to}
-            to={n.to}
-            activeOptions={{ exact: n.exact }}
-            className="shrink-0 rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground data-[status=active]:border-primary/40 data-[status=active]:bg-primary/10 data-[status=active]:text-primary"
-          >
-            {n.label}
-          </Link>
-        ))}
+      {/* ── Nav-bar — sticky, bliver stående ── */}
+      <nav className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 py-1.5 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {publicNavItems.map((n) => (
+            <Link
+              key={n.to}
+              to={n.to}
+              activeOptions={{ exact: n.exact }}
+              className="shrink-0 rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground data-[status=active]:border-primary/40 data-[status=active]:bg-primary/10 data-[status=active]:text-primary"
+            >
+              {n.label}
+            </Link>
+          ))}
 
-        {session && (
-          <>
-            <span className="shrink-0 self-center text-border">|</span>
-            {authNavItems.map((n) => (
-              <Link
-                key={n.to}
-                to={n.to}
-                activeOptions={{ exact: n.exact }}
-                className="shrink-0 rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground data-[status=active]:border-primary/40 data-[status=active]:bg-primary/10 data-[status=active]:text-primary"
-              >
-                {n.label}
-              </Link>
-            ))}
-          </>
-        )}
+          {session && (
+            <>
+              <span className="shrink-0 self-center text-border">|</span>
+              {authNavItems.map((n) => (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  activeOptions={{ exact: n.exact }}
+                  className="shrink-0 rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground data-[status=active]:border-primary/40 data-[status=active]:bg-primary/10 data-[status=active]:text-primary"
+                >
+                  {n.label}
+                </Link>
+              ))}
+            </>
+          )}
+        </div>
       </nav>
-    </header>
+    </>
   );
 }
