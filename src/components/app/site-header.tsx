@@ -50,7 +50,7 @@ function useScrolled(threshold = 0) {
 export function SiteHeader() {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
-  const scrolled = useScrolled(60);
+  const scrolled = useScrolled(0);
 
   const { data } = useQuery({
     queryKey: ["site-settings"],
