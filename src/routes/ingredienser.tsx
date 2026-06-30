@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
-import { listIngredients, listCocktails, listCategories } from "@/lib/cocktails.functions";
+import { listIngredients, listCocktails, listCategories, listRecipes, type RecipeWithDetails } from "@/lib/cocktails.functions";
 import { setIngredientAvailable } from "@/lib/admin.functions";
 import { getShoppingList, addToShoppingList, removeFromShoppingList, removeFromShoppingListOnly } from "@/lib/shopping-list.functions";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,7 +19,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/ingredienser")({
   head: () => ({
@@ -31,13 +33,12 @@ export const Route = createFileRoute("/ingredienser")({
   component: IngredientsPage,
 });
 
-type Tab = "alle" | "goer-klar" | "indgaar-flest" | "indkoebsliste";
+type Tab = "alle" | "goer-klar" | "indgaar-flest";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "alle", label: "Alle" },
   { id: "goer-klar", label: "Gør en cocktail klar" },
   { id: "indgaar-flest", label: "Indgår i flest cocktails" },
-  { id: "indkoebsliste", label: "Indkøbsliste" },
 ];
 
 function IngredientsPage() {
@@ -84,6 +85,26 @@ function IngredientsPage() {
     [shoppingListData],
   );
 
+  const { data: recipes } = useQuery({
+    queryKey: ["recipes"],
+    queryFn: () => fetchRecipes(),
+  });
+
+  const recipeByIngredientName = useMemo(() => {
+    const map = new Map<string, RecipeWithDetails>();
+    for (const r of (recipes ?? []) as RecipeWithDetails[]) {
+      map.set(r.name.toLowerCase(), r);
+    }
+    return map;
+  }, [recipes]);
+
+  // Dialog-state: sporg om ingrediens eller opskrift
+  const [recipeDialog, setRecipeDialog] = useState<{
+    ingredientId: string;
+    ingredientName: string;
+    recipe: RecipeWithDetails;
+  } | null>(null);
+
   const canEdit = !!admin?.isAdmin;
 
   const addM = useMutation({
@@ -92,13 +113,9 @@ function IngredientsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const removeM = useMutation({
-    mutationFn: (ingredientId: string) => removeFromList({ data: { ingredientId } }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["shopping-list"] });
-      qc.invalidateQueries({ queryKey: ["ingredients"] });
-      qc.invalidateQueries({ queryKey: ["cocktails"] });
-    },
+  const addManyM = useMutation({
+    mutationFn: (ids: string[]) => addManyToList({ data: { ingredientIds: ids } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shopping-list"] }),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -197,19 +214,7 @@ function IngredientsPage() {
     ? indgaarFlestRows.filter((r) => r.name.toLowerCase().includes(q))
     : indgaarFlestRows;
 
-  // ── Indkøbsliste grupperet efter kategori ─────────────────────────────────
-  const shoppingListGrouped = useMemo(() => {
-    const items = shoppingListData ?? [];
-    const map = new Map<string, typeof items>();
-    for (const row of items) {
-      const cat = row.ingredients?.category ?? "Andet";
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat)!.push(row);
-    }
-    // Sorter kategorier alfabetisk
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b, "da"));
-  }, [shoppingListData]);
-
+  // ── Søgning ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -221,18 +226,16 @@ function IngredientsPage() {
             : "Oversigt over ingredienser. Log ind som admin for at redigere lager."}
         </p>
 
-        {/* Søgefelt — ikke vist på indkøbsliste-fanen */}
-        {tab !== "indkoebsliste" && (
-          <div className="relative mb-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Søg efter ingrediens..."
-              className="pl-9"
-            />
-          </div>
-        )}
+        {/* Søgefelt */}
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søg efter ingrediens..."
+            className="pl-9"
+          />
+        </div>
 
         {/* Fane-vælger — select på mobil, pills på større skærme */}
         <div className="mb-6">
@@ -299,7 +302,7 @@ function IngredientsPage() {
                         <ShoppingListButton
                           ingredientIds={[ing.id]}
                           shoppingListIds={shoppingListIds}
-                          onAdd={() => addM.mutate(ing.id)}
+                          onAdd={() => handleAdd(ing.id, ing.name)}
                           isPending={addM.isPending}
                         />
                       )}
@@ -356,7 +359,7 @@ function IngredientsPage() {
                       <ShoppingListButton
                         ingredientIds={[r.ingredient.id]}
                         shoppingListIds={shoppingListIds}
-                        onAdd={() => addM.mutate(r.ingredient!.id)}
+                        onAdd={() => handleAdd(r.ingredient!.id, r.ingredient!.name)}
                         isPending={addM.isPending}
                       />
                     )}
@@ -407,7 +410,7 @@ function IngredientsPage() {
                       <ShoppingListButton
                         ingredientIds={[r.ingredient.id]}
                         shoppingListIds={shoppingListIds}
-                        onAdd={() => addM.mutate(r.ingredient!.id)}
+                        onAdd={() => handleAdd(r.ingredient!.id, r.ingredient!.name)}
                         isPending={addM.isPending}
                       />
                     )}
@@ -491,6 +494,62 @@ function IngredientsPage() {
             </ul>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog: spørg om ingrediens eller opskrift */}
+        {recipeDialog && (
+          <Dialog open={!!recipeDialog} onOpenChange={(o) => !o && setRecipeDialog(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>{recipeDialog.ingredientName}</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Der findes en opskrift på {recipeDialog.ingredientName}. Vil du tilføje selve
+                ingrediensen eller ingredienserne til at lave den?
+              </p>
+              {recipeDialog.recipe.ingredients.filter((i) => !i.available).length > 0 && (
+                <ul className="mt-1 space-y-0.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  {recipeDialog.recipe.ingredients
+                    .filter((i) => !i.available)
+                    .map((i) => (
+                      <li key={i.ingredient_id} className="text-sm text-muted-foreground">
+                        {i.name}
+                      </li>
+                    ))}
+                </ul>
+              )}
+              {recipeDialog.recipe.ingredients.filter((i) => !i.available).length === 0 && (
+                <p className="text-sm italic text-muted-foreground">
+                  Alle ingredienser til opskriften er allerede på lager.
+                </p>
+              )}
+              <DialogFooter className="flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    addM.mutate(recipeDialog.ingredientId);
+                    setRecipeDialog(null);
+                  }}
+                >
+                  Tilføj {recipeDialog.ingredientName}
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={recipeDialog.recipe.ingredients.filter((i) => !i.available).length === 0}
+                  onClick={() => {
+                    const missing = recipeDialog.recipe.ingredients
+                      .filter((i) => !i.available)
+                      .map((i) => i.ingredient_id);
+                    if (missing.length > 0) addManyM.mutate(missing);
+                    setRecipeDialog(null);
+                  }}
+                >
+                  Tilføj opskriftens ingredienser
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </main>
     </div>
   );

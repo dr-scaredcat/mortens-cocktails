@@ -24,6 +24,7 @@ const publicNavItems = [
   { to: "/cocktails" as const, label: "Cocktails", exact: false },
   { to: "/opskrifter" as const, label: "Opskrifter", exact: false },
   { to: "/ingredienser" as const, label: "Ingredienser", exact: false },
+  { to: "/indkoebsliste" as const, label: "Indkøbsliste", exact: false },
   { to: "/menukort" as const, label: "Menukort", exact: false },
 ] as const;
 
