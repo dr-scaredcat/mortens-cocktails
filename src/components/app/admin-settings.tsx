@@ -29,7 +29,6 @@ import {
   type LogoType,
   type LogoAlign,
 } from "@/lib/orders.functions";
-import { AdminCategories } from "@/components/app/admin-categories";
 import { AdminUsers } from "@/components/app/admin-users";
 import { AdminThemes } from "@/components/app/admin-themes";
 import { BarskabLogo } from "@/components/app/barskab-logo";
@@ -341,14 +340,6 @@ export function AdminSettings() {
             />
           </div>
         </Card>
-      </section>
-
-      {/* Kategorier */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Kategorier
-        </h2>
-        <AdminCategories />
       </section>
 
       {/* Temaer */}
