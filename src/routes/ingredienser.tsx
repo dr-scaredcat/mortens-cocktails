@@ -228,17 +228,6 @@ function IngredientsPage() {
             : "Oversigt over ingredienser. Log ind som admin for at redigere lager."}
         </p>
 
-        {/* Søgefelt */}
-        <div className="relative mb-4">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søg efter ingrediens..."
-            className="pl-9"
-          />
-        </div>
-
         {/* Fane-vælger */}
         <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
           {TABS.map((t) => (
@@ -255,6 +244,17 @@ function IngredientsPage() {
               {t.label}
             </button>
           ))}
+        </div>
+
+        {/* Søgefelt */}
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søg efter ingrediens..."
+            className="pl-9"
+          />
         </div>
 
         {/* ── Fane: Alle ── */}
@@ -433,7 +433,7 @@ function IngredientsPage() {
               </DialogHeader>
               <p className="text-sm text-muted-foreground">
                 Der findes en opskrift på {recipeDialog.ingredientName}. Vil du tilføje selve
-                ingrediensen eller ingredienserne til at lave opskriften?
+                ingrediensen eller ingredienserne til at lave den?
               </p>
               {recipeDialog.recipe.ingredients.filter((i) => !i.available).length > 0 && (
                 <ul className="mt-1 space-y-0.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
