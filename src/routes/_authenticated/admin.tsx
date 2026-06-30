@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/select";
 import { useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
-import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
 import { AdminRecipes } from "@/components/app/admin-recipes";
 import { AdminTags } from "@/components/app/admin-tags";
@@ -21,8 +20,8 @@ import { AdminMenukort } from "@/components/app/admin-menukort";
 import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
 import { AdminStatistik } from "@/components/app/admin-statistik";
-import { AdminSpirits } from "@/components/app/admin-spirits";
-import { AdminSpiritTypes } from "@/components/app/admin-spirit-types";
+import { AdminIngredientsSection } from "@/components/app/admin-ingredients-section";
+import { AdminSpiritsSection } from "@/components/app/admin-spirits-section";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Aston's Bar" }] }),
@@ -35,16 +34,15 @@ function AdminPage() {
   const [tab, setTab] = useState("menukort");
 
   const TABS = [
-    { value: "menukort",      label: "Menukort" },
-    { value: "cocktails",     label: "Cocktails" },
-    { value: "opskrifter",    label: "Opskrifter" },
-    { value: "spiritus",      label: "Spiritus" },
-    { value: "ingredients",   label: "Ingredienser" },
-    { value: "tags",          label: "Tags" },
-    { value: "spiritustyper", label: "Spiritus typer" },
-    { value: "glasses",       label: "Glas" },
-    { value: "garnishes",     label: "Pynt" },
-    { value: "settings",      label: "Indstillinger" },
+    { value: "menukort",    label: "Menukort" },
+    { value: "cocktails",   label: "Cocktails" },
+    { value: "opskrifter",  label: "Opskrifter" },
+    { value: "spiritus",    label: "Spiritus" },
+    { value: "ingredients", label: "Ingredienser" },
+    { value: "tags",        label: "Tags" },
+    { value: "glasses",     label: "Glas" },
+    { value: "garnishes",   label: "Pynt" },
+    { value: "settings",    label: "Indstillinger" },
   ];
 
   return (
@@ -88,16 +86,13 @@ function AdminPage() {
               <AdminRecipes />
             </TabsContent>
             <TabsContent value="spiritus">
-              <AdminSpirits />
+              <AdminSpiritsSection />
             </TabsContent>
             <TabsContent value="ingredients">
-              <AdminIngredients />
+              <AdminIngredientsSection />
             </TabsContent>
             <TabsContent value="tags">
               <AdminTags />
-            </TabsContent>
-            <TabsContent value="spiritustyper">
-              <AdminSpiritTypes />
             </TabsContent>
             <TabsContent value="glasses">
               <AdminGlasses />
