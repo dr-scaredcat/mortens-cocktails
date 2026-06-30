@@ -73,13 +73,15 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
       </div>
 
       {/* ── Nav-bar: Cocktails | Spiritus — sticky, bliver stående ── */}
-      <nav className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur px-4 py-1.5">
-        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="sticky top-0 z-30 border-b border-border bg-background/90 px-4 py-2 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl gap-1 rounded-xl border border-border bg-card p-1 text-sm">
           <Link
             to="/menukort"
             className={cn(
-              "shrink-0 rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground",
-              active === "cocktails" && "border-primary/40 bg-primary/10 text-primary",
+              "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
+              active === "cocktails"
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Cocktails
@@ -87,8 +89,10 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
           <Link
             to="/spiritus"
             className={cn(
-              "shrink-0 rounded-full border border-transparent px-3 py-1 text-muted-foreground hover:text-foreground",
-              active === "spiritus" && "border-primary/40 bg-primary/10 text-primary",
+              "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
+              active === "spiritus"
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Spiritus

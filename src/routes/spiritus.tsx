@@ -166,7 +166,7 @@ function SpiritusPage() {
     [data],
   );
 
-  // Spiritus der matcher søgningen (uden type-filter) — bruges til chip-tællinger.
+  // Spiritus der matcher søgningen (uden type-filter) — bruges til at afgøre hvilke chips der vises.
   const searchPool = useMemo(() => {
     if (!q.trim()) return available;
     const s = q.trim().toLowerCase();
@@ -290,10 +290,7 @@ function SpiritusPage() {
                     variant={active ? "default" : "outline"}
                     className={active ? "bg-primary text-primary-foreground" : ""}
                   >
-                    {tn}{" "}
-                    <span className={active ? "opacity-75" : "text-muted-foreground"}>
-                      ({countByType.get(tn) ?? 0})
-                    </span>
+                    {tn}
                   </Badge>
                 </button>
               );
@@ -306,10 +303,7 @@ function SpiritusPage() {
                     selectedTypes.includes(OTHER_LABEL) ? "bg-primary text-primary-foreground" : ""
                   }
                 >
-                  {OTHER_LABEL}{" "}
-                  <span className={selectedTypes.includes(OTHER_LABEL) ? "opacity-75" : "text-muted-foreground"}>
-                    ({otherCount})
-                  </span>
+                  {OTHER_LABEL}
                 </Badge>
               </button>
             )}
