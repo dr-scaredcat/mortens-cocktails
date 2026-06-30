@@ -5,13 +5,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
 import { listIngredients, listCocktails, listCategories, listRecipes, type RecipeWithDetails } from "@/lib/cocktails.functions";
 import { setIngredientAvailable } from "@/lib/admin.functions";
-import { getShoppingList, addToShoppingList, removeFromShoppingList, removeFromShoppingListOnly } from "@/lib/shopping-list.functions";
+import { getShoppingList, addToShoppingList, addManyToShoppingList } from "@/lib/shopping-list.functions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/use-session";
 import { isAdmin as isAdminFn } from "@/lib/admin.functions";
 import { toast } from "sonner";
-import { Search, ShoppingCart, Check, X } from "lucide-react";
+import { Search } from "lucide-react";
 import type { CocktailWithDetails } from "@/lib/cocktails.functions";
 import { ShoppingListButton } from "@/components/app/shopping-list-button";
 import {
@@ -51,8 +51,8 @@ function IngredientsPage() {
   const fetchCats = useServerFn(listCategories);
   const fetchShoppingList = useServerFn(getShoppingList);
   const addToList = useServerFn(addToShoppingList);
-  const removeFromList = useServerFn(removeFromShoppingList);
-  const removeFromListOnly = useServerFn(removeFromShoppingListOnly);
+  const addManyToList = useServerFn(addManyToShoppingList);
+  const fetchRecipes = useServerFn(listRecipes);
 
   const [tab, setTab] = useState<Tab>("alle");
   const [openName, setOpenName] = useState<string | null>(null);
@@ -98,7 +98,7 @@ function IngredientsPage() {
     return map;
   }, [recipes]);
 
-  // Dialog-state: sporg om ingrediens eller opskrift
+  // Dialog-state: spørg om ingrediens eller opskrift
   const [recipeDialog, setRecipeDialog] = useState<{
     ingredientId: string;
     ingredientName: string;
@@ -119,11 +119,15 @@ function IngredientsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const removeOnlyM = useMutation({
-    mutationFn: (ingredientId: string) => removeFromListOnly({ data: { ingredientId } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["shopping-list"] }),
-    onError: (e: Error) => toast.error(e.message),
-  });
+  // Checker om ingrediensen har en opskrift — spørg i så fald brugeren
+  function handleAdd(ingredientId: string, ingredientName: string) {
+    const recipe = recipeByIngredientName.get(ingredientName.toLowerCase());
+    if (recipe) {
+      setRecipeDialog({ ingredientId, ingredientName, recipe });
+    } else {
+      addM.mutate(ingredientId);
+    }
+  }
 
   const toggle = useMutation({
     mutationFn: (vars: { id: string; available: boolean }) =>
@@ -150,7 +154,7 @@ function IngredientsPage() {
   // ── Fane: Gør en cocktail klar — ingredienser hvor kun den ene mangler ──
   const goerKlarRows = useMemo(() => {
     const list = (cocktails ?? []) as CocktailWithDetails[];
-    const map = new Map<string, string[]>(); // ingrediensnavn → cocktailnavne
+    const map = new Map<string, string[]>();
     for (const c of list) {
       if (c.missing.length === 1) {
         const ingName = c.missing[0];
@@ -171,7 +175,7 @@ function IngredientsPage() {
   // ── Fane: Indgår i flest cocktails — ikke tilgængelige ingredienser sorteret efter brug ──
   const indgaarFlestRows = useMemo(() => {
     const list = (cocktails ?? []) as CocktailWithDetails[];
-    const map = new Map<string, string[]>(); // ingrediensnavn → cocktailnavne
+    const map = new Map<string, string[]>();
     for (const c of list) {
       for (const i of c.ingredients) {
         if (!i.available) {
@@ -184,7 +188,6 @@ function IngredientsPage() {
     return Array.from(map.entries())
       .map(([name, cocktailNames]) => ({
         name,
-        // Deduplicate
         cocktailNames: [...new Set(cocktailNames)].sort((a, b) => a.localeCompare(b, "da")),
         ingredient: (ingredients ?? []).find((i) => i.name === name),
       }))
@@ -214,7 +217,6 @@ function IngredientsPage() {
     ? indgaarFlestRows.filter((r) => r.name.toLowerCase().includes(q))
     : indgaarFlestRows;
 
-  // ── Søgning ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -237,42 +239,22 @@ function IngredientsPage() {
           />
         </div>
 
-        {/* Fane-vælger — select på mobil, pills på større skærme */}
-        <div className="mb-6">
-          {/* Mobil: dropdown */}
-          <select
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium sm:hidden"
-            value={tab}
-            onChange={(e) => { setTab(e.target.value as Tab); setSearch(""); }}
-          >
-            {TABS.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}{t.id === "indkoebsliste" && (shoppingListData ?? []).length > 0 ? ` (${(shoppingListData ?? []).length})` : ""}
-              </option>
-            ))}
-          </select>
-          {/* Større skærme: pill-knapper */}
-          <div className="hidden sm:flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => { setTab(t.id); setSearch(""); }}
-                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  tab === t.id
-                    ? "bg-primary/15 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t.label}
-                {t.id === "indkoebsliste" && (shoppingListData ?? []).length > 0 && (
-                  <span className="ml-1.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs text-primary">
-                    {(shoppingListData ?? []).length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+        {/* Fane-vælger */}
+        <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { setTab(t.id); setSearch(""); }}
+              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                tab === t.id
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* ── Fane: Alle ── */}
@@ -421,59 +403,6 @@ function IngredientsPage() {
           </div>
         )}
 
-        {/* ── Fane: Indkøbsliste ── */}
-        {tab === "indkoebsliste" && (
-          <div>
-            {shoppingListGrouped.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-                Indkøbslisten er tom. Tilføj ingredienser fra de andre faner.
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {shoppingListGrouped.map(([cat, rows]) => (
-                  <section key={cat}>
-                    <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-primary">
-                      {cat}
-                    </h2>
-                    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                      {rows.map((row) => (
-                        <li key={row.ingredient_id} className="flex items-center gap-3 px-4 py-3">
-                          <button
-                            type="button"
-                            disabled={removeM.isPending || !session}
-                            onClick={() => session && removeM.mutate(row.ingredient_id)}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-primary hover:bg-primary/10 hover:text-primary disabled:opacity-40"
-                            title="Marker som købt og tilføj til lager"
-                            aria-label="Marker som købt"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <span className="flex-1 text-sm">{row.ingredients?.name}</span>
-                          <button
-                            type="button"
-                            disabled={removeOnlyM.isPending || !session}
-                            onClick={() => session && removeOnlyM.mutate(row.ingredient_id)}
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:text-destructive disabled:opacity-40"
-                            title="Fjern fra liste (uden at tilføje til lager)"
-                            aria-label="Fjern fra liste"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    {session && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Hak markerer som købt og tilføjer til lageret. Kryds fjerner fra listen uden at tilføje til lager.
-                      </p>
-                    )}
-                  </section>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Dialog: vis cocktails for valgt ingrediens */}
         <Dialog open={!!openName} onOpenChange={(o) => !o && setOpenName(null)}>
           <DialogContent>
@@ -504,7 +433,7 @@ function IngredientsPage() {
               </DialogHeader>
               <p className="text-sm text-muted-foreground">
                 Der findes en opskrift på {recipeDialog.ingredientName}. Vil du tilføje selve
-                ingrediensen eller ingredienserne til at lave den?
+                ingrediensen eller ingredienserne til at lave opskriften?
               </p>
               {recipeDialog.recipe.ingredients.filter((i) => !i.available).length > 0 && (
                 <ul className="mt-1 space-y-0.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
