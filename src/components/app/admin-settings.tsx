@@ -561,4 +561,26 @@ export function AdminSettings() {
               </p>
             </div>
             {compressProgress && (
-              <p className="t
+              <p className="text-sm text-muted-foreground">{compressProgress}</p>
+            )}
+            <Button
+              variant="outline"
+              onClick={compressAllImages}
+              disabled={compressing}
+            >
+              {compressing ? "Komprimerer…" : "Komprimer alle billeder"}
+            </Button>
+          </div>
+        </Card>
+      </section>
+
+      {/* Brugere */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Brugere
+        </h2>
+        <AdminUsers />
+      </section>
+    </div>
+  );
+}
