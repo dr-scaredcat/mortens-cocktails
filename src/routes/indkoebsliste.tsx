@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
-import { listRecipes, type RecipeWithDetails } from "@/lib/cocktails.functions";
+import { listRecipes, listCategories, type RecipeWithDetails } from "@/lib/cocktails.functions";
 import {
   getShoppingList,
   addToShoppingList,
@@ -111,6 +111,12 @@ function IndkoebslistePage() {
     queryFn: () => fetchRecipes(),
   });
 
+  const fetchCats = useServerFn(listCategories);
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => fetchCats(),
+  });
+
   // Map: ingrediensnavn (lowercase) → opskrift
   const recipeByIngredientName = useMemo(() => {
     const map = new Map<string, RecipeWithDetails>();
@@ -155,17 +161,20 @@ function IndkoebslistePage() {
     recipe: RecipeWithDetails;
   } | null>(null);
 
-  // Gruppér efter kategori
+  // Gruppér efter kategori — i admin-rækkefølge (kategoriernes position),
+  // så indkøbslisten vises ens med Ingredienser-siden.
   const grouped = useMemo(() => {
     const items = shoppingListData ?? [];
     const map = new Map<string, typeof items>();
+    for (const c of categories ?? []) map.set(c.name, []);
+    if (!map.has("Andet")) map.set("Andet", []);
     for (const row of items) {
       const cat = row.ingredients?.category ?? "Andet";
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat)!.push(row);
+      const key = map.has(cat) ? cat : "Andet";
+      map.get(key)!.push(row);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b, "da"));
-  }, [shoppingListData]);
+    return Array.from(map.entries()).filter(([, rows]) => rows.length > 0);
+  }, [shoppingListData, categories]);
 
   const total = (shoppingListData ?? []).length;
 
