@@ -26,8 +26,8 @@ import {
 export const Route = createFileRoute("/indkoebsliste")({
   head: () => ({
     meta: [
-      { title: "Indkoebsliste — Aston's Bar" },
-      { name: "description", content: "Din indkoebsliste." },
+      { title: "Indkøbsliste — Aston's Bar" },
+      { name: "description", content: "Din indkøbsliste." },
     ],
   }),
   component: IndkoebslistePage,
@@ -57,8 +57,8 @@ function RecipeSubstDialog({
           <DialogTitle>{ingredientName}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Der findes en opskrift på {ingredientName}. Vil du tilfoeje selve ingrediensen eller
-          ingredienserne til at lave den?
+          Der findes en opskrift på {ingredientName}. Vil du tilføje selve ingrediensen eller
+          ingredienserne til at lave opskriften?
         </p>
         {missingInRecipe.length > 0 && (
           <ul className="mt-1 space-y-0.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
@@ -71,19 +71,19 @@ function RecipeSubstDialog({
         )}
         {missingInRecipe.length === 0 && (
           <p className="text-sm text-muted-foreground italic">
-            Alle ingredienser til opskriften er allerede pa lager.
+            Alle ingredienser til opskriften er allerede på lager.
           </p>
         )}
         <DialogFooter className="flex-col gap-2 sm:flex-row">
           <Button variant="outline" className="flex-1" onClick={onAddIngredient}>
-            Tilfoej {ingredientName}
+            Tilføj {ingredientName}
           </Button>
           <Button
             className="flex-1"
             onClick={onAddRecipeIngredients}
             disabled={missingInRecipe.length === 0}
           >
-            Tilfoej opskriftens ingredienser
+            Tilføj opskriftens ingredienser
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -175,7 +175,7 @@ function IndkoebslistePage() {
       <main className="mx-auto max-w-3xl px-4 py-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-3xl">Indkoebsliste</h1>
+            <h1 className="font-serif text-3xl">Indkøbsliste</h1>
             {total > 0 && (
               <p className="mt-1 text-sm text-muted-foreground">{total} {total === 1 ? "vare" : "varer"}</p>
             )}
@@ -184,10 +184,10 @@ function IndkoebslistePage() {
         </div>
 
         {isLoading ? (
-          <p className="text-muted-foreground">Indlaesser...</p>
+          <p className="text-muted-foreground">Indlæser...</p>
         ) : grouped.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-            Indkoebslisten er tom. Tilfoj ingredienser fra Ingredienser- eller Cocktails-siden.
+            Indkøbslisten er tom. Tilføj ingredienser fra Ingredienser- eller Cocktails-siden.
           </div>
         ) : (
           <div className="space-y-6">
