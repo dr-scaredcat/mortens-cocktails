@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Wine, Martini, AlignStartVertical, AlignCenterVertical, AlignEndVertical, ImagePlus } from "lucide-react";
+import { AlignStartVertical, AlignCenterVertical, AlignEndVertical, ImagePlus } from "lucide-react";
 import {
   getOrderingEnabled,
   setOrderingEnabled,
@@ -20,12 +20,14 @@ import {
   setLogoAlign,
   setLogoType,
   setTextOffsetY,
+  setLogoOffsetY,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
   DEFAULT_LOGO_GAP,
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
   DEFAULT_TEXT_OFFSET_Y,
+  DEFAULT_LOGO_OFFSET_Y,
   type LogoType,
   type LogoAlign,
 } from "@/lib/orders.functions";
@@ -39,8 +41,6 @@ import { compressImage } from "@/lib/image-utils";
 
 const LOGO_OPTIONS: { type: LogoType; label: string }[] = [
   { type: "barskab", label: "Aston" },
-  { type: "martini", label: "Martini" },
-  { type: "wine", label: "Vinglas" },
   { type: "custom", label: "PNG-fil" },
 ];
 
@@ -111,6 +111,7 @@ export function AdminSettings() {
   const updateLogoAlign = useServerFn(setLogoAlign);
   const updateLogoType = useServerFn(setLogoType);
   const updateTextOffsetY = useServerFn(setTextOffsetY);
+  const updateLogoOffsetY = useServerFn(setLogoOffsetY);
   const qc = useQueryClient();
 
   const { data: orderingData, isLoading: orderingLoading } = useQuery({
@@ -138,6 +139,8 @@ export function AdminSettings() {
   const [logoTypeBusy, setLogoTypeBusy] = useState(false);
   const [textOffsetY, setTextOffsetYLocal] = useState(DEFAULT_TEXT_OFFSET_Y);
   const [textOffsetYBusy, setTextOffsetYBusy] = useState(false);
+  const [logoOffsetY, setLogoOffsetYLocal] = useState(DEFAULT_LOGO_OFFSET_Y);
+  const [logoOffsetYBusy, setLogoOffsetYBusy] = useState(false);
 
   // ── Billedkomprimering ──────────────────────────────────────────────────
   const [compressing, setCompressing] = useState(false);
@@ -211,6 +214,7 @@ export function AdminSettings() {
     setLogoAlignLocal(settings.logoAlign);
     setLogoTypeLocal(settings.logoType);
     setTextOffsetYLocal(settings.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y);
+    setLogoOffsetYLocal(settings.logoOffsetY ?? DEFAULT_LOGO_OFFSET_Y);
   }, [settings]);
 
   async function toggle(enabled: boolean) {
@@ -282,11 +286,24 @@ export function AdminSettings() {
     try {
       await updateTextOffsetY({ data: { offset: textOffsetY } });
       qc.invalidateQueries({ queryKey: ["site-settings"] });
-      toast.success("Vertikal afstand gemt");
+      toast.success("Tekstens placering gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
     } finally {
       setTextOffsetYBusy(false);
+    }
+  }
+
+  async function saveLogoOffsetY() {
+    setLogoOffsetYBusy(true);
+    try {
+      await updateLogoOffsetY({ data: { offset: logoOffsetY } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Logoets placering gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setLogoOffsetYBusy(false);
     }
   }
 
@@ -403,8 +420,6 @@ export function AdminSettings() {
                         : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
                     )}
                   >
-                    {type === "martini" && <Martini className="h-6 w-6" />}
-                    {type === "wine" && <Wine className="h-6 w-6" />}
                     {type === "barskab" && <BarskabLogo className="h-6 w-6" />}
                     {type === "custom" && <ImagePlus className="h-6 w-6" />}
                     <span className="text-xs font-medium">{label}</span>
@@ -482,7 +497,16 @@ export function AdminSettings() {
               busy={logoGapBusy}
             />
             <SliderRow
-              label="Afstand vertikalt"
+              label="Logo lodret placering"
+              value={logoOffsetY}
+              min={-60}
+              max={60}
+              onChange={setLogoOffsetYLocal}
+              onSave={saveLogoOffsetY}
+              busy={logoOffsetYBusy}
+            />
+            <SliderRow
+              label="Tekst lodret placering"
               value={textOffsetY}
               min={-60}
               max={60}
@@ -500,7 +524,12 @@ export function AdminSettings() {
                 className={cn("flex", alignClass[logoAlign])}
                 style={{ gap: `${logoGap}px` }}
               >
-                <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
+                <span
+                  className="shrink-0"
+                  style={{ position: "relative", top: `${logoOffsetY}px` }}
+                >
+                  <SiteLogo type={logoType} size={logoSize} className="text-primary" />
+                </span>
                 <span
                   className="font-serif leading-none"
                   style={{
@@ -532,26 +561,4 @@ export function AdminSettings() {
               </p>
             </div>
             {compressProgress && (
-              <p className="text-sm text-muted-foreground">{compressProgress}</p>
-            )}
-            <Button
-              variant="outline"
-              onClick={compressAllImages}
-              disabled={compressing}
-            >
-              {compressing ? "Komprimerer…" : "Komprimer alle billeder"}
-            </Button>
-          </div>
-        </Card>
-      </section>
-
-      {/* Brugere */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Brugere
-        </h2>
-        <AdminUsers />
-      </section>
-    </div>
-  );
-}
+              <p className="t

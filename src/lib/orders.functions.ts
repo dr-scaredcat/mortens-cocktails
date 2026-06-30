@@ -193,6 +193,7 @@ export const DEFAULT_LOGO_GAP = 10;
 export const DEFAULT_LOGO_ALIGN: LogoAlign = "center";
 export const DEFAULT_LOGO_TYPE: LogoType = "barskab";
 export const DEFAULT_TEXT_OFFSET_Y = 0;
+export const DEFAULT_LOGO_OFFSET_Y = 0;
 
 export const setLogoSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -278,6 +279,20 @@ export const setTextOffsetY = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setLogoOffsetY = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { offset: number }) =>
+    z.object({ offset: z.number().int().min(-60).max(60) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_offset_y", value: data.offset as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // =================== Samlet header-konfiguration ===================
 // Ét DB-kald der henter alle header-/logo-indstillinger på én gang, så
 // headeren ikke laver seks separate round-trips pr. sideindlæsning.
@@ -290,6 +305,7 @@ export type SiteSettings = {
   logoAlign: LogoAlign;
   logoType: LogoType;
   textOffsetY: number;
+  logoOffsetY: number;
 };
 
 export const getSiteSettings = createServerFn({ method: "GET" }).handler(
@@ -298,7 +314,7 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const { data, error } = await sb
       .from("app_settings")
       .select("key, value")
-      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y"]);
+      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y", "logo_offset_y"]);
     if (error) throw new Error(error.message);
 
     const map = new Map((data ?? []).map((r) => [r.key, r.value]));
@@ -321,6 +337,8 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
       logoAlign: validAlign.includes(alignVal as LogoAlign) ? (alignVal as LogoAlign) : DEFAULT_LOGO_ALIGN,
       logoType: validType.includes(typeVal as LogoType) ? (typeVal as LogoType) : DEFAULT_LOGO_TYPE,
       textOffsetY: num(map.get("text_offset_y"), DEFAULT_TEXT_OFFSET_Y),
+      logoOffsetY: num(map.get("logo_offset_y"), DEFAULT_LOGO_OFFSET_Y),
     };
   },
 );
+  

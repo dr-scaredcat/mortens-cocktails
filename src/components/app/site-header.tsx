@@ -14,6 +14,7 @@ import {
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
   DEFAULT_TEXT_OFFSET_Y,
+  DEFAULT_LOGO_OFFSET_Y,
 } from "@/lib/orders.functions";
 import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function SiteHeader() {
   const logoAlign = data?.logoAlign ?? DEFAULT_LOGO_ALIGN;
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
+  const logoOffsetY = data?.logoOffsetY ?? DEFAULT_LOGO_OFFSET_Y;
 
   return (
     <>
@@ -65,11 +67,16 @@ export function SiteHeader() {
             )}
             style={{ gap: logoGap }}
           >
-            <SiteLogo
-              type={logoType}
-              size={logoSize}
-              className="shrink-0 text-primary"
-            />
+            <span
+              className="shrink-0"
+              style={{ position: "relative", top: logoOffsetY }}
+            >
+              <SiteLogo
+                type={logoType}
+                size={logoSize}
+                className="text-primary"
+              />
+            </span>
             <span
               className="leading-none"
               style={{ fontSize: textSize, position: "relative", top: textOffsetY }}
