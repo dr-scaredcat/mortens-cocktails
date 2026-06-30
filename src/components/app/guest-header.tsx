@@ -15,6 +15,7 @@ import {
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
   DEFAULT_TEXT_OFFSET_Y,
+  DEFAULT_LOGO_OFFSET_Y,
 } from "@/lib/orders.functions";
 
 const alignClass = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -36,6 +37,7 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
   const logoAlign = data?.logoAlign ?? DEFAULT_LOGO_ALIGN;
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
+  const logoOffsetY = data?.logoOffsetY ?? DEFAULT_LOGO_OFFSET_Y;
 
   return (
     <>
@@ -49,11 +51,12 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
             )}
             style={{ gap: logoGap }}
           >
-            <SiteLogo
-              size={logoSize}
-              type={logoType}
-              className="shrink-0 text-primary"
-            />
+            <span
+              className="shrink-0"
+              style={{ position: "relative", top: logoOffsetY }}
+            >
+              <SiteLogo size={logoSize} type={logoType} className="text-primary" />
+            </span>
             <span
               className="font-serif"
               style={{ fontSize: textSize, position: "relative", top: textOffsetY }}
