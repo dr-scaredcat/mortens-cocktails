@@ -258,8 +258,8 @@ function CocktailsPage() {
                   <DialogTitle>{current.ingredientName}</DialogTitle>
                 </DialogHeader>
                 <p className="text-sm text-muted-foreground">
-                  Der findes en opskrift pa {current.ingredientName}. Vil du tilfoeje selve
-                  ingrediensen eller ingredienserne til at lave den?
+                  Der findes en opskrift på {current.ingredientName}. Vil du tilføje selve
+                  ingrediensen eller ingredienserne til at lave opskriften?
                   {recipeDialog.pending.length > 1 && (
                     <span className="ml-1 text-xs">
                       ({recipeDialog.currentIdx + 1}/{recipeDialog.pending.length})
@@ -277,19 +277,19 @@ function CocktailsPage() {
                 )}
                 {missingInRecipe.length === 0 && (
                   <p className="text-sm italic text-muted-foreground">
-                    Alle ingredienser til opskriften er allerede pa lager.
+                    Alle ingredienser til opskriften er allerede på lager.
                   </p>
                 )}
                 <DialogFooter className="flex-col gap-2 sm:flex-row">
                   <Button variant="outline" className="flex-1" onClick={() => handleRecipeChoice(false)}>
-                    Tilfoej {current.ingredientName}
+                    Tilføj {current.ingredientName}
                   </Button>
                   <Button
                     className="flex-1"
                     disabled={missingInRecipe.length === 0}
                     onClick={() => handleRecipeChoice(true)}
                   >
-                    Tilfoej opskriftens ingredienser
+                    Tilføj opskriftens ingredienser
                   </Button>
                 </DialogFooter>
               </DialogContent>
