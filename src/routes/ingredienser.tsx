@@ -3,15 +3,15 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
-import { listIngredients, listCocktails, listCategories } from "@/lib/cocktails.functions";
+import { listIngredients, listCocktails, listCategories, listRecipes, type RecipeWithDetails } from "@/lib/cocktails.functions";
 import { setIngredientAvailable } from "@/lib/admin.functions";
-import { getShoppingList, addToShoppingList, removeFromShoppingList } from "@/lib/shopping-list.functions";
+import { getShoppingList, addToShoppingList, addManyToShoppingList } from "@/lib/shopping-list.functions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/use-session";
 import { isAdmin as isAdminFn } from "@/lib/admin.functions";
 import { toast } from "sonner";
-import { Search, ShoppingCart, Check } from "lucide-react";
+import { Search, ShoppingCart } from "lucide-react";
 import type { CocktailWithDetails } from "@/lib/cocktails.functions";
 import { ShoppingListButton } from "@/components/app/shopping-list-button";
 import {
@@ -19,7 +19,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/ingredienser")({
   head: () => ({
@@ -31,13 +33,12 @@ export const Route = createFileRoute("/ingredienser")({
   component: IngredientsPage,
 });
 
-type Tab = "alle" | "goer-klar" | "indgaar-flest" | "indkoebsliste";
+type Tab = "alle" | "goer-klar" | "indgaar-flest";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "alle", label: "Alle" },
   { id: "goer-klar", label: "Gør en cocktail klar" },
   { id: "indgaar-flest", label: "Indgår i flest cocktails" },
-  { id: "indkoebsliste", label: "Indkøbsliste" },
 ];
 
 function IngredientsPage() {
@@ -50,7 +51,8 @@ function IngredientsPage() {
   const fetchCats = useServerFn(listCategories);
   const fetchShoppingList = useServerFn(getShoppingList);
   const addToList = useServerFn(addToShoppingList);
-  const removeFromList = useServerFn(removeFromShoppingList);
+  const addManyToList = useServerFn(addManyToShoppingList);
+  const fetchRecipes = useServerFn(listRecipes);
 
   const [tab, setTab] = useState<Tab>("alle");
   const [openName, setOpenName] = useState<string | null>(null);
@@ -83,6 +85,26 @@ function IngredientsPage() {
     [shoppingListData],
   );
 
+  const { data: recipes } = useQuery({
+    queryKey: ["recipes"],
+    queryFn: () => fetchRecipes(),
+  });
+
+  const recipeByIngredientName = useMemo(() => {
+    const map = new Map<string, RecipeWithDetails>();
+    for (const r of (recipes ?? []) as RecipeWithDetails[]) {
+      map.set(r.name.toLowerCase(), r);
+    }
+    return map;
+  }, [recipes]);
+
+  // Dialog-state: sporg om ingrediens eller opskrift
+  const [recipeDialog, setRecipeDialog] = useState<{
+    ingredientId: string;
+    ingredientName: string;
+    recipe: RecipeWithDetails;
+  } | null>(null);
+
   const canEdit = !!admin?.isAdmin;
 
   const addM = useMutation({
@@ -91,15 +113,21 @@ function IngredientsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const removeM = useMutation({
-    mutationFn: (ingredientId: string) => removeFromList({ data: { ingredientId } }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["shopping-list"] });
-      qc.invalidateQueries({ queryKey: ["ingredients"] });
-      qc.invalidateQueries({ queryKey: ["cocktails"] });
-    },
+  const addManyM = useMutation({
+    mutationFn: (ids: string[]) => addManyToList({ data: { ingredientIds: ids } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shopping-list"] }),
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // Checker om ingrediensen har en opskrift — sporg i sa fald brugeren
+  function handleAdd(ingredientId: string, ingredientName: string) {
+    const recipe = recipeByIngredientName.get(ingredientName.toLowerCase());
+    if (recipe) {
+      setRecipeDialog({ ingredientId, ingredientName, recipe });
+    } else {
+      addM.mutate(ingredientId);
+    }
+  }
 
   const toggle = useMutation({
     mutationFn: (vars: { id: string; available: boolean }) =>
@@ -190,19 +218,7 @@ function IngredientsPage() {
     ? indgaarFlestRows.filter((r) => r.name.toLowerCase().includes(q))
     : indgaarFlestRows;
 
-  // ── Indkøbsliste grupperet efter kategori ─────────────────────────────────
-  const shoppingListGrouped = useMemo(() => {
-    const items = shoppingListData ?? [];
-    const map = new Map<string, typeof items>();
-    for (const row of items) {
-      const cat = row.ingredients?.category ?? "Andet";
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat)!.push(row);
-    }
-    // Sorter kategorier alfabetisk
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b, "da"));
-  }, [shoppingListData]);
-
+  // ── Søgning ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -214,18 +230,16 @@ function IngredientsPage() {
             : "Oversigt over ingredienser. Log ind som admin for at redigere lager."}
         </p>
 
-        {/* Søgefelt — ikke vist på indkøbsliste-fanen */}
-        {tab !== "indkoebsliste" && (
-          <div className="relative mb-4">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Søg efter ingrediens..."
-              className="pl-9"
-            />
-          </div>
-        )}
+        {/* Søgefelt */}
+        <div className="relative mb-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søg efter ingrediens..."
+            className="pl-9"
+          />
+        </div>
 
         {/* Fane-vælger */}
         <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
@@ -233,7 +247,7 @@ function IngredientsPage() {
             <button
               key={t.id}
               type="button"
-              onClick={() => { setTab(t.id); setSearch(""); }}
+              onClick={() => { setTab(t.id as Tab); setSearch(""); }}
               className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 tab === t.id
                   ? "bg-primary/15 text-primary"
@@ -241,11 +255,6 @@ function IngredientsPage() {
               }`}
             >
               {t.label}
-              {t.id === "indkoebsliste" && (shoppingListData ?? []).length > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary/20 px-1.5 py-0.5 text-xs text-primary">
-                  {(shoppingListData ?? []).length}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -277,7 +286,7 @@ function IngredientsPage() {
                         <ShoppingListButton
                           ingredientIds={[ing.id]}
                           shoppingListIds={shoppingListIds}
-                          onAdd={() => addM.mutate(ing.id)}
+                          onAdd={() => handleAdd(ing.id, ing.name)}
                           isPending={addM.isPending}
                         />
                       )}
@@ -334,7 +343,7 @@ function IngredientsPage() {
                       <ShoppingListButton
                         ingredientIds={[r.ingredient.id]}
                         shoppingListIds={shoppingListIds}
-                        onAdd={() => addM.mutate(r.ingredient!.id)}
+                        onAdd={() => handleAdd(r.ingredient!.id, r.ingredient!.name)}
                         isPending={addM.isPending}
                       />
                     )}
@@ -385,56 +394,13 @@ function IngredientsPage() {
                       <ShoppingListButton
                         ingredientIds={[r.ingredient.id]}
                         shoppingListIds={shoppingListIds}
-                        onAdd={() => addM.mutate(r.ingredient!.id)}
+                        onAdd={() => handleAdd(r.ingredient!.id, r.ingredient!.name)}
                         isPending={addM.isPending}
                       />
                     )}
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
-        )}
-
-        {/* ── Fane: Indkøbsliste ── */}
-        {tab === "indkoebsliste" && (
-          <div>
-            {shoppingListGrouped.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-                Indkøbslisten er tom. Tilføj ingredienser fra de andre faner.
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {shoppingListGrouped.map(([cat, rows]) => (
-                  <section key={cat}>
-                    <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-primary">
-                      {cat}
-                    </h2>
-                    <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-                      {rows.map((row) => (
-                        <li key={row.ingredient_id} className="flex items-center gap-3 px-4 py-3">
-                          <button
-                            type="button"
-                            disabled={removeM.isPending || !session}
-                            onClick={() => session && removeM.mutate(row.ingredient_id)}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:border-primary hover:bg-primary/10 hover:text-primary disabled:opacity-40"
-                            title="Marker som købt"
-                            aria-label="Marker som købt"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <span className="flex-1 text-sm">{row.ingredients?.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {session && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Tryk ✓ for at markere som købt — ingrediensen tilføjes automatisk til lageret.
-                      </p>
-                    )}
-                  </section>
-                ))}
-              </div>
             )}
           </div>
         )}
@@ -459,28 +425,63 @@ function IngredientsPage() {
             </ul>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog: spørg om ingrediens eller opskrift */}
+        {recipeDialog && (
+          <Dialog open={!!recipeDialog} onOpenChange={(o) => !o && setRecipeDialog(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>{recipeDialog.ingredientName}</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Der findes en opskrift på {recipeDialog.ingredientName}. Vil du tilføje selve
+                ingrediensen eller ingredienserne til at lave den?
+              </p>
+              {recipeDialog.recipe.ingredients.filter((i) => !i.available).length > 0 && (
+                <ul className="mt-1 space-y-0.5 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  {recipeDialog.recipe.ingredients
+                    .filter((i) => !i.available)
+                    .map((i) => (
+                      <li key={i.ingredient_id} className="text-sm text-muted-foreground">
+                        {i.name}
+                      </li>
+                    ))}
+                </ul>
+              )}
+              {recipeDialog.recipe.ingredients.filter((i) => !i.available).length === 0 && (
+                <p className="text-sm italic text-muted-foreground">
+                  Alle ingredienser til opskriften er allerede på lager.
+                </p>
+              )}
+              <DialogFooter className="flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    addM.mutate(recipeDialog.ingredientId);
+                    setRecipeDialog(null);
+                  }}
+                >
+                  Tilføj {recipeDialog.ingredientName}
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={recipeDialog.recipe.ingredients.filter((i) => !i.available).length === 0}
+                  onClick={() => {
+                    const missing = recipeDialog.recipe.ingredients
+                      .filter((i) => !i.available)
+                      .map((i) => i.ingredient_id);
+                    if (missing.length > 0) addManyM.mutate(missing);
+                    setRecipeDialog(null);
+                  }}
+                >
+                  Tilføj opskriftens ingredienser
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </main>
     </div>
   );
 }
-        <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Fane: Alle ── */}
-        {tab === "alle" && (
-          <div className="space-y-6">
-            {grouped.map(([
