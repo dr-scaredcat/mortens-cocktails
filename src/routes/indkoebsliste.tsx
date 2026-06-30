@@ -227,7 +227,7 @@ function IndkoebslistePage() {
             ))}
             {session && (
               <p className="text-xs text-muted-foreground">
-                Hak markerer som kobt og tilfojer til lageret. Kryds fjerner fra listen.
+                Flueben markerer som købt og tilføjer til lageret. Kryds fjerner fra listen.
               </p>
             )}
           </div>
