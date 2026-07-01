@@ -203,36 +203,16 @@ export const DEFAULT_LOGO_OFFSET_Y = 0;
 export type FontKey =
   | "default"
   | "custom"
-  // Klassisk
-  | "playfair"
-  | "cormorant"
-  | "ebgaramond"
-  | "lora"
-  // Vintage
-  | "cinzel"
-  | "marcellus"
-  | "abril"
-  | "specialelite"
-  // Moderne
-  | "bebas"
-  | "oswald"
-  | "montserrat"
-  | "archivoblack"
-  // Playful
-  | "lobster"
-  | "pacifico"
+  | "permanentmarker"
   | "caveat"
-  | "righteous"
-  | "permanentmarker";
-
-export type FontGroup = "classic" | "vintage" | "modern" | "playful";
+  | "bebas"
+  | "cinzel";
 
 export type FontOption = {
   key: FontKey;
   label: string;
   google: string; // familie-del til Google Fonts css2-URL'en; tom = indlæses ikke
   stack: string;  // CSS font-family; tom = arv tema-standard
-  group?: FontGroup;
 };
 
 // Custom-font konvention: læg en fil i public/ som `custom-font.woff2`.
@@ -241,41 +221,13 @@ export const CUSTOM_FONT_FAMILY = "CustomFont";
 export const CUSTOM_FONT_URL = "/custom-font.woff2";
 
 export const FONT_OPTIONS: FontOption[] = [
-  { key: "default",      label: "Tema-standard",      google: "",                                                    stack: "" },
-  { key: "custom",       label: "Egen font (public)", google: "",                                                    stack: "'CustomFont', serif" },
-
-  // Klassisk
-  { key: "playfair",     label: "Playfair Display",   google: "Playfair+Display:ital,wght@0,400;0,600;0,700;1,400",  stack: "'Playfair Display', serif",   group: "classic" },
-  { key: "cormorant",    label: "Cormorant Garamond", google: "Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400", stack: "'Cormorant Garamond', serif", group: "classic" },
-  { key: "ebgaramond",   label: "EB Garamond",        google: "EB+Garamond:ital,wght@0,400;0,600;0,700;1,400",       stack: "'EB Garamond', serif",        group: "classic" },
-  { key: "lora",         label: "Lora",               google: "Lora:ital,wght@0,400;0,600;0,700;1,400",              stack: "'Lora', serif",               group: "classic" },
-
-  // Vintage
-  { key: "cinzel",       label: "Cinzel",             google: "Cinzel:wght@400;600;700",                             stack: "'Cinzel', serif",             group: "vintage" },
-  { key: "marcellus",    label: "Marcellus",          google: "Marcellus",                                           stack: "'Marcellus', serif",          group: "vintage" },
-  { key: "abril",        label: "Abril Fatface",      google: "Abril+Fatface",                                       stack: "'Abril Fatface', serif",      group: "vintage" },
-  { key: "specialelite", label: "Special Elite",      google: "Special+Elite",                                       stack: "'Special Elite', monospace",  group: "vintage" },
-
-  // Moderne
-  { key: "bebas",        label: "Bebas Neue",         google: "Bebas+Neue",                                          stack: "'Bebas Neue', sans-serif",    group: "modern" },
-  { key: "oswald",       label: "Oswald",             google: "Oswald:wght@400;500;600;700",                         stack: "'Oswald', sans-serif",        group: "modern" },
-  { key: "montserrat",   label: "Montserrat",         google: "Montserrat:ital,wght@0,400;0,600;0,700;1,400",        stack: "'Montserrat', sans-serif",    group: "modern" },
-  { key: "archivoblack", label: "Archivo Black",      google: "Archivo+Black",                                       stack: "'Archivo Black', sans-serif", group: "modern" },
-
-  // Playful
-  { key: "lobster",      label: "Lobster",            google: "Lobster",                                             stack: "'Lobster', cursive",          group: "playful" },
-  { key: "pacifico",     label: "Pacifico",           google: "Pacifico",                                            stack: "'Pacifico', cursive",         group: "playful" },
-  { key: "caveat",       label: "Caveat",             google: "Caveat:wght@400;600;700",                             stack: "'Caveat', cursive",           group: "playful" },
-  { key: "righteous",    label: "Righteous",          google: "Righteous",                                           stack: "'Righteous', sans-serif",     group: "playful" },
-  { key: "permanentmarker", label: "Permanent Marker", google: "Permanent+Marker",                                   stack: "'Permanent Marker', cursive", group: "playful" },
+  { key: "default",         label: "Tema-standard",      google: "",                        stack: "" },
+  { key: "custom",          label: "Egen font (public)", google: "",                        stack: "'CustomFont', serif" },
+  { key: "permanentmarker", label: "Permanent Marker",   google: "Permanent+Marker",        stack: "'Permanent Marker', cursive" },
+  { key: "caveat",          label: "Caveat",             google: "Caveat:wght@400;600;700", stack: "'Caveat', cursive" },
+  { key: "bebas",           label: "Bebas Neue",         google: "Bebas+Neue",              stack: "'Bebas Neue', sans-serif" },
+  { key: "cinzel",          label: "Cinzel",             google: "Cinzel:wght@400;600;700", stack: "'Cinzel', serif" },
 ];
-
-export const FONT_GROUP_LABELS: Record<FontGroup, string> = {
-  classic: "Klassisk",
-  vintage: "Vintage",
-  modern: "Moderne",
-  playful: "Playful",
-};
 
 export const DEFAULT_HEADING_FONT: FontKey = "default";
 export const DEFAULT_LOGO_FONT: FontKey = "default";
