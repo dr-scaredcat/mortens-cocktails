@@ -21,6 +21,11 @@ import {
   setLogoType,
   setTextOffsetY,
   setLogoOffsetY,
+  setHeadingFont,
+  setLogoFont,
+  FONT_OPTIONS,
+  FONT_GROUP_LABELS,
+  fontStack,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
   DEFAULT_LOGO_GAP,
@@ -28,8 +33,12 @@ import {
   DEFAULT_LOGO_TYPE,
   DEFAULT_TEXT_OFFSET_Y,
   DEFAULT_LOGO_OFFSET_Y,
+  DEFAULT_HEADING_FONT,
+  DEFAULT_LOGO_FONT,
   type LogoType,
   type LogoAlign,
+  type FontKey,
+  type FontGroup,
 } from "@/lib/orders.functions";
 import { AdminUsers } from "@/components/app/admin-users";
 import { AdminThemes } from "@/components/app/admin-themes";
@@ -100,6 +109,67 @@ function SliderRow({
   );
 }
 
+const FONT_GROUP_ORDER: FontGroup[] = ["classic", "vintage", "modern", "playful"];
+
+function FontPicker({
+  label,
+  value,
+  onSelect,
+  busy,
+}: {
+  label: string;
+  value: FontKey;
+  onSelect: (key: FontKey) => void;
+  busy: boolean;
+}) {
+  const baseOptions = FONT_OPTIONS.filter((f) => !f.group); // Tema-standard + Egen font
+
+  function renderButton(key: FontKey, btnLabel: string, stack: string) {
+    const isActive = value === key;
+    return (
+      <button
+        key={key}
+        onClick={() => onSelect(key)}
+        disabled={busy}
+        style={{ fontFamily: stack || undefined }}
+        className={cn(
+          "rounded-lg border-2 px-3 py-2 text-sm transition-colors",
+          isActive
+            ? "border-primary bg-primary/10 text-primary"
+            : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+        )}
+      >
+        {btnLabel}
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium">{label}</Label>
+
+      <div className="flex flex-wrap gap-2">
+        {baseOptions.map((f) => renderButton(f.key, f.label, f.stack))}
+      </div>
+
+      {FONT_GROUP_ORDER.map((group) => {
+        const opts = FONT_OPTIONS.filter((f) => f.group === group);
+        if (opts.length === 0) return null;
+        return (
+          <div key={group} className="space-y-1.5">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              {FONT_GROUP_LABELS[group]}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {opts.map((f) => renderButton(f.key, f.label, f.stack))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AdminSettings() {
   const fetchSetting = useServerFn(getOrderingEnabled);
   const updateSetting = useServerFn(setOrderingEnabled);
@@ -112,6 +182,8 @@ export function AdminSettings() {
   const updateLogoType = useServerFn(setLogoType);
   const updateTextOffsetY = useServerFn(setTextOffsetY);
   const updateLogoOffsetY = useServerFn(setLogoOffsetY);
+  const updateHeadingFont = useServerFn(setHeadingFont);
+  const updateLogoFont = useServerFn(setLogoFont);
   const qc = useQueryClient();
 
   const { data: orderingData, isLoading: orderingLoading } = useQuery({
@@ -141,6 +213,10 @@ export function AdminSettings() {
   const [textOffsetYBusy, setTextOffsetYBusy] = useState(false);
   const [logoOffsetY, setLogoOffsetYLocal] = useState(DEFAULT_LOGO_OFFSET_Y);
   const [logoOffsetYBusy, setLogoOffsetYBusy] = useState(false);
+  const [headingFont, setHeadingFontLocal] = useState<FontKey>(DEFAULT_HEADING_FONT);
+  const [headingFontBusy, setHeadingFontBusy] = useState(false);
+  const [logoFont, setLogoFontLocal] = useState<FontKey>(DEFAULT_LOGO_FONT);
+  const [logoFontBusy, setLogoFontBusy] = useState(false);
 
   // ── Billedkomprimering ──────────────────────────────────────────────────
   const [compressing, setCompressing] = useState(false);
@@ -215,6 +291,8 @@ export function AdminSettings() {
     setLogoTypeLocal(settings.logoType);
     setTextOffsetYLocal(settings.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y);
     setLogoOffsetYLocal(settings.logoOffsetY ?? DEFAULT_LOGO_OFFSET_Y);
+    setHeadingFontLocal(settings.headingFont ?? DEFAULT_HEADING_FONT);
+    setLogoFontLocal(settings.logoFont ?? DEFAULT_LOGO_FONT);
   }, [settings]);
 
   async function toggle(enabled: boolean) {
@@ -332,6 +410,34 @@ export function AdminSettings() {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
     } finally {
       setLogoTypeBusy(false);
+    }
+  }
+
+  async function selectHeadingFont(font: FontKey) {
+    setHeadingFontLocal(font);
+    setHeadingFontBusy(true);
+    try {
+      await updateHeadingFont({ data: { font } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Overskrift-skrifttype gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setHeadingFontBusy(false);
+    }
+  }
+
+  async function selectLogoFont(font: FontKey) {
+    setLogoFontLocal(font);
+    setLogoFontBusy(true);
+    try {
+      await updateLogoFont({ data: { font } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Logo-skrifttype gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setLogoFontBusy(false);
     }
   }
 
@@ -467,6 +573,30 @@ export function AdminSettings() {
             </div>
           </div>
 
+          {/* Skrifttyper */}
+          <div className="space-y-4 p-4">
+            <div>
+              <Label className="text-base">Skrifttyper</Label>
+              <p className="text-sm text-muted-foreground">
+                Gælder overskrifter og logo. Logoet kan have sin egen skrifttype.
+              </p>
+            </div>
+
+            <FontPicker
+              label="Overskrifter"
+              value={headingFont}
+              onSelect={selectHeadingFont}
+              busy={headingFontBusy}
+            />
+
+            <FontPicker
+              label="Logo"
+              value={logoFont}
+              onSelect={selectLogoFont}
+              busy={logoFontBusy}
+            />
+          </div>
+
           {/* Sliders */}
           <div className="space-y-5 p-4">
             <SliderRow
@@ -536,12 +666,19 @@ export function AdminSettings() {
                     fontSize: `${textSize}px`,
                     position: "relative",
                     top: `${textOffsetY}px`,
+                    fontFamily: fontStack(logoFont) || undefined,
                   }}
                 >
                   {siteName || "Barskab"}
                 </span>
               </div>
             </div>
+            <p
+              className="mt-2 text-lg"
+              style={{ fontFamily: fontStack(headingFont) || undefined }}
+            >
+              Eksempel på en overskrift
+            </p>
           </div>
         </Card>
       </section>
