@@ -24,7 +24,6 @@ import {
   setHeadingFont,
   setLogoFont,
   FONT_OPTIONS,
-  FONT_GROUP_LABELS,
   fontStack,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
@@ -38,7 +37,6 @@ import {
   type LogoType,
   type LogoAlign,
   type FontKey,
-  type FontGroup,
 } from "@/lib/orders.functions";
 import { AdminUsers } from "@/components/app/admin-users";
 import { AdminThemes } from "@/components/app/admin-themes";
@@ -109,8 +107,6 @@ function SliderRow({
   );
 }
 
-const FONT_GROUP_ORDER: FontGroup[] = ["classic", "vintage", "modern", "playful"];
-
 function FontPicker({
   label,
   value,
@@ -122,50 +118,30 @@ function FontPicker({
   onSelect: (key: FontKey) => void;
   busy: boolean;
 }) {
-  const baseOptions = FONT_OPTIONS.filter((f) => !f.group); // Tema-standard + Egen font
-
-  function renderButton(key: FontKey, btnLabel: string, stack: string) {
-    const isActive = value === key;
-    return (
-      <button
-        key={key}
-        onClick={() => onSelect(key)}
-        disabled={busy}
-        style={{ fontFamily: stack || undefined }}
-        className={cn(
-          "rounded-lg border-2 px-3 py-2 text-sm transition-colors",
-          isActive
-            ? "border-primary bg-primary/10 text-primary"
-            : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
-        )}
-      >
-        {btnLabel}
-      </button>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">{label}</Label>
-
       <div className="flex flex-wrap gap-2">
-        {baseOptions.map((f) => renderButton(f.key, f.label, f.stack))}
+        {FONT_OPTIONS.map((f) => {
+          const isActive = value === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => onSelect(f.key)}
+              disabled={busy}
+              style={{ fontFamily: f.stack || undefined }}
+              className={cn(
+                "rounded-lg border-2 px-3 py-2 text-sm transition-colors",
+                isActive
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+              )}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
-
-      {FONT_GROUP_ORDER.map((group) => {
-        const opts = FONT_OPTIONS.filter((f) => f.group === group);
-        if (opts.length === 0) return null;
-        return (
-          <div key={group} className="space-y-1.5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              {FONT_GROUP_LABELS[group]}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {opts.map((f) => renderButton(f.key, f.label, f.stack))}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
