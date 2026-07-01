@@ -195,6 +195,101 @@ export const DEFAULT_LOGO_TYPE: LogoType = "barskab";
 export const DEFAULT_TEXT_OFFSET_Y = 0;
 export const DEFAULT_LOGO_OFFSET_Y = 0;
 
+// =================== Skrifttyper (fonts) ===================
+// Kurateret sæt Google Fonts. "default" = ingen override (tema-standard).
+// `google` er familie-delen til Google Fonts css2-URL'en; tom = intet at indlæse.
+// `stack` er CSS font-family; tom = arv tema-standard.
+
+export type FontKey =
+  | "default"
+  | "custom"
+  // Klassisk
+  | "playfair"
+  | "cormorant"
+  | "ebgaramond"
+  | "lora"
+  // Vintage
+  | "cinzel"
+  | "marcellus"
+  | "abril"
+  | "specialelite"
+  // Moderne
+  | "bebas"
+  | "oswald"
+  | "montserrat"
+  | "archivoblack"
+  // Playful
+  | "lobster"
+  | "pacifico"
+  | "caveat"
+  | "righteous";
+
+export type FontGroup = "classic" | "vintage" | "modern" | "playful";
+
+export type FontOption = {
+  key: FontKey;
+  label: string;
+  google: string; // familie-del til Google Fonts css2-URL'en; tom = indlæses ikke
+  stack: string;  // CSS font-family; tom = arv tema-standard
+  group?: FontGroup;
+};
+
+// Custom-font konvention: læg en fil i public/ som `custom-font.woff2`.
+// FontApplier registrerer den automatisk under familienavnet 'CustomFont'.
+export const CUSTOM_FONT_FAMILY = "CustomFont";
+export const CUSTOM_FONT_URL = "/custom-font.woff2";
+
+export const FONT_OPTIONS: FontOption[] = [
+  { key: "default",      label: "Tema-standard",      google: "",                                                    stack: "" },
+  { key: "custom",       label: "Egen font (public)", google: "",                                                    stack: "'CustomFont', serif" },
+
+  // Klassisk
+  { key: "playfair",     label: "Playfair Display",   google: "Playfair+Display:ital,wght@0,400;0,600;0,700;1,400",  stack: "'Playfair Display', serif",   group: "classic" },
+  { key: "cormorant",    label: "Cormorant Garamond", google: "Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400", stack: "'Cormorant Garamond', serif", group: "classic" },
+  { key: "ebgaramond",   label: "EB Garamond",        google: "EB+Garamond:ital,wght@0,400;0,600;0,700;1,400",       stack: "'EB Garamond', serif",        group: "classic" },
+  { key: "lora",         label: "Lora",               google: "Lora:ital,wght@0,400;0,600;0,700;1,400",              stack: "'Lora', serif",               group: "classic" },
+
+  // Vintage
+  { key: "cinzel",       label: "Cinzel",             google: "Cinzel:wght@400;600;700",                             stack: "'Cinzel', serif",             group: "vintage" },
+  { key: "marcellus",    label: "Marcellus",          google: "Marcellus",                                           stack: "'Marcellus', serif",          group: "vintage" },
+  { key: "abril",        label: "Abril Fatface",      google: "Abril+Fatface",                                       stack: "'Abril Fatface', serif",      group: "vintage" },
+  { key: "specialelite", label: "Special Elite",      google: "Special+Elite",                                       stack: "'Special Elite', monospace",  group: "vintage" },
+
+  // Moderne
+  { key: "bebas",        label: "Bebas Neue",         google: "Bebas+Neue",                                          stack: "'Bebas Neue', sans-serif",    group: "modern" },
+  { key: "oswald",       label: "Oswald",             google: "Oswald:wght@400;500;600;700",                         stack: "'Oswald', sans-serif",        group: "modern" },
+  { key: "montserrat",   label: "Montserrat",         google: "Montserrat:ital,wght@0,400;0,600;0,700;1,400",        stack: "'Montserrat', sans-serif",    group: "modern" },
+  { key: "archivoblack", label: "Archivo Black",      google: "Archivo+Black",                                       stack: "'Archivo Black', sans-serif", group: "modern" },
+
+  // Playful
+  { key: "lobster",      label: "Lobster",            google: "Lobster",                                             stack: "'Lobster', cursive",          group: "playful" },
+  { key: "pacifico",     label: "Pacifico",           google: "Pacifico",                                            stack: "'Pacifico', cursive",         group: "playful" },
+  { key: "caveat",       label: "Caveat",             google: "Caveat:wght@400;600;700",                             stack: "'Caveat', cursive",           group: "playful" },
+  { key: "righteous",    label: "Righteous",          google: "Righteous",                                           stack: "'Righteous', sans-serif",     group: "playful" },
+];
+
+export const FONT_GROUP_LABELS: Record<FontGroup, string> = {
+  classic: "Klassisk",
+  vintage: "Vintage",
+  modern: "Moderne",
+  playful: "Playful",
+};
+
+export const DEFAULT_HEADING_FONT: FontKey = "default";
+export const DEFAULT_LOGO_FONT: FontKey = "default";
+
+const FONT_KEYS = FONT_OPTIONS.map((f) => f.key) as [FontKey, ...FontKey[]];
+
+export function fontStack(key: FontKey | undefined): string {
+  return FONT_OPTIONS.find((f) => f.key === key)?.stack ?? "";
+}
+
+// Samlet Google Fonts css2-URL for hele sættet — bruges i __root.tsx's <head>.
+export const GOOGLE_FONTS_HREF = `https://fonts.googleapis.com/css2?${FONT_OPTIONS
+  .filter((f) => f.google)
+  .map((f) => `family=${f.google}`)
+  .join("&")}&display=swap`;
+
 export const setLogoSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { size: number }) =>
@@ -293,9 +388,37 @@ export const setLogoOffsetY = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setHeadingFont = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { font: FontKey }) =>
+    z.object({ font: z.enum(FONT_KEYS) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "heading_font", value: data.font as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setLogoFont = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { font: FontKey }) =>
+    z.object({ font: z.enum(FONT_KEYS) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_font", value: data.font as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // =================== Samlet header-konfiguration ===================
 // Ét DB-kald der henter alle header-/logo-indstillinger på én gang, så
-// headeren ikke laver seks separate round-trips pr. sideindlæsning.
+// headeren ikke laver mange separate round-trips pr. sideindlæsning.
 
 export type SiteSettings = {
   name: string;
@@ -306,6 +429,8 @@ export type SiteSettings = {
   logoType: LogoType;
   textOffsetY: number;
   logoOffsetY: number;
+  headingFont: FontKey;
+  logoFont: FontKey;
 };
 
 export const getSiteSettings = createServerFn({ method: "GET" }).handler(
@@ -314,7 +439,7 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const { data, error } = await sb
       .from("app_settings")
       .select("key, value")
-      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y", "logo_offset_y"]);
+      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y", "logo_offset_y", "heading_font", "logo_font"]);
     if (error) throw new Error(error.message);
 
     const map = new Map((data ?? []).map((r) => [r.key, r.value]));
@@ -326,8 +451,11 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const nameVal = map.get("site_name");
     const alignVal = map.get("logo_align");
     const typeVal = map.get("logo_type");
+    const headingFontVal = map.get("heading_font");
+    const logoFontVal = map.get("logo_font");
     const validAlign: LogoAlign[] = ["top", "center", "bottom"];
     const validType: LogoType[] = ["barskab", "martini", "wine", "custom"];
+    const validFont = FONT_OPTIONS.map((f) => f.key) as FontKey[];
 
     return {
       name: typeof nameVal === "string" && nameVal.length > 0 ? nameVal : DEFAULT_SITE_NAME,
@@ -338,7 +466,8 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
       logoType: validType.includes(typeVal as LogoType) ? (typeVal as LogoType) : DEFAULT_LOGO_TYPE,
       textOffsetY: num(map.get("text_offset_y"), DEFAULT_TEXT_OFFSET_Y),
       logoOffsetY: num(map.get("logo_offset_y"), DEFAULT_LOGO_OFFSET_Y),
+      headingFont: validFont.includes(headingFontVal as FontKey) ? (headingFontVal as FontKey) : DEFAULT_HEADING_FONT,
+      logoFont: validFont.includes(logoFontVal as FontKey) ? (logoFontVal as FontKey) : DEFAULT_LOGO_FONT,
     };
   },
 );
-  
