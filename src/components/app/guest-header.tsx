@@ -4,10 +4,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SiteLogo } from "@/components/app/site-logo";
+import { FontApplier } from "@/components/app/font-applier";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/hooks/use-session";
 import {
   getSiteSettings,
+  fontStack,
   DEFAULT_SITE_NAME,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
@@ -16,6 +18,7 @@ import {
   DEFAULT_LOGO_TYPE,
   DEFAULT_TEXT_OFFSET_Y,
   DEFAULT_LOGO_OFFSET_Y,
+  DEFAULT_LOGO_FONT,
 } from "@/lib/orders.functions";
 
 const alignClass = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
@@ -38,12 +41,15 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
   const logoType = data?.logoType ?? DEFAULT_LOGO_TYPE;
   const textOffsetY = data?.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y;
   const logoOffsetY = data?.logoOffsetY ?? DEFAULT_LOGO_OFFSET_Y;
+  const logoFontStack = fontStack(data?.logoFont ?? DEFAULT_LOGO_FONT) || undefined;
 
   return (
     <>
-      {/* ── Logo + hjem-knap — scroller væk naturligt ── */}
+      <FontApplier />
+
+      {/* ── Logo-række — scroller væk naturligt ── */}
       <div className="border-b border-border bg-background px-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between py-4">
+        <div className="mx-auto flex max-w-5xl items-center py-3">
           <div
             className={cn(
               "flex",
@@ -59,47 +65,54 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
             </span>
             <span
               className="font-serif"
-              style={{ fontSize: textSize, position: "relative", top: textOffsetY }}
+              style={{
+                fontSize: textSize,
+                position: "relative",
+                top: textOffsetY,
+                fontFamily: logoFontStack,
+              }}
             >
               {siteName}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* ── Nav-bar: Cocktails | Spiritus — sticky. Home-knap i højre side ── */}
+      <nav className="sticky top-0 z-30 border-b border-border bg-background/90 px-4 py-1.5 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center gap-2 text-sm">
+          <div className="flex flex-1 gap-1 rounded-xl border border-border bg-card p-1">
+            <Link
+              to="/menukort"
+              className={cn(
+                "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
+                active === "cocktails"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Cocktails
+            </Link>
+            <Link
+              to="/spiritus"
+              className={cn(
+                "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
+                active === "spiritus"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Spiritus
+            </Link>
+          </div>
 
           {session && (
-            <Button asChild size="sm" variant="ghost" aria-label="Gå til forsiden">
+            <Button asChild size="sm" variant="ghost" aria-label="Gå til forsiden" className="shrink-0">
               <Link to="/cocktails">
                 <Home className="h-4 w-4" />
               </Link>
             </Button>
           )}
-        </div>
-      </div>
-
-      {/* ── Nav-bar: Cocktails | Spiritus — sticky, bliver stående ── */}
-      <nav className="sticky top-0 z-30 border-b border-border bg-background/90 px-4 py-2 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl gap-1 rounded-xl border border-border bg-card p-1 text-sm">
-          <Link
-            to="/menukort"
-            className={cn(
-              "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
-              active === "cocktails"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Cocktails
-          </Link>
-          <Link
-            to="/spiritus"
-            className={cn(
-              "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
-              active === "spiritus"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Spiritus
-          </Link>
         </div>
       </nav>
     </>
