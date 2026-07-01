@@ -222,7 +222,8 @@ export type FontKey =
   | "lobster"
   | "pacifico"
   | "caveat"
-  | "righteous";
+  | "righteous"
+  | "permanentmarker";
 
 export type FontGroup = "classic" | "vintage" | "modern" | "playful";
 
@@ -266,6 +267,7 @@ export const FONT_OPTIONS: FontOption[] = [
   { key: "pacifico",     label: "Pacifico",           google: "Pacifico",                                            stack: "'Pacifico', cursive",         group: "playful" },
   { key: "caveat",       label: "Caveat",             google: "Caveat:wght@400;600;700",                             stack: "'Caveat', cursive",           group: "playful" },
   { key: "righteous",    label: "Righteous",          google: "Righteous",                                           stack: "'Righteous', sans-serif",     group: "playful" },
+  { key: "permanentmarker", label: "Permanent Marker", google: "Permanent+Marker",                                   stack: "'Permanent Marker', cursive", group: "playful" },
 ];
 
 export const FONT_GROUP_LABELS: Record<FontGroup, string> = {
