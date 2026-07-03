@@ -17,6 +17,7 @@ import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functio
 import { OrderButton } from "@/components/app/order-button";
 import { getPopularCocktails, type PopularBadge } from "@/lib/stats.functions";
 import { getOrderingEnabled } from "@/lib/orders.functions";
+import { thumbUrl } from "@/lib/image-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -27,6 +28,17 @@ export const Route = createFileRoute("/menukort")({
       { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
+  // SSR-prefetch: hent cocktails på serveren og læg dem i query-cachen, så det
+  // fulde svar allerede indeholder dataen. Returværdien serialiseres af routeren
+  // og bruges som initialData i komponenten → ingen "Indlæser..."-blink og ingen
+  // hydration-mismatch (uden behov for ekstra afhængigheder).
+  loader: async ({ context }) => {
+    const cocktails = await context.queryClient.ensureQueryData({
+      queryKey: ["cocktails"],
+      queryFn: () => listCocktails(),
+    });
+    return { cocktails };
+  },
   component: MenukortPage,
 });
 
@@ -73,10 +85,11 @@ function MenukortCocktailCard({
           )}
           {cocktail.image_url ? (
             <img
-              src={cocktail.image_url}
+              src={thumbUrl(cocktail.image_url, 480) ?? cocktail.image_url}
               alt={cocktail.name}
               className="h-full w-full object-cover"
               loading="lazy"
+              decoding="async"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1">
@@ -152,16 +165,22 @@ function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function MenukortPage() {
+  const { cocktails: initialCocktails } = Route.useLoaderData();
+
   const fetchCocktails = useServerFn(listCocktails);
   const { data, isLoading } = useQuery({
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
+    // Fra SSR-loaderen — undgår "Indlæser..." ved første render.
+    initialData: initialCocktails,
   });
   const fetchOrdering = useServerFn(getOrderingEnabled);
   const { data: orderingData } = useQuery({
     queryKey: ["ordering-enabled"],
     queryFn: () => fetchOrdering(),
     refetchInterval: 30_000,
+    // Skal altid være frisk — overstyrer det globale staleTime på 60 s.
+    staleTime: 0,
   });
   const orderingEnabled = !!orderingData?.enabled;
 
@@ -280,7 +299,7 @@ function MenukortPage() {
           </div>
         )}
 
-        {/* Detalje-dialog — viser det fulde CocktailCard med alt info */}
+        {/* Detalje-dialog — viser det fulde CocktailCard med alt info + fremgangsmåde */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
@@ -305,6 +324,7 @@ function MenukortPage() {
                       <CocktailCard
                         cocktail={c}
                         showAvailabilityBadge={false}
+                        showInstructions
                         footerSlot={
                           <div
                             className="flex flex-wrap gap-2"
