@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { ShoppingListButton } from "@/components/app/shopping-list-button";
 import { thumbUrl } from "@/lib/image-utils";
+import { CardImage } from "@/components/app/card-image";
 
 const PRESETS = [1, 2, 3, 4];
 const MAX_MULTIPLIER = 99;
@@ -70,12 +71,9 @@ export function CocktailCard({
         role={clickable ? "button" : undefined}
       >
         {cocktail.image_url ? (
-          <img
+          <CardImage
             src={thumb ? (thumbUrl(cocktail.image_url, 480) ?? cocktail.image_url) : cocktail.image_url}
             alt={cocktail.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            decoding="async"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1">
