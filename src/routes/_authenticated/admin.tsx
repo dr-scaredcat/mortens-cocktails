@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
 import { AdminRecipes } from "@/components/app/admin-recipes";
@@ -19,9 +19,15 @@ import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
 import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
-import { AdminStatistik } from "@/components/app/admin-statistik";
 import { AdminIngredientsSection } from "@/components/app/admin-ingredients-section";
 import { AdminSpiritsSection } from "@/components/app/admin-spirits-section";
+
+// Statistik-fanen trækker recharts ind, som er et tungt bibliotek. Vi lazy-loader
+// den, så recharts først hentes når admin faktisk åbner fanen — og aldrig ender i
+// den bundle andre sider (fx gæstesiderne) downloader.
+const AdminStatistik = lazy(() =>
+  import("@/components/app/admin-statistik").then((m) => ({ default: m.AdminStatistik })),
+);
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Aston's Bar" }] }),
@@ -42,6 +48,7 @@ function AdminPage() {
     { value: "tags",        label: "Tags" },
     { value: "glasses",     label: "Glas" },
     { value: "garnishes",   label: "Pynt" },
+    { value: "statistik",   label: "Statistik" },
     { value: "settings",    label: "Indstillinger" },
   ];
 
@@ -99,6 +106,13 @@ function AdminPage() {
             </TabsContent>
             <TabsContent value="garnishes">
               <AdminGarnishes />
+            </TabsContent>
+            <TabsContent value="statistik">
+              <Suspense
+                fallback={<p className="text-muted-foreground">Indlæser statistik…</p>}
+              >
+                <AdminStatistik />
+              </Suspense>
             </TabsContent>
             <TabsContent value="settings">
               <AdminSettings />
