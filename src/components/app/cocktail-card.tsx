@@ -7,6 +7,7 @@ import { RatingStars } from "@/components/app/rating-stars";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { ShoppingListButton } from "@/components/app/shopping-list-button";
+import { thumbUrl } from "@/lib/image-utils";
 
 const PRESETS = [1, 2, 3, 4];
 const MAX_MULTIPLIER = 99;
@@ -30,6 +31,8 @@ export function CocktailCard({
   initialMultiplier = 1,
   shoppingListIds,
   onAddToShoppingList,
+  showInstructions = false,
+  thumb = false,
 }: {
   cocktail: CocktailWithDetails;
   showAvailabilityBadge?: boolean;
@@ -42,6 +45,10 @@ export function CocktailCard({
   shoppingListIds?: Set<string>;
   /** Callback til at tilføje manglende ingredienser */
   onAddToShoppingList?: (ingredientIds: string[]) => void;
+  /** Vis fremgangsmåde (instructions) under ingredienslisten */
+  showInstructions?: boolean;
+  /** Brug et mindre thumbnail-billede (til kort-gitre). Detalje-visning bruger fuldt billede. */
+  thumb?: boolean;
 }) {
   const safeInitial = Number.isFinite(initialMultiplier) && initialMultiplier >= 1 ? initialMultiplier : 1;
   const [multiplier, setMultiplier] = useState(safeInitial);
@@ -64,10 +71,11 @@ export function CocktailCard({
       >
         {cocktail.image_url ? (
           <img
-            src={cocktail.image_url}
+            src={thumb ? (thumbUrl(cocktail.image_url, 480) ?? cocktail.image_url) : cocktail.image_url}
             alt={cocktail.name}
             className="h-full w-full object-cover"
             loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1">
@@ -181,6 +189,19 @@ export function CocktailCard({
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* Fremgangsmåde — vises kun når showInstructions er sat og der findes tekst */}
+          {showInstructions && cocktail.instructions && (
+            <div
+              className={cn("space-y-1 pt-1 text-sm", clickable && "cursor-pointer")}
+              onClick={onClick}
+            >
+              <p className="font-medium text-foreground">Fremgangsmåde</p>
+              <p className="whitespace-pre-line text-muted-foreground">
+                {cocktail.instructions}
+              </p>
+            </div>
           )}
 
           {!compact && (
