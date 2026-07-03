@@ -18,6 +18,7 @@ import { OrderButton } from "@/components/app/order-button";
 import { getPopularCocktails, type PopularBadge } from "@/lib/stats.functions";
 import { getOrderingEnabled } from "@/lib/orders.functions";
 import { thumbUrl } from "@/lib/image-utils";
+import { CardImage } from "@/components/app/card-image";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -84,12 +85,9 @@ function MenukortCocktailCard({
             </div>
           )}
           {cocktail.image_url ? (
-            <img
+            <CardImage
               src={thumbUrl(cocktail.image_url, 480) ?? cocktail.image_url}
               alt={cocktail.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
-              decoding="async"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1">
