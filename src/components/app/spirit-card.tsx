@@ -5,17 +5,21 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { SpiritWithDetails } from "@/lib/spirits.functions";
 import { SpiritRatingStars } from "@/components/app/spirit-rating-stars";
+import { thumbUrl } from "@/lib/image-utils";
 
 export function SpiritCard({
   spirit,
   footerSlot,
   onClick,
   showTypeBadge = true,
+  thumb = false,
 }: {
   spirit: SpiritWithDetails;
   footerSlot?: ReactNode;
   onClick?: () => void;
   showTypeBadge?: boolean;
+  /** Brug et mindre thumbnail-billede (til kort-gitre). Detalje-visning bruger fuldt billede. */
+  thumb?: boolean;
 }) {
   const clickable = !!onClick;
   return (
@@ -32,10 +36,11 @@ export function SpiritCard({
       >
         {spirit.image_url ? (
           <img
-            src={spirit.image_url}
+            src={thumb ? (thumbUrl(spirit.image_url, 480) ?? spirit.image_url) : spirit.image_url}
             alt={spirit.name}
             className="h-full w-full object-cover"
             loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
