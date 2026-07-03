@@ -17,6 +17,7 @@ import { listSpirits, listSpiritTypes, type SpiritWithDetails } from "@/lib/spir
 import { getPopularSpirits, type PopularBadge } from "@/lib/stats.functions";
 import { getOrderingEnabled } from "@/lib/orders.functions";
 import { thumbUrl } from "@/lib/image-utils";
+import { CardImage } from "@/components/app/card-image";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/spiritus")({
@@ -81,12 +82,9 @@ function MenukortSpiritCard({
             </div>
           )}
           {spirit.image_url ? (
-            <img
+            <CardImage
               src={thumbUrl(spirit.image_url, 480) ?? spirit.image_url}
               alt={spirit.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
-              decoding="async"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1">
