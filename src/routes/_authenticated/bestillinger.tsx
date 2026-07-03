@@ -36,11 +36,18 @@ function OrdersPage() {
   const removeAll = useServerFn(deleteAllOrders);
   const writeLog = useServerFn(logOrder);
   const qc = useQueryClient();
+
+  // Er realtime-kanalen aktiv? Når den er, kan vi nøjes med langsommere polling
+  // som sikkerhedsnet (60 s). Falder realtime ud, går vi tilbage til 30 s.
+  const [realtimeReady, setRealtimeReady] = useState(false);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["orders"],
     queryFn: () => fetchOrders(),
-    refetchInterval: 30_000,
+    refetchInterval: realtimeReady ? 60_000 : 30_000,
     refetchOnWindowFocus: true,
+    // Bestillinger skal altid være friske — overstyrer det globale staleTime.
+    staleTime: 0,
   });
 
   // ── Realtime: lyt efter ændringer på cocktail_orders ──────────────────────
@@ -56,11 +63,16 @@ function OrdersPage() {
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
+          setRealtimeReady(true);
           qc.invalidateQueries({ queryKey: ["orders"] });
+        } else {
+          // CHANNEL_ERROR, TIMED_OUT, CLOSED → stol ikke på realtime; poll hyppigere.
+          setRealtimeReady(false);
         }
       });
 
     return () => {
+      setRealtimeReady(false);
       supabase.removeChannel(channel);
     };
   }, [qc]);
