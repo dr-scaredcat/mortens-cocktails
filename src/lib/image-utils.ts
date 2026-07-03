@@ -64,3 +64,56 @@ export async function compressImage(
     img.src = url;
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Thumbnail-URL til kort-gitre
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Formålet er at gitre (menukort, spiritus, cocktails, admin-lister) henter et
+// mindre billede end det fulde. Detalje-dialoger bruger stadig den fulde URL.
+//
+//  • TheCocktailDB: tilføj "/preview" — et lille, gratis thumbnail. Altid sikkert.
+//  • Supabase Storage: kræver Storage Image Transformations (kun på betalte
+//    planer). På fri plan MÅ vi ikke transformere, ellers brækker billederne —
+//    derfor er transformationen slået fra via SUPABASE_IMAGE_TRANSFORMS.
+//  • Alle andre URL'er returneres uændret.
+//
+// Hvis I senere opgraderer Supabase og aktiverer transforms, så sæt blot
+// SUPABASE_IMAGE_TRANSFORMS = true — så begynder thumbUrl at bruge width/quality
+// på Supabase-hostede billeder også.
+
+/** Slå til hvis Supabase Storage Image Transformations er aktiveret (Pro+). */
+const SUPABASE_IMAGE_TRANSFORMS = false;
+
+/**
+ * Returnér en thumbnail-variant af en billed-URL til brug i kort-gitre.
+ *
+ * @param url    Original billed-URL (må gerne være null/undefined)
+ * @param width  Ønsket bredde i px (bruges kun ved Supabase-transforms)
+ * @returns      Thumbnail-URL, eller den oprindelige URL hvis den ikke kan
+ *               transformeres. null hvis input er tomt.
+ */
+export function thumbUrl(
+  url: string | null | undefined,
+  width = 480,
+): string | null {
+  if (!url) return null;
+
+  // TheCocktailDB — /preview giver et lille thumbnail (gratis, altid sikkert).
+  if (url.includes("thecocktaildb.com")) {
+    return url.endsWith("/preview") ? url : `${url}/preview`;
+  }
+
+  // Supabase Storage — kun hvis transforms er aktiveret på projektet.
+  if (SUPABASE_IMAGE_TRANSFORMS && url.includes("/storage/v1/object/public/")) {
+    const transformed = url.replace(
+      "/storage/v1/object/public/",
+      "/storage/v1/render/image/public/",
+    );
+    const sep = transformed.includes("?") ? "&" : "?";
+    return `${transformed}${sep}width=${width}&quality=75`;
+  }
+
+  // Alt andet (inkl. Supabase-billeder på fri plan) returneres uændret.
+  return url;
+}
