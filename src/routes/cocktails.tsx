@@ -239,6 +239,8 @@ function CocktailsPage() {
                 <CocktailCard
                   key={c.id}
                   cocktail={c}
+                  thumb
+                  showInstructions
                   shoppingListIds={session ? shoppingListIds : undefined}
                   onAddToShoppingList={session ? () => handleAddMissing(c) : undefined}
                 />
