@@ -52,6 +52,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { getSpiritSort, setSpiritSort, type SortMode } from "@/lib/sort-settings.functions";
 import { compressImage } from "@/lib/image-utils";
+import { AdminImage } from "@/components/app/admin-image";
 
 const NO_TYPE = "__none__";
 
@@ -99,7 +100,7 @@ function SortableSpiritRow({
       </button>
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
         {spirit.image_url && (
-          <img src={spirit.image_url} alt={spirit.name} className="h-full w-full object-cover" />
+          <AdminImage src={spirit.image_url} alt={spirit.name} className="h-full w-full" />
         )}
       </div>
       <div className="min-w-0">
@@ -384,10 +385,10 @@ export function AdminSpirits() {
                   />
                 </div>
                 {form.image_url && (
-                  <img
+                  <AdminImage
                     src={form.image_url}
                     alt="Preview"
-                    className="mt-2 h-32 w-full rounded object-cover"
+                    className="mt-2 h-32 w-full rounded"
                   />
                 )}
               </div>
@@ -496,7 +497,7 @@ export function AdminSpirits() {
             >
               <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
                 {s.image_url && (
-                  <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
+                  <AdminImage src={s.image_url} alt={s.name} className="h-full w-full" />
                 )}
               </div>
               <div className="min-w-0">
@@ -549,4 +550,4 @@ export function AdminSpirits() {
       )}
     </div>
   );
-}
+    }
