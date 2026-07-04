@@ -15,7 +15,47 @@ import { Toaster } from "@/components/ui/sonner";
 import { getThemesData } from "@/lib/themes.functions";
 import { applyThemeColors } from "@/hooks/use-theme";
 import { oklchToHex, isOklchString } from "@/lib/color-utils";
-import { GOOGLE_FONTS_HREF } from "@/lib/orders.functions";
+
+// Nøgle til de cachede tema-farver i localStorage. Deles mellem boot-scriptet
+// (som læser) og ThemeLoader (som skriver).
+const THEME_CACHE_KEY = "astonsbar.theme";
+
+// Inline boot-script: sætter cachede tema-farver som CSS-variabler FØR første
+// paint, så gæster ikke ser standardtemaet blinke, før ThemeLoader har hentet det
+// aktive tema fra Supabase. Fejler stille hvis intet er cachet (så gælder
+// :root-standarderne fra styles.css). Mappingen er identisk med applyThemeColors
+// i src/hooks/use-theme.ts — hold dem synkroniseret hvis variabel-listen ændres.
+const THEME_BOOT_SCRIPT = `
+(function () {
+  try {
+    var raw = localStorage.getItem("${THEME_CACHE_KEY}");
+    if (!raw) return;
+    var c = JSON.parse(raw);
+    if (!c || !c.background) return;
+    var s = document.documentElement.style;
+    function set(k, v) { if (v) s.setProperty(k, v); }
+    set("--background", c.background);
+    set("--foreground", c.foreground);
+    set("--card", c.card);
+    set("--card-foreground", c.foreground);
+    set("--popover", c.card);
+    set("--popover-foreground", c.foreground);
+    set("--primary", c.primary);
+    set("--primary-foreground", c.primaryForeground);
+    set("--secondary", c.accent);
+    set("--secondary-foreground", c.accentForeground);
+    set("--muted", c.muted);
+    set("--muted-foreground", c.mutedForeground);
+    set("--accent", c.accent);
+    set("--accent-foreground", c.accentForeground);
+    set("--destructive", c.destructive);
+    set("--destructive-foreground", c.destructiveForeground);
+    set("--border", c.border);
+    set("--input", c.muted);
+    set("--ring", c.primary);
+  } catch (e) {}
+})();
+`;
 
 function NotFoundComponent() {
   return (
@@ -105,11 +145,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap",
       },
-      // Valgbare skrifttyper (admin → Indstillinger → Skrifttyper)
-      {
-        rel: "stylesheet",
-        href: GOOGLE_FONTS_HREF,
-      },
+      // De valgbare skrifttyper (admin → Indstillinger → Skrifttyper) indlæses nu
+      // dynamisk af FontApplier — kun den/de faktisk valgte font(s). Derfor er det
+      // statiske GOOGLE_FONTS_HREF-link fjernet herfra.
       // Favicon
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
@@ -131,6 +169,8 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Tema-FOUC: anvend cachede farver synkront før første paint. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body>
         {children}
@@ -156,15 +196,24 @@ function setThemeColorMeta(background: string) {
 
 function ThemeLoader() {
   useEffect(() => {
-    getThemesData().then(({ themes, activeThemeId }) => {
-      const active = themes.find((t) => t.id === activeThemeId);
-      if (active) {
-        applyThemeColors(active.colors);
-        setThemeColorMeta(active.colors.background);
-      }
-    }).catch(() => {
-      // Ignore — default CSS variables og statisk theme-color forbliver
-    });
+    getThemesData()
+      .then(({ themes, activeThemeId }) => {
+        const active = themes.find((t) => t.id === activeThemeId);
+        if (active) {
+          applyThemeColors(active.colors);
+          setThemeColorMeta(active.colors.background);
+          // Cache farverne, så boot-scriptet kan anvende dem synkront næste gang
+          // og undgå tema-blink. Serverens data er autoritativ og opdaterer cachen.
+          try {
+            localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(active.colors));
+          } catch {
+            // localStorage utilgængelig (fx privat browsing) — ignorér.
+          }
+        }
+      })
+      .catch(() => {
+        // Ignore — default CSS variables og statisk theme-color forbliver
+      });
   }, []);
   return null;
 }
