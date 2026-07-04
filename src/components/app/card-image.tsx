@@ -5,8 +5,9 @@ import { isPngImage } from "@/lib/image-utils";
  *
  *  • PNG (typisk egne uploads med gennemsigtig baggrund): vises "contain" —
  *    centreret og skaleret til at passe i feltet med bevaret gennemsigtighed,
- *    ligesom placeholder-billederne, bare lidt større (h-4/5 mod placeholderens
- *    h-2/3).
+ *    ligesom placeholder-billederne. Både højde og bredde begrænses til 80% af
+ *    feltet, så billedet skalerer proportionalt på alle skærmstørrelser (og fx
+ *    en liggende PNG ikke fylder hele bredden på mobil).
  *  • Alt andet (fotos, JPEG, TheCocktailDB): vises "cover" og fylder hele feltet.
  *
  * Selve placeholder-visningen (når der slet ikke er noget billede) håndteres af
@@ -15,11 +16,11 @@ import { isPngImage } from "@/lib/image-utils";
 export function CardImage({ src, alt }: { src: string; alt: string }) {
   if (isPngImage(src)) {
     return (
-      <div className="flex h-full w-full items-center justify-center p-2">
+      <div className="flex h-full w-full items-center justify-center">
         <img
           src={src}
           alt={alt}
-          className="h-4/5 w-auto max-w-full object-contain"
+          className="max-h-[80%] max-w-[80%] object-contain"
           loading="lazy"
           decoding="async"
         />
