@@ -62,6 +62,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/integrations/supabase/client";
 import { getCocktailSort, setCocktailSort, type SortMode } from "@/lib/sort-settings.functions";
 import { compressImage } from "@/lib/image-utils";
+import { AdminImage } from "@/components/app/admin-image";
 
 type Item = { _id: string; name: string; amount: string; unit: string };
 
@@ -300,7 +301,7 @@ function SortableCocktailRow({
       </button>
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
         {cocktail.image_url && (
-          <img src={cocktail.image_url} alt={cocktail.name} className="h-full w-full object-cover" />
+          <AdminImage src={cocktail.image_url} alt={cocktail.name} className="h-full w-full" />
         )}
       </div>
       <div className="min-w-0">
@@ -624,7 +625,7 @@ export function AdminCocktails() {
             >
               <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted sm:h-16 sm:w-16">
                 {c.image_url && (
-                  <img src={c.image_url} alt={c.name} className="h-full w-full object-cover" />
+                  <AdminImage src={c.image_url} alt={c.name} className="h-full w-full" />
                 )}
               </div>
               <div className="min-w-0">
@@ -762,7 +763,7 @@ function CocktailForm({
       const compressed = await compressImage(file);
       // Bevar .png (og dermed gennemsigtighed) hvis compressImage returnerede en PNG.
       const ext = compressed.type === "image/png" ? "png" : "jpg";
-      const fileName = `cocktail_${Date.now()}.${ext}`;           // spirit: `spirit_${Date.now()}.${ext}`
+      const fileName = `cocktail_${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("cocktail-images")
         .upload(fileName, compressed, { upsert: false, contentType: compressed.type });
@@ -809,7 +810,7 @@ function CocktailForm({
         </div>
         {form.image_url && (
           <div className="relative mt-2">
-            <img src={form.image_url} alt="Preview" className="h-32 w-full rounded object-cover" />
+            <AdminImage src={form.image_url} alt="Preview" className="h-32 w-full rounded" />
             <Button
               type="button"
               variant="destructive"
