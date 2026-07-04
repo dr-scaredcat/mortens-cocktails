@@ -297,10 +297,12 @@ export function AdminSpirits() {
     setUploadingImg(true);
     try {
       const compressed = await compressImage(file);
-      const fileName = `spirit_${Date.now()}.jpg`;
+      // Bevar .png (og dermed gennemsigtighed) hvis compressImage returnerede en PNG.
+      const ext = compressed.type === "image/png" ? "png" : "jpg";
+      const fileName = `spirit_${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("cocktail-images")
-        .upload(fileName, compressed, { upsert: false, contentType: "image/jpeg" });
+        .upload(fileName, compressed, { upsert: false, contentType: compressed.type });
       if (uploadError) throw new Error(uploadError.message);
       const { data: urlData } = supabase.storage.from("cocktail-images").getPublicUrl(fileName);
       patch("image_url", urlData.publicUrl);
