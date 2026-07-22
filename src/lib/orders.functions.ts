@@ -5,10 +5,11 @@ import { z } from "zod";
 
 export type OrderRow = {
   id: string;
-  kind: string;                 // NY: 'cocktail' | 'spirit'
+  kind: string;                 // 'cocktail' | 'spirit' | 'wine'
   cocktail_id: string | null;
-  spirit_id: string | null;     // NY
-  cocktail_name: string;        // bruges som vare-navn for begge typer
+  spirit_id: string | null;
+  wine_id: string | null;       // NY
+  cocktail_name: string;        // bruges som vare-navn for alle typer
   customer_name: string;
   note: string | null;
   status: string;
@@ -17,9 +18,10 @@ export type OrderRow = {
 };
 
 const orderInput = z.object({
-  kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
+  kind: z.enum(["cocktail", "spirit", "wine"]).optional().default("cocktail"),
   cocktailId: z.string().uuid().nullable().optional(),
   spiritId: z.string().uuid().nullable().optional(),
+  wineId: z.string().uuid().nullable().optional(),
   cocktailName: z.string().min(1).max(120),
   customerName: z.string().trim().min(1, "Skriv dit navn").max(60),
   note: z.string().trim().max(300).optional().nullable(),
@@ -34,6 +36,7 @@ export const createOrder = createServerFn({ method: "POST" })
       kind: data.kind,
       cocktail_id: data.kind === "cocktail" ? data.cocktailId ?? null : null,
       spirit_id: data.kind === "spirit" ? data.spiritId ?? null : null,
+      wine_id: data.kind === "wine" ? data.wineId ?? null : null,
       cocktail_name: data.cocktailName,
       customer_name: data.customerName,
       note: data.note && data.note.length > 0 ? data.note : null,
@@ -47,9 +50,8 @@ export const listOrders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
     const { data, error } = await (context.supabase.from("cocktail_orders") as any)
-      .select("id, kind, cocktail_id, spirit_id, cocktail_name, customer_name, note, status, created_at, quantity")
+      .select("id, kind, cocktail_id, spirit_id, wine_id, cocktail_name, customer_name, note, status, created_at, quantity")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []) as OrderRow[];
@@ -216,23 +218,17 @@ export type FontOption = {
 };
 
 // Custom-font konvention: læg en fil i public/ som `custom-font.woff2`.
-// FontApplier registrerer den automatisk under familienavnet 'CustomFont'.
-export const CUSTOM_FONT_FAMILY = "CustomFont";
-export const CUSTOM_FONT_URL = "/custom-font.woff2";
-
 export const FONT_OPTIONS: FontOption[] = [
-  { key: "default",         label: "Tema-standard",      google: "",                        stack: "" },
-  { key: "custom",          label: "Egen font (public)", google: "",                        stack: "'CustomFont', serif" },
-  { key: "permanentmarker", label: "Permanent Marker",   google: "Permanent+Marker",        stack: "'Permanent Marker', cursive" },
-  { key: "caveat",          label: "Caveat",             google: "Caveat:wght@400;600;700", stack: "'Caveat', cursive" },
-  { key: "bebas",           label: "Bebas Neue",         google: "Bebas+Neue",              stack: "'Bebas Neue', sans-serif" },
-  { key: "cinzel",          label: "Cinzel",             google: "Cinzel:wght@400;600;700", stack: "'Cinzel', serif" },
+  { key: "default",        label: "Standard",         google: "",                          stack: "" },
+  { key: "permanentmarker",label: "Permanent Marker",  google: "Permanent+Marker",          stack: "'Permanent Marker', cursive" },
+  { key: "caveat",         label: "Caveat",            google: "Caveat:wght@400;700",       stack: "'Caveat', cursive" },
+  { key: "bebas",          label: "Bebas Neue",        google: "Bebas+Neue",                stack: "'Bebas Neue', sans-serif" },
+  { key: "cinzel",         label: "Cinzel",            google: "Cinzel:wght@400;700",       stack: "'Cinzel', serif" },
+  { key: "custom",         label: "Custom font",       google: "",                          stack: "'CustomFont', sans-serif" },
 ];
 
 export const DEFAULT_HEADING_FONT: FontKey = "default";
 export const DEFAULT_LOGO_FONT: FontKey = "default";
-
-const FONT_KEYS = FONT_OPTIONS.map((f) => f.key) as [FontKey, ...FontKey[]];
 
 export function fontStack(key: FontKey | undefined): string {
   return FONT_OPTIONS.find((f) => f.key === key)?.stack ?? "";
@@ -345,7 +341,7 @@ export const setLogoOffsetY = createServerFn({ method: "POST" })
 export const setHeadingFont = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { font: FontKey }) =>
-    z.object({ font: z.enum(FONT_KEYS) }).parse(d),
+    z.object({ font: z.enum(["default", "custom", "permanentmarker", "caveat", "bebas", "cinzel"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
@@ -359,7 +355,7 @@ export const setHeadingFont = createServerFn({ method: "POST" })
 export const setLogoFont = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { font: FontKey }) =>
-    z.object({ font: z.enum(FONT_KEYS) }).parse(d),
+    z.object({ font: z.enum(["default", "custom", "permanentmarker", "caveat", "bebas", "cinzel"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
