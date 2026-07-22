@@ -21,6 +21,7 @@ import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
 import { AdminIngredientsSection } from "@/components/app/admin-ingredients-section";
 import { AdminSpiritsSection } from "@/components/app/admin-spirits-section";
+import { AdminWines } from "@/components/app/admin-wines";
 
 // Statistik-fanen trækker recharts ind, som er et tungt bibliotek. Vi lazy-loader
 // den, så recharts først hentes når admin faktisk åbner fanen — og aldrig ender i
@@ -44,6 +45,7 @@ function AdminPage() {
     { value: "cocktails",   label: "Cocktails" },
     { value: "opskrifter",  label: "Opskrifter" },
     { value: "spiritus",    label: "Spiritus" },
+    { value: "vine",        label: "Vine" },
     { value: "ingredients", label: "Ingredienser" },
     { value: "tags",        label: "Tags" },
     { value: "glasses",     label: "Glas" },
@@ -94,6 +96,9 @@ function AdminPage() {
             </TabsContent>
             <TabsContent value="spiritus">
               <AdminSpiritsSection />
+            </TabsContent>
+            <TabsContent value="vine">
+              <AdminWines />
             </TabsContent>
             <TabsContent value="ingredients">
               <AdminIngredientsSection />
