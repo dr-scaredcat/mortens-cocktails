@@ -163,9 +163,9 @@ export const getSpiritTypeStats = createServerFn({ method: "GET" })
 
 // ── Statistik: Rating-fordeling ────────────────────────────────────────────
 
-export type RatingStatRow = { rating: number; count: number };
+export type RatingDistRow = { rating: number; count: number };
 
-export const getRatingStats = createServerFn({ method: "GET" })
+export const getRatingDistribution = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
@@ -173,13 +173,14 @@ export const getRatingStats = createServerFn({ method: "GET" })
       .from("cocktail_ratings")
       .select("rating");
     if (error) throw new Error(error.message);
-    const counts = new Map<number, number>();
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     for (const row of data ?? []) {
-      counts.set(row.rating, (counts.get(row.rating) ?? 0) + 1);
+      const r = Number(row.rating);
+      if (r >= 1 && r <= 5) counts[r]++;
     }
-    const result: RatingStatRow[] = [1, 2, 3, 4, 5].map((r) => ({
+    const result: RatingDistRow[] = [1, 2, 3, 4, 5].map((r) => ({
       rating: r,
-      count: counts.get(r) ?? 0,
+      count: counts[r],
     }));
     return result;
   });
@@ -370,45 +371,59 @@ export const getGuestSeries = createServerFn({ method: "POST" })
       quantity: number | null;
     }>;
 
-    // Find tidsspænd
-    const times = allRows.map((r) => new Date(r.logged_at).getTime());
-    const spanMs = times.length > 1 ? Math.max(...times) - Math.min(...times) : 0;
-    const groupByDay = spanMs > 7 * 24 * 3600 * 1000;
+    if (allRows.length === 0) return [];
+
+    const firstTime = new Date(allRows[0].logged_at);
+    const lastTime = new Date(allRows[allRows.length - 1].logged_at);
+    const spanHours = (lastTime.getTime() - firstTime.getTime()) / 1000 / 3600;
+    const useHours = spanHours <= 48;
 
     function bucket(iso: string): string {
-      const d = new Date(iso);
-      if (groupByDay) return d.toISOString().slice(0, 10);
-      return d.toISOString().slice(0, 13);
+      if (useHours) return iso.slice(0, 13) + ":00"; // YYYY-MM-DDTHH:00
+      return iso.slice(0, 10);                        // YYYY-MM-DD
     }
 
-    // Byg totaler pr. gæst
-    const totals = new Map<string, number>();
-    for (const r of allRows) {
-      totals.set(r.customer_name, (totals.get(r.customer_name) ?? 0) + (r.quantity ?? 1));
+    // Byg per-gæst optælling (efter quantity)
+    const guestMap = new Map<string, Map<string, number>>();
+    for (const row of allRows) {
+      const b = bucket(row.logged_at);
+      if (!guestMap.has(row.customer_name)) guestMap.set(row.customer_name, new Map());
+      const m = guestMap.get(row.customer_name)!;
+      m.set(b, (m.get(b) ?? 0) + (row.quantity ?? 1));
     }
 
-    // Top 10 gæster
-    const top10 = Array.from(totals.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([name]) => name);
+    // Saml alle unikke buckets
+    const allBuckets = Array.from(
+      new Set(allRows.map((r) => bucket(r.logged_at)))
+    ).sort();
 
-    const result: GuestSeriesRow[] = top10.map((name) => {
-      const personal = allRows.filter((r) => r.customer_name === name);
-      const bucketMap = new Map<string, number>();
-      for (const r of personal) {
-        const key = bucket(r.logged_at);
-        bucketMap.set(key, (bucketMap.get(key) ?? 0) + (r.quantity ?? 1));
-      }
-      let cumulative = 0;
-      const series: GuestTimePoint[] = Array.from(bucketMap.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([time, q]) => {
-          cumulative += q;
-          return { time, cumulative };
+    // Byg kumulerede serier og find top 8 gæster
+    const result: GuestSeriesRow[] = Array.from(guestMap.entries())
+      .map(([customer_name, bucketMap]) => {
+        let cum = 0;
+        const series: GuestTimePoint[] = allBuckets.map((b) => {
+          cum += bucketMap.get(b) ?? 0;
+          return { time: b, cumulative: cum };
         });
-      return { customer_name: name, total: totals.get(name) ?? 0, series };
-    });
+        return { customer_name, total: cum, series };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
 
     return result;
+  });
+
+// ── Nulstil statistikdata ──────────────────────────────────────────────────
+
+export const clearOrderLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context);
+    const sb = await getAdminClient();
+    const { error } = await sb
+      .from("order_log" as any)
+      .delete()
+      .not("id", "is", null);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });

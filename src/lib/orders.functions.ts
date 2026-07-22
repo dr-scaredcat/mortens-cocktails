@@ -218,14 +218,20 @@ export type FontOption = {
 };
 
 // Custom-font konvention: læg en fil i public/ som `custom-font.woff2`.
+// FontApplier registrerer den automatisk under familienavnet 'CustomFont'.
+export const CUSTOM_FONT_FAMILY = "CustomFont";
+export const CUSTOM_FONT_URL = "/custom-font.woff2";
+
 export const FONT_OPTIONS: FontOption[] = [
-  { key: "default",        label: "Standard",         google: "",                          stack: "" },
-  { key: "permanentmarker",label: "Permanent Marker",  google: "Permanent+Marker",          stack: "'Permanent Marker', cursive" },
-  { key: "caveat",         label: "Caveat",            google: "Caveat:wght@400;700",       stack: "'Caveat', cursive" },
-  { key: "bebas",          label: "Bebas Neue",        google: "Bebas+Neue",                stack: "'Bebas Neue', sans-serif" },
-  { key: "cinzel",         label: "Cinzel",            google: "Cinzel:wght@400;700",       stack: "'Cinzel', serif" },
-  { key: "custom",         label: "Custom font",       google: "",                          stack: "'CustomFont', sans-serif" },
+  { key: "default",         label: "Tema-standard",      google: "",                        stack: "" },
+  { key: "custom",          label: "Egen font (public)", google: "",                        stack: "'CustomFont', serif" },
+  { key: "permanentmarker", label: "Permanent Marker",   google: "Permanent+Marker",        stack: "'Permanent Marker', cursive" },
+  { key: "caveat",          label: "Caveat",             google: "Caveat:wght@400;600;700", stack: "'Caveat', cursive" },
+  { key: "bebas",           label: "Bebas Neue",         google: "Bebas+Neue",              stack: "'Bebas Neue', sans-serif" },
+  { key: "cinzel",          label: "Cinzel",             google: "Cinzel:wght@400;600;700", stack: "'Cinzel', serif" },
 ];
+
+const FONT_KEYS = FONT_OPTIONS.map((f) => f.key) as [FontKey, ...FontKey[]];
 
 export const DEFAULT_HEADING_FONT: FontKey = "default";
 export const DEFAULT_LOGO_FONT: FontKey = "default";
