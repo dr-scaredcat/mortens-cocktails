@@ -23,7 +23,7 @@ import {
 
 const alignClass = { top: "items-start", center: "items-center", bottom: "items-end" } as const;
 
-export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
+export function GuestHeader({ active }: { active: "cocktails" | "spiritus" | "vine" }) {
   const { session } = useSession();
   const fetchSettings = useServerFn(getSiteSettings);
 
@@ -78,14 +78,19 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
         </div>
       </div>
 
-      {/* ── Nav-bar: Cocktails | Spiritus — sticky. Home-knap i højre side ── */}
+      {/* ── Nav-bar: Cocktails | Spiritus | Vine — sticky. Home-knap højre ── */}
+      {/*
+        Tre pills på smal mobil: vi bruger kortere padding (px-2 py-1.5) og
+        text-[13px] for at alle tre labels passer inden for skærmbredden.
+        På sm+ skærme gives normal padding (px-3) via sm:px-3.
+      */}
       <nav className="sticky top-0 z-30 border-b border-border bg-background/90 px-4 py-1.5 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 text-sm">
           <div className="flex flex-1 gap-1 rounded-xl border border-border bg-card p-1">
             <Link
               to="/menukort"
               className={cn(
-                "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
+                "flex-1 rounded-lg px-2 py-1.5 text-center text-[13px] font-medium leading-tight transition-colors sm:px-3 sm:text-sm",
                 active === "cocktails"
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:text-foreground",
@@ -96,13 +101,24 @@ export function GuestHeader({ active }: { active: "cocktails" | "spiritus" }) {
             <Link
               to="/spiritus"
               className={cn(
-                "flex-1 rounded-lg px-3 py-1.5 text-center font-medium transition-colors",
+                "flex-1 rounded-lg px-2 py-1.5 text-center text-[13px] font-medium leading-tight transition-colors sm:px-3 sm:text-sm",
                 active === "spiritus"
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
               Spiritus
+            </Link>
+            <Link
+              to="/vine"
+              className={cn(
+                "flex-1 rounded-lg px-2 py-1.5 text-center text-[13px] font-medium leading-tight transition-colors sm:px-3 sm:text-sm",
+                active === "vine"
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Vine
             </Link>
           </div>
 
