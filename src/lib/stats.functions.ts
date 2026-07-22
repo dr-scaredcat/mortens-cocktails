@@ -15,9 +15,10 @@ export const logOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: {
     originalOrderId: string;
-    kind?: "cocktail" | "spirit";
+    kind?: "cocktail" | "spirit" | "wine";
     cocktailId: string | null;
     spiritId?: string | null;
+    wineId?: string | null;
     cocktailName: string;
     customerName: string;
     note: string | null;
@@ -26,9 +27,10 @@ export const logOrder = createServerFn({ method: "POST" })
     quantity?: number;
   }) => z.object({
     originalOrderId: z.string(),
-    kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
+    kind: z.enum(["cocktail", "spirit", "wine"]).optional().default("cocktail"),
     cocktailId: z.string().uuid().nullable(),
     spiritId: z.string().uuid().nullable().optional().default(null),
+    wineId: z.string().uuid().nullable().optional().default(null),
     cocktailName: z.string(),
     customerName: z.string(),
     note: z.string().nullable(),
@@ -44,6 +46,7 @@ export const logOrder = createServerFn({ method: "POST" })
       kind: data.kind,
       cocktail_id: data.cocktailId,
       spirit_id: data.spiritId ?? null,
+      wine_id: data.wineId ?? null,
       cocktail_name: data.cocktailName,
       customer_name: data.customerName,
       note: data.note,
@@ -62,9 +65,10 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
   .inputValidator((d: {
     orders: Array<{
       originalOrderId: string;
-      kind?: "cocktail" | "spirit";
+      kind?: "cocktail" | "spirit" | "wine";
       cocktailId: string | null;
       spiritId?: string | null;
+      wineId?: string | null;
       cocktailName: string;
       customerName: string;
       note: string | null;
@@ -75,9 +79,10 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
   }) => z.object({
     orders: z.array(z.object({
       originalOrderId: z.string(),
-      kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
+      kind: z.enum(["cocktail", "spirit", "wine"]).optional().default("cocktail"),
       cocktailId: z.string().uuid().nullable(),
       spiritId: z.string().uuid().nullable().optional().default(null),
+      wineId: z.string().uuid().nullable().optional().default(null),
       cocktailName: z.string(),
       customerName: z.string(),
       note: z.string().nullable(),
@@ -95,6 +100,7 @@ export const logOrdersBulk = createServerFn({ method: "POST" })
       kind: o.kind ?? "cocktail",
       cocktail_id: o.cocktailId,
       spirit_id: o.spiritId ?? null,
+      wine_id: o.wineId ?? null,
       cocktail_name: o.cocktailName,
       customer_name: o.customerName,
       note: o.note,
@@ -146,7 +152,7 @@ export const getSpiritTypeStats = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const counts = new Map<string, number>();
     for (const row of (data ?? []) as Array<{ spirit_type: string | null }>) {
-      const key = row.spirit_type?.trim() ? row.spirit_type.trim() : SPIRIT_TYPE_FALLBACK;
+      const key = row.spirit_type ?? SPIRIT_TYPE_FALLBACK;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     const result: SpiritTypeStatRow[] = Array.from(counts.entries())
@@ -157,9 +163,9 @@ export const getSpiritTypeStats = createServerFn({ method: "GET" })
 
 // ── Statistik: Rating-fordeling ────────────────────────────────────────────
 
-export type RatingDistRow = { rating: number; count: number };
+export type RatingStatRow = { rating: number; count: number };
 
-export const getRatingDistribution = createServerFn({ method: "GET" })
+export const getRatingStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
@@ -167,21 +173,18 @@ export const getRatingDistribution = createServerFn({ method: "GET" })
       .from("cocktail_ratings")
       .select("rating");
     if (error) throw new Error(error.message);
-    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const counts = new Map<number, number>();
     for (const row of data ?? []) {
-      const r = Number(row.rating);
-      if (r >= 1 && r <= 5) counts[r]++;
+      counts.set(row.rating, (counts.get(row.rating) ?? 0) + 1);
     }
-    const result: RatingDistRow[] = [1, 2, 3, 4, 5].map((r) => ({
+    const result: RatingStatRow[] = [1, 2, 3, 4, 5].map((r) => ({
       rating: r,
-      count: counts[r],
+      count: counts.get(r) ?? 0,
     }));
     return result;
   });
 
 // ── Statistik: Top 5 mest bestilte cocktails ──────────────────────────────
-// Tæller efter quantity, så en bestilling på ×3 tæller som 3 drinks.
-// Filtreret til kind='cocktail', så spiritus-bestillinger ikke tæller med.
 
 export type TopCocktailRow = { cocktail_name: string; count: number };
 
@@ -207,8 +210,6 @@ export const getTopCocktails = createServerFn({ method: "GET" })
   });
 
 // ── Statistik: Top 5 mest bestilte spiritus ───────────────────────────────
-// Samme princip som getTopCocktails, men filtreret til kind='spirit'.
-// Vare-navnet ligger også her i cocktail_name-kolonnen (delt bestillingslog).
 
 export type TopSpiritRow = { spirit_name: string; count: number };
 
@@ -234,10 +235,6 @@ export const getTopSpirits = createServerFn({ method: "GET" })
   });
 
 // ── Populære cocktails til badges (OFFENTLIG) ──────────────────────────────
-// Bruges på det offentlige menukort, så den er bevidst uden auth-middleware.
-// Den udstiller kun hvilke cocktails der er populære (id + antal) — ingen
-// gæstenavne eller andet følsomt. Tæller efter quantity og matcher på
-// cocktail_id (robust over for omdøbninger). Filtreret til kind='cocktail'.
 
 export type PopularBadge = "bestseller" | "popular";
 export type PopularCocktailRow = {
@@ -247,8 +244,8 @@ export type PopularCocktailRow = {
   badge: PopularBadge;
 };
 
-const POPULAR_THRESHOLD = 3; // mindst 3 bestillinger før et badge gives
-const POPULAR_LIMIT = 5;     // #1 = bestseller, #2-5 = populær
+const POPULAR_THRESHOLD = 3;
+const POPULAR_LIMIT = 5;
 
 export const getPopularCocktails = createServerFn({ method: "GET" }).handler(
   async (): Promise<PopularCocktailRow[]> => {
@@ -280,7 +277,6 @@ export const getPopularCocktails = createServerFn({ method: "GET" }).handler(
 );
 
 // ── Populære spiritus til badges (OFFENTLIG) — spejler getPopularCocktails ─
-// Matcher på spirit_id og er filtreret til kind='spirit'.
 
 export type PopularSpiritRow = {
   spirit_id: string;
@@ -319,9 +315,6 @@ export const getPopularSpirits = createServerFn({ method: "GET" }).handler(
 );
 
 // ── Statistik: Bestillinger over tid ──────────────────────────────────────
-// Returnerer RÅ bestillingspunkter (tidsstempel + antal). Al gruppering,
-// "bar-døgn"-logik og positionering på tidsaksen sker i klienten, så det kan
-// regnes i lokal tid (Europe/Copenhagen) frem for UTC.
 
 export type OrderPoint = { t: string; q: number };
 
@@ -377,60 +370,45 @@ export const getGuestSeries = createServerFn({ method: "POST" })
       quantity: number | null;
     }>;
 
-    // Find tidsperiode
-    if (allRows.length === 0) return [];
-    const firstTime = new Date(allRows[0].logged_at);
-    const lastTime = new Date(allRows[allRows.length - 1].logged_at);
-    const spanHours = (lastTime.getTime() - firstTime.getTime()) / 1000 / 3600;
-    // Brug timer ved <= 48t, ellers dage
-    const useHours = spanHours <= 48;
+    // Find tidsspænd
+    const times = allRows.map((r) => new Date(r.logged_at).getTime());
+    const spanMs = times.length > 1 ? Math.max(...times) - Math.min(...times) : 0;
+    const groupByDay = spanMs > 7 * 24 * 3600 * 1000;
 
     function bucket(iso: string): string {
-      if (useHours) return iso.slice(0, 13) + ":00"; // YYYY-MM-DDTHH:00
-      return iso.slice(0, 10);                        // YYYY-MM-DD
+      const d = new Date(iso);
+      if (groupByDay) return d.toISOString().slice(0, 10);
+      return d.toISOString().slice(0, 13);
     }
 
-    // Byg per-gæst optælling (efter quantity)
-    const guestMap = new Map<string, Map<string, number>>();
-    for (const row of allRows) {
-      const b = bucket(row.logged_at);
-      if (!guestMap.has(row.customer_name)) guestMap.set(row.customer_name, new Map());
-      const m = guestMap.get(row.customer_name)!;
-      m.set(b, (m.get(b) ?? 0) + (row.quantity ?? 1));
+    // Byg totaler pr. gæst
+    const totals = new Map<string, number>();
+    for (const r of allRows) {
+      totals.set(r.customer_name, (totals.get(r.customer_name) ?? 0) + (r.quantity ?? 1));
     }
 
-    // Saml alle unikke buckets
-    const allBuckets = Array.from(
-      new Set(allRows.map((r) => bucket(r.logged_at)))
-    ).sort();
+    // Top 10 gæster
+    const top10 = Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name]) => name);
 
-    // Byg kumulerede serier og find top 8 gæster
-    const result: GuestSeriesRow[] = Array.from(guestMap.entries())
-      .map(([customer_name, bucketMap]) => {
-        let cum = 0;
-        const series: GuestTimePoint[] = allBuckets.map((b) => {
-          cum += bucketMap.get(b) ?? 0;
-          return { time: b, cumulative: cum };
+    const result: GuestSeriesRow[] = top10.map((name) => {
+      const personal = allRows.filter((r) => r.customer_name === name);
+      const bucketMap = new Map<string, number>();
+      for (const r of personal) {
+        const key = bucket(r.logged_at);
+        bucketMap.set(key, (bucketMap.get(key) ?? 0) + (r.quantity ?? 1));
+      }
+      let cumulative = 0;
+      const series: GuestTimePoint[] = Array.from(bucketMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([time, q]) => {
+          cumulative += q;
+          return { time, cumulative };
         });
-        return { customer_name, total: cum, series };
-      })
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
+      return { customer_name: name, total: totals.get(name) ?? 0, series };
+    });
 
     return result;
-  });
-
-// ── Nulstil statistikdata ──────────────────────────────────────────────────
-
-export const clearOrderLog = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    await assertAdmin(context);
-    const sb = await getAdminClient();
-    const { error } = await sb
-      .from("order_log" as any)
-      .delete()
-      .not("id", "is", null);
-    if (error) throw new Error(error.message);
-    return { ok: true };
   });
