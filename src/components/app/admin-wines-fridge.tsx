@@ -58,8 +58,8 @@ export function AdminWinesFridge() {
 
   function addShelf() {
     if (draft.shelves.length >= MAX_SHELVES) return;
-    const last = draft.shelves[draft.shelves.length - 1]?.slots ?? 5;
-    setDraft({ shelves: [...draft.shelves, { slots: last }] });
+    const last = draft.shelves[draft.shelves.length - 1] ?? { slotsForrest: 5, slotsBagerst: 5 };
+    setDraft({ shelves: [...draft.shelves, { slotsForrest: last.slotsForrest, slotsBagerst: last.slotsBagerst }] });
   }
 
   function removeShelf() {
@@ -67,10 +67,10 @@ export function AdminWinesFridge() {
     setDraft({ shelves: draft.shelves.slice(0, -1) });
   }
 
-  function changeSlots(index: number, delta: number) {
+  function changeSlots(index: number, field: "slotsForrest" | "slotsBagerst", delta: number) {
     setDraft({
       shelves: draft.shelves.map((s, i) =>
-        i !== index ? s : { slots: Math.min(MAX_SLOTS, Math.max(1, s.slots + delta)) },
+        i !== index ? s : { ...s, [field]: Math.min(MAX_SLOTS, Math.max(1, s[field] + delta)) },
       ),
     });
   }
@@ -134,22 +134,33 @@ export function AdminWinesFridge() {
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {draft.shelves.map((shelf, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <span className="w-16 shrink-0 text-sm text-muted-foreground">Hylde {i + 1}</span>
-              <div className="flex items-center gap-2">
-                <Button type="button" size="icon" variant="outline" className="h-8 w-8"
-                  onClick={() => changeSlots(i, -1)} disabled={shelf.slots <= 1}>
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <span className="w-20 text-center text-sm tabular-nums">
-                  {shelf.slots} {shelf.slots === 1 ? "plads" : "pladser"}
-                </span>
-                <Button type="button" size="icon" variant="outline" className="h-8 w-8"
-                  onClick={() => changeSlots(i, 1)} disabled={shelf.slots >= MAX_SLOTS}>
-                  <Plus className="h-4 w-4" />
-                </Button>
+            <div key={i} className="rounded-lg border border-border p-3">
+              <p className="mb-2 text-sm font-medium">Hylde {i + 1}</p>
+              <div className="space-y-2">
+                {(["forrest", "bagerst"] as const).map((side) => {
+                  const field = side === "forrest" ? "slotsForrest" : "slotsBagerst";
+                  const val = shelf[field];
+                  return (
+                    <div key={side} className="flex items-center gap-3">
+                      <span className="w-16 shrink-0 text-xs text-muted-foreground capitalize">{side}</span>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" size="icon" variant="outline" className="h-7 w-7"
+                          onClick={() => changeSlots(i, field, -1)} disabled={val <= 1}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-16 text-center text-sm tabular-nums">
+                          {val} {val === 1 ? "plads" : "pladser"}
+                        </span>
+                        <Button type="button" size="icon" variant="outline" className="h-7 w-7"
+                          onClick={() => changeSlots(i, field, 1)} disabled={val >= MAX_SLOTS}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
