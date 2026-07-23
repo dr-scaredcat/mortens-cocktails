@@ -78,7 +78,7 @@ function Bottle({
     sizeClass,
     wine ? "border" : "border border-dashed border-border text-muted-foreground",
     isSelected && "ring-2 ring-primary",
-    isHighlighted && "ring-2 ring-primary animate-pulse",
+    isHighlighted && "ring-2 ring-primary",
     blocked && "cursor-not-allowed opacity-60",
     clickable && "cursor-pointer hover:border-primary",
   );
@@ -172,7 +172,12 @@ function DepthSection({
 }) {
   const isPicker = mode === "admin-vaelger";
   // Lag 2 har slots-1 mulige pladser (øverste)
-  const lag2Count = Math.max(0, slots - 1);
+  // Lag 2 vises kun hvis mindst én plads i lag 2 er besat
+  // (enten af den fremhævede vin eller af en anden vin).
+  const lag2HasWines = Array.from({ length: Math.max(0, slots - 1) }, (_, i) => i + 1).some(
+    (slotNo) => byPosition.has(posKey(shelfNo, slotNo, depth, 2)),
+  );
+  const lag2Count = lag2HasWines ? Math.max(0, slots - 1) : 0;
   // Grid skal have 2*slots kolonner for lag 1, og lag 2 starter ved kolonne 2
   const gridCols = slots * 2;
 
@@ -425,4 +430,4 @@ export function WineFridgeLegend({ className }: { className?: string }) {
       </span>
     </div>
   );
-}
+                }
