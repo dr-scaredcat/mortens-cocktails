@@ -12,6 +12,7 @@ const WINE_TYPE_STYLE: Record<string, WineTypeStyle> = {
   "rosé":        { fill: "oklch(0.84 0.09 20)",  text: "oklch(0.30 0.06 20)" },
   "mousserende": { fill: "oklch(0.91 0.08 100)", text: "oklch(0.30 0.05 90)" },
   "dessertvin":  { fill: "oklch(0.71 0.13 62)",  text: "oklch(0.26 0.06 60)" },
+  "andet":       { fill: "oklch(0.72 0.04 270)",  text: "oklch(0.97 0.01 270)" },
 };
 
 const FALLBACK_STYLE: WineTypeStyle = {
@@ -23,31 +24,12 @@ function styleForType(type: string): WineTypeStyle {
   return WINE_TYPE_STYLE[type] ?? FALLBACK_STYLE;
 }
 
-// ── Dimensioner ─────────────────────────────────────────────────────────────
-// Lag 1: 44px (w-11), lag 2: 36px (w-9). Gap mellem cirkler: 8px (gap-2).
-// Forskydning lag 2: centerlinjen skal ligge halvvejs mellem to lag-1-centre.
-// Lag 1 center-til-center afstand: 44 + 8 = 52px.
-// Lag 2 offset fra venstre kant af lag 1: (52 / 2) - (36 / 2) = 26 - 18 = 8px.
-// Men vi vil have LAG 2's VENSTREKANT til at starte 26px inde i lag 1's første cirkel,
-// dvs. marginLeft = 26px (halvt af lag-1-pitch).
-const LAG1_SIZE = 44; // px, svarende til w-11
-const LAG2_SIZE = 36; // px, svarende til w-9
-const GAP = 8;        // px, svarende til gap-2
-const PITCH = LAG1_SIZE + GAP; // 52px — center-til-center afstand i lag 1
-// Lag 2 cirkel 1's centrum skal ligge ved x = PITCH/2 = 26px fra lag 1 cirkel 1's centrum.
-// Lag 2 cirkel 1's venstrekant: 26 - LAG2_SIZE/2 = 26 - 18 = 8px.
-// Men vi lægger lag 2 i en container med padding-left = PITCH/2 - LAG2_SIZE/2 = 8px
-// og bruger samme gap (8px) som lag 1. Dermed:
-//   lag2[0] centrum = 8 + 18 = 26px ✓
-//   lag2[1] centrum = 8 + 18 + 52 = 78px = 26 + 52 ✓ (halvvejs mellem lag1[1] og lag1[2])
-const LAG2_OFFSET = PITCH / 2 - LAG2_SIZE / 2; // = 8px
-
 // ── Typer ───────────────────────────────────────────────────────────────────
 export type FridgePosition = {
   shelf: number;
   slot: number;
-  depth: number;
-  layer: number;
+  depth: number; // 1 = forrest, 2 = bagerst
+  layer: number; // 1 = nederste, 2 = øverste
 };
 
 export type WineFridgeMode = "admin-vaelger" | "gæst";
@@ -88,14 +70,13 @@ function Bottle({
 }) {
   const typeStyle = wine ? styleForType(wine.wine_type) : null;
   const isSparkling = wine?.wine_type === "mousserende";
-  // Lag 2 er lidt mindre end lag 1
+  // Lag 2 er lidt mindre end lag 1 — 36px vs 44px
   const sizeClass = isLag2 ? "h-9 w-9" : "h-11 w-11";
 
   const cls = cn(
     "relative flex shrink-0 items-center justify-center rounded-full text-xs font-medium transition select-none",
     sizeClass,
     wine ? "border" : "border border-dashed border-border text-muted-foreground",
-    // Ingen ring-offset — undgår at ringen klippes af overflow-hidden
     isSelected && "ring-2 ring-primary",
     isHighlighted && "ring-2 ring-primary animate-pulse",
     blocked && "cursor-not-allowed opacity-60",
@@ -145,10 +126,32 @@ function Bottle({
   );
 }
 
-// ── Én dybde-sektion (forrest ELLER bagerst) med lag 1 + lag 2 ─────────────
+// ── Grid-baseret dybde-sektion ──────────────────────────────────────────────
+//
+// Robust forskydning via CSS Grid med inline custom properties.
+//
+// Lag 1 har N pladser. Lag 2 har N-1 pladser og skal ligge HALVVEJS
+// mellem lag-1-cirklerne. Vi opnår dette ved at definere et grid med
+// 2N kolonner af ens bredde (LAG1_PX / 2). Da en lag-1-cirkel er 44px og
+// gab er 8px, er en halv enhed (44+8)/2 = 26px.
+//
+// Lag 1 cirkel i slot X starter i grid-kolonne 2X-1 og slutter i 2X+1
+// (dvs. spænder 2 kolonner).
+// Lag 2 cirkel i slot X starter i grid-kolonne 2X og slutter i 2X+2
+// (dvs. også 2 kolonner, men forskudt én halv enhed).
+//
+// Dermed er lag-2 cirkel Xs centrum præcis midt imellem lag-1 cirklerne
+// X og X+1 — uanset skærmstørrelse og uden at bryde ved scroll.
+
+const LAG1_PX = 44; // h-11 w-11
+const LAG2_PX = 36; // h-9 w-9
+const GAP_PX = 8;   // gap-2
+// Halvkolonnebredde i pixels — bruges som --col-w custom property
+const HALF_COL_PX = (LAG1_PX + GAP_PX) / 2; // = 26px
+
 function DepthSection({
   shelfNo,
-  slots,
+  slots,         // antal pladser i dette lag/denne dybde
   depth,
   byPosition,
   mode,
@@ -168,75 +171,94 @@ function DepthSection({
   onSelectSlot?: (pos: FridgePosition) => void;
 }) {
   const isPicker = mode === "admin-vaelger";
+  // Lag 2 har slots-1 mulige pladser (øverste)
+  const lag2Count = Math.max(0, slots - 1);
+  // Grid skal have 2*slots kolonner for lag 1, og lag 2 starter ved kolonne 2
+  const gridCols = slots * 2;
 
   return (
-    <div className="space-y-1">
-      {/* Lag 2 — øverste, forskudt præcist halvt pitch til højre */}
-      {slots > 1 && (
-        <div className="overflow-x-auto pb-0.5">
-          <div
-            className="flex"
-            style={{
-              paddingLeft: LAG2_OFFSET,
-              gap: GAP,
-            }}
-          >
-            {Array.from({ length: slots - 1 }, (_, i) => {
-              const slotNo = i + 1;
-              const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 2)) ?? null;
-              const isSelected = selectedPositions.some(
-                (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 2,
-              );
-              const isHighlighted = !!wine && wine.id === highlightWineId;
-              const isOwnWine = !!wine && wine.id === currentWineId;
+    <div className="overflow-x-auto pb-1">
+      {/*
+        Grid: 2*slots kolonner, hver HALF_COL_PX bred.
+        Lag 1: cirkel i slot X → grid-column: 2X-1 / span 2
+        Lag 2: cirkel i slot X → grid-column: 2X   / span 2
+        Gab simuleres ved at cirklerne er 44px/36px mens kolonnepar er 52px brede.
+      */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${gridCols}, ${HALF_COL_PX}px)`,
+          rowGap: "6px",
+        }}
+      >
+        {/* Lag 2 — øverste, forskudt */}
+        {lag2Count > 0 && Array.from({ length: lag2Count }, (_, i) => {
+          const slotNo = i + 1;
+          const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 2)) ?? null;
+          const isSelected = selectedPositions.some(
+            (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 2,
+          );
+          const isHighlighted = !!wine && wine.id === highlightWineId;
+          const isOwnWine = !!wine && wine.id === currentWineId;
 
-              // Tjek forudsætning: lag 1 slot X og X+1 begge besat (inkl. valgte pladser)
-              const leftOk =
-                !!byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ||
-                selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1);
-              const rightOk =
-                !!byPosition.get(posKey(shelfNo, slotNo + 1, depth, 1)) ||
-                selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo + 1 && s.depth === depth && s.layer === 1);
-              const prereqMet = leftOk && rightOk;
+          const leftOk =
+            !!byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ||
+            selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1);
+          const rightOk =
+            !!byPosition.get(posKey(shelfNo, slotNo + 1, depth, 1)) ||
+            selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo + 1 && s.depth === depth && s.layer === 1);
+          const prereqMet = leftOk && rightOk;
 
-              const blocked = isPicker ? (!!wine && !isOwnWine) || !prereqMet : false;
-              const clickable = isPicker && !blocked;
+          const blocked = isPicker ? (!!wine && !isOwnWine) || !prereqMet : false;
+          const clickable = isPicker && !blocked;
 
-              return (
-                <Bottle
-                  key={slotNo}
-                  label={String(slotNo)}
-                  wine={wine}
-                  isSelected={isSelected}
-                  isHighlighted={isHighlighted}
-                  blocked={blocked}
-                  clickable={clickable}
-                  isLag2
-                  onClick={clickable ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 2 }) : undefined}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
+          // Lag 2 slot X → grid-column: 2X / span 2
+          const colStart = slotNo * 2;
 
-      {/* Lag 1 — nederste */}
-      <div className="overflow-x-auto pb-0.5">
-        <div className="flex" style={{ gap: GAP }}>
-          {Array.from({ length: slots }, (_, i) => {
-            const slotNo = i + 1;
-            const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ?? null;
-            const isSelected = selectedPositions.some(
-              (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1,
-            );
-            const isHighlighted = !!wine && wine.id === highlightWineId;
-            const isOwnWine = !!wine && wine.id === currentWineId;
-            const blocked = isPicker && !!wine && !isOwnWine;
-            const clickable = isPicker && !blocked;
-
-            return (
+          return (
+            <div
+              key={slotNo}
+              style={{ gridColumn: `${colStart} / span 2`, display: "flex", justifyContent: "center" }}
+            >
               <Bottle
-                key={slotNo}
+                label={String(slotNo)}
+                wine={wine}
+                isSelected={isSelected}
+                isHighlighted={isHighlighted}
+                blocked={blocked}
+                clickable={clickable}
+                isLag2
+                onClick={clickable ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 2 }) : undefined}
+              />
+            </div>
+          );
+        })}
+
+        {/* Lag 2 fylder én grid-row — lag 1 starter i næste row */}
+        {/* Vi bruger en tom div der fylder hele bredden som row-separator kun hvis lag2Count > 0 */}
+        {lag2Count === 0 && null}
+
+        {/* Lag 1 — nederste */}
+        {Array.from({ length: slots }, (_, i) => {
+          const slotNo = i + 1;
+          const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ?? null;
+          const isSelected = selectedPositions.some(
+            (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1,
+          );
+          const isHighlighted = !!wine && wine.id === highlightWineId;
+          const isOwnWine = !!wine && wine.id === currentWineId;
+          const blocked = isPicker && !!wine && !isOwnWine;
+          const clickable = isPicker && !blocked;
+
+          // Lag 1 slot X → grid-column: 2X-1 / span 2
+          const colStart = slotNo * 2 - 1;
+
+          return (
+            <div
+              key={slotNo}
+              style={{ gridColumn: `${colStart} / span 2`, display: "flex", justifyContent: "center" }}
+            >
+              <Bottle
                 label={String(slotNo)}
                 wine={wine}
                 isSelected={isSelected}
@@ -245,9 +267,9 @@ function DepthSection({
                 clickable={clickable}
                 onClick={clickable ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 1 }) : undefined}
               />
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -294,7 +316,7 @@ export function WineFridge({
               <div>
                 <p className="mb-1.5 text-[11px] text-muted-foreground/70">Bagerst</p>
                 <DepthSection
-                  shelfNo={shelfNo} slots={shelf.slots} depth={2}
+                  shelfNo={shelfNo} slots={shelf.slotsBagerst} depth={2}
                   byPosition={byPosition} mode={mode}
                   selectedPositions={selectedPositions}
                   highlightWineId={highlightWineId} currentWineId={currentWineId}
@@ -304,7 +326,7 @@ export function WineFridge({
               <div>
                 <p className="mb-1.5 text-[11px] text-muted-foreground/70">Forrest</p>
                 <DepthSection
-                  shelfNo={shelfNo} slots={shelf.slots} depth={1}
+                  shelfNo={shelfNo} slots={shelf.slotsForrest} depth={1}
                   byPosition={byPosition} mode={mode}
                   selectedPositions={selectedPositions}
                   highlightWineId={highlightWineId} currentWineId={currentWineId}
@@ -350,7 +372,12 @@ export function WinePlacementView({
   return (
     <div className={cn("space-y-4", className)}>
       {groups.map((g) => {
-        const slots = layout.shelves[g.shelf - 1]?.slots ?? 5;
+        const shelfDef = layout.shelves[g.shelf - 1];
+        // Brug korrekt slots-antal afhængigt af dybden
+        const slots = g.depth === 1
+          ? (shelfDef?.slotsForrest ?? 5)
+          : (shelfDef?.slotsBagerst ?? 5);
+
         return (
           <div key={`${g.shelf}:${g.depth}`}>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -361,37 +388,16 @@ export function WinePlacementView({
                 </span>
               )}
             </p>
-            <div className="space-y-1 rounded-lg border border-border bg-card p-3">
-              {/* Lag 2 */}
-              {slots > 1 && (
-                <div className="overflow-x-auto pb-0.5">
-                  <div className="flex" style={{ paddingLeft: LAG2_OFFSET, gap: GAP }}>
-                    {Array.from({ length: slots - 1 }, (_, i) => {
-                      const slotNo = i + 1;
-                      const w = byPosition.get(posKey(g.shelf, slotNo, g.depth, 2)) ?? null;
-                      return (
-                        <Bottle key={slotNo} label={String(slotNo)} wine={w}
-                          isSelected={false} isHighlighted={!!w && w.id === wine.id}
-                          blocked={false} clickable={false} isLag2 />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {/* Lag 1 */}
-              <div className="overflow-x-auto pb-0.5">
-                <div className="flex" style={{ gap: GAP }}>
-                  {Array.from({ length: slots }, (_, i) => {
-                    const slotNo = i + 1;
-                    const w = byPosition.get(posKey(g.shelf, slotNo, g.depth, 1)) ?? null;
-                    return (
-                      <Bottle key={slotNo} label={String(slotNo)} wine={w}
-                        isSelected={false} isHighlighted={!!w && w.id === wine.id}
-                        blocked={false} clickable={false} />
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="rounded-lg border border-border bg-card p-3">
+              <DepthSection
+                shelfNo={g.shelf}
+                slots={slots}
+                depth={g.depth}
+                byPosition={byPosition}
+                mode="gæst"
+                selectedPositions={[]}
+                highlightWineId={wine.id}
+              />
             </div>
           </div>
         );

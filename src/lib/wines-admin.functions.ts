@@ -175,7 +175,10 @@ export const deleteWine = createServerFn({ method: "POST" })
 
 // ── Gem køleskabslayout ─────────────────────────────────────────────────────
 const layoutSchema = z.object({
-  shelves: z.array(z.object({ slots: z.number().int().min(1).max(20) })).min(1).max(15),
+  shelves: z.array(z.object({
+    slotsForrest: z.number().int().min(1).max(20),
+    slotsBagerst: z.number().int().min(1).max(20),
+  })).min(1).max(15),
 });
 
 export const saveWineFridgeLayout = createServerFn({ method: "POST" })
@@ -194,7 +197,14 @@ export const saveWineFridgeLayout = createServerFn({ method: "POST" })
     const affectedNames = new Set<string>();
     for (const p of (placed ?? []) as any[]) {
       const shelfDef = layout.shelves[p.shelf - 1];
-      if (!shelfDef || p.slot > shelfDef.slots) {
+      if (!shelfDef) {
+        affectedIds.push(p.id);
+        if (p.wines?.name) affectedNames.add(p.wines.name);
+        continue;
+      }
+      // depth 1 = forrest, depth 2 = bagerst
+      const maxSlot = p.depth === 1 ? shelfDef.slotsForrest : shelfDef.slotsBagerst;
+      if (p.slot > maxSlot) {
         affectedIds.push(p.id);
         if (p.wines?.name) affectedNames.add(p.wines.name);
       }
