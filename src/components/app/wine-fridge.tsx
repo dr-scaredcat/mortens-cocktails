@@ -69,7 +69,6 @@ function Bottle({
   isLag2?: boolean;
 }) {
   const typeStyle = wine ? styleForType(wine.wine_type) : null;
-  const isSparkling = wine?.wine_type === "mousserende";
   // Lag 2 er lidt mindre end lag 1 — 36px vs 44px
   const sizeClass = isLag2 ? "h-9 w-9" : "h-11 w-11";
 
@@ -94,12 +93,7 @@ function Bottle({
   const inner = (
     <>
       <span className="leading-none">{label}</span>
-      {isSparkling && (
-        <span className="pointer-events-none absolute right-1 top-1 flex gap-[2px]">
-          <span className="h-[3px] w-[3px] rounded-full bg-current opacity-70" />
-          <span className="h-[3px] w-[3px] rounded-full bg-current opacity-50" />
-        </span>
-      )}
+
     </>
   );
 
@@ -182,7 +176,7 @@ function DepthSection({
   const gridCols = slots * 2;
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div className="overflow-x-auto overflow-y-visible pb-1 pt-1">
       {/*
         Grid: 2*slots kolonner, hver HALF_COL_PX bred.
         Lag 1: cirkel i slot X → grid-column: 2X-1 / span 2
@@ -194,6 +188,7 @@ function DepthSection({
           display: "grid",
           gridTemplateColumns: `repeat(${gridCols}, ${HALF_COL_PX}px)`,
           rowGap: "6px",
+          padding: "3px 0",  /* plads til ring-2 (2px) + lidt luft */
         }}
       >
         {/* Lag 2 — øverste, forskudt */}
@@ -430,4 +425,4 @@ export function WineFridgeLegend({ className }: { className?: string }) {
       </span>
     </div>
   );
-                }
+}
