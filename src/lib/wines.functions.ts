@@ -8,6 +8,7 @@ export const WINE_TYPE_ORDER = [
   "rosé",
   "mousserende",
   "dessertvin",
+  "andet",
 ] as const;
 
 export type WineType = (typeof WINE_TYPE_ORDER)[number];
