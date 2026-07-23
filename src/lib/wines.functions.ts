@@ -212,17 +212,17 @@ export const drinkWine = createServerFn({ method: "POST" })
   });
 
 // ── Vinkøleskabets layout ───────────────────────────────────────────────────
-export type WineFridgeShelf = { slots: number };
+export type WineFridgeShelf = { slotsForrest: number; slotsBagerst: number };
 export type WineFridgeLayout = { shelves: WineFridgeShelf[] };
 
 export const DEFAULT_WINE_FRIDGE_LAYOUT: WineFridgeLayout = {
   shelves: [
-    { slots: 5 },
-    { slots: 5 },
-    { slots: 5 },
-    { slots: 5 },
-    { slots: 5 },
-    { slots: 5 },
+    { slotsForrest: 5, slotsBagerst: 5 },
+    { slotsForrest: 5, slotsBagerst: 5 },
+    { slotsForrest: 5, slotsBagerst: 5 },
+    { slotsForrest: 5, slotsBagerst: 5 },
+    { slotsForrest: 5, slotsBagerst: 5 },
+    { slotsForrest: 5, slotsBagerst: 5 },
   ],
 };
 
@@ -232,7 +232,11 @@ function isValidLayout(value: unknown): value is WineFridgeLayout {
     typeof value === "object" &&
     Array.isArray((value as any).shelves) &&
     (value as any).shelves.every(
-      (s: any) => !!s && typeof s === "object" && typeof s.slots === "number" && s.slots >= 1,
+      (s: any) =>
+        !!s &&
+        typeof s === "object" &&
+        typeof s.slotsForrest === "number" && s.slotsForrest >= 1 &&
+        typeof s.slotsBagerst === "number" && s.slotsBagerst >= 1,
     )
   );
 }
