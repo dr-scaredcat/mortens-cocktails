@@ -4,22 +4,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Wine } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { GuestHeader } from "@/components/app/guest-header";
 import { OrderButton } from "@/components/app/order-button";
 import { CardImage } from "@/components/app/card-image";
 import { WinePlacementView, WineFridgeLegend } from "@/components/app/wine-fridge";
+import { DrinkWineDialog } from "@/components/app/drink-wine-dialog";
 import {
-  listWines,
-  getWineFridgeLayout,
-  WINE_TYPE_ORDER,
-  DEFAULT_WINE_FRIDGE_LAYOUT,
-  type WineWithDetails,
-  type WineFridgeLayout,
+  listWines, getWineFridgeLayout, getWineSelfServe,
+  WINE_TYPE_ORDER, DEFAULT_WINE_FRIDGE_LAYOUT,
+  type WineWithDetails, type WineFridgeLayout,
 } from "@/lib/wines.functions";
 import { getOrderingEnabled } from "@/lib/orders.functions";
 import { thumbUrl } from "@/lib/image-utils";
@@ -29,31 +27,23 @@ export const Route = createFileRoute("/vine")({
   head: () => ({
     meta: [
       { title: "Vine — Aston's Bar" },
-      { name: "description", content: "Vores vinlager — se hvad der er på køl og bestil en flaske." },
+      { name: "description", content: "Vores vinlager — se hvad der er på køl." },
     ],
   }),
   loader: async ({ context }) => {
     const [wines, layout] = await Promise.all([
-      context.queryClient.ensureQueryData({
-        queryKey: ["wines"],
-        queryFn: () => listWines(),
-      }),
-      context.queryClient.ensureQueryData({
-        queryKey: ["wine-fridge-layout"],
-        queryFn: () => getWineFridgeLayout(),
-      }),
+      context.queryClient.ensureQueryData({ queryKey: ["wines"], queryFn: () => listWines() }),
+      context.queryClient.ensureQueryData({ queryKey: ["wine-fridge-layout"], queryFn: () => getWineFridgeLayout() }),
     ]);
     return { wines, layout };
   },
   component: VinePage,
 });
 
-// ── Hjælpere ────────────────────────────────────────────────────────────────
 function formatAbv(abv: number | null): string {
   if (abv === null) return "";
   return abv.toFixed(1).replace(".", ",") + " %";
 }
-
 function formatDrinkWindow(from: number | null, to: number | null): string {
   if (!from && !to) return "";
   if (from && to) return `${from}–${to}`;
@@ -61,28 +51,17 @@ function formatDrinkWindow(from: number | null, to: number | null): string {
   return `til ${to}`;
 }
 
-// ── Kort ────────────────────────────────────────────────────────────────────
-function WineCard({
-  wine,
-  onOpen,
-  orderingEnabled,
-}: {
+// ── Vinkortet ────────────────────────────────────────────────────────────────
+function WineCard({ wine, onOpen, orderingEnabled, selfServe, onDrink }: {
   wine: WineWithDetails;
   onOpen: () => void;
   orderingEnabled: boolean;
+  selfServe: boolean;
+  onDrink: () => void;
 }) {
-  // quantity = antal placeringer; vine uden placering filtreres fra i listWines
-  const soldOut = wine.quantity === 0;
-
   return (
-    <Card className={cn("flex flex-col overflow-hidden border-border/70 bg-card transition hover:border-primary/50", soldOut && "opacity-60")}>
-      <div
-        className="relative aspect-[4/3] w-full shrink-0 cursor-pointer bg-muted"
-        onClick={onOpen}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      >
+    <Card className="flex flex-col overflow-hidden border-border/70 bg-card transition hover:border-primary/50">
+      <div className="relative aspect-[4/3] w-full shrink-0 cursor-pointer bg-muted" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen()}>
         {wine.image_url ? (
           <CardImage src={thumbUrl(wine.image_url, 480) ?? wine.image_url} alt={wine.name} />
         ) : (
@@ -92,56 +71,44 @@ function WineCard({
           </div>
         )}
       </div>
-
       <div className="flex flex-1 flex-col gap-2 p-4">
         <div className="flex cursor-pointer items-start justify-between gap-2" onClick={onOpen}>
           <div className="min-w-0">
             <h3 className="font-serif text-xl leading-tight">
               {wine.name}
-              {wine.vintage && (
-                <span className="ml-1.5 text-base font-normal text-muted-foreground">{wine.vintage}</span>
-              )}
+              {wine.vintage && <span className="ml-1.5 text-base font-normal text-muted-foreground">{wine.vintage}</span>}
             </h3>
             {wine.producer && <p className="text-sm text-muted-foreground">{wine.producer}</p>}
           </div>
           <Badge variant="outline" className="shrink-0 text-xs">{wine.wine_type}</Badge>
         </div>
-
         {(wine.country || wine.region) && (
-          <p className="cursor-pointer text-sm text-muted-foreground" onClick={onOpen}>
-            {[wine.region, wine.country].filter(Boolean).join(", ")}
-          </p>
+          <p className="cursor-pointer text-sm text-muted-foreground" onClick={onOpen}>{[wine.region, wine.country].filter(Boolean).join(", ")}</p>
         )}
-        {wine.grapes && (
-          <p className="cursor-pointer text-sm text-muted-foreground" onClick={onOpen}>{wine.grapes}</p>
-        )}
-
-        {/* Antal flasker */}
-        <p className="text-xs text-muted-foreground">
-          {wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"} på køl
-        </p>
+        {wine.grapes && <p className="cursor-pointer text-sm text-muted-foreground" onClick={onOpen}>{wine.grapes}</p>}
+        <p className="text-xs text-muted-foreground">{wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"} på køl</p>
       </div>
-
-      {orderingEnabled && (
-        <div className="mt-auto px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+      <div className="mt-auto px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+        {selfServe ? (
+          <Button className="w-full" size="sm" variant="outline" onClick={onDrink}>
+            Drik
+          </Button>
+        ) : orderingEnabled ? (
           <OrderButton kind="wine" wineId={wine.id} cocktailName={wine.name} />
-        </div>
-      )}
+        ) : null}
+      </div>
     </Card>
   );
 }
 
 // ── Detaljedialog-indhold ───────────────────────────────────────────────────
-function WineDetailCard({
-  wine,
-  layout,
-  allWines,
-  orderingEnabled,
-}: {
+function WineDetailCard({ wine, layout, allWines, orderingEnabled, selfServe, onDrink }: {
   wine: WineWithDetails;
   layout: WineFridgeLayout;
   allWines: WineWithDetails[];
   orderingEnabled: boolean;
+  selfServe: boolean;
+  onDrink: () => void;
 }) {
   return (
     <Card className="flex flex-col overflow-hidden border-border/70 bg-card">
@@ -150,28 +117,19 @@ function WineDetailCard({
           <CardImage src={wine.image_url} alt={wine.name} />
         </div>
       )}
-
       <div className="flex flex-1 flex-col gap-5 p-5">
-        {/* Titel */}
         <div>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h2 className="font-serif text-2xl leading-tight">
               {wine.name}
-              {wine.vintage && (
-                <span className="ml-2 text-xl font-normal text-muted-foreground">{wine.vintage}</span>
-              )}
+              {wine.vintage && <span className="ml-2 text-xl font-normal text-muted-foreground">{wine.vintage}</span>}
             </h2>
             <Badge variant="outline">{wine.wine_type}</Badge>
           </div>
           {wine.producer && <p className="mt-1 text-base text-muted-foreground">{wine.producer}</p>}
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"} på køl
-          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"} på køl</p>
         </div>
-
         {wine.description && <p className="text-sm text-foreground/80">{wine.description}</p>}
-
-        {/* Detaljer */}
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           {wine.country && (<><dt className="text-muted-foreground">Land</dt><dd>{wine.country}</dd></>)}
           {wine.region && (<><dt className="text-muted-foreground">Område</dt><dd>{wine.region}</dd></>)}
@@ -182,28 +140,24 @@ function WineDetailCard({
           {wine.serving_temp && (<><dt className="text-muted-foreground">Serveringstemperatur</dt><dd>{wine.serving_temp}</dd></>)}
           {wine.food_pairing && (<><dt className="text-muted-foreground">Passer til</dt><dd>{wine.food_pairing}</dd></>)}
         </dl>
-
-        {/* Smagsnoter */}
         {wine.tasting_notes && (
           <div className="rounded-lg bg-muted px-4 py-3">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mine smagsnoter</p>
             <p className="text-sm italic leading-relaxed text-foreground/80">{wine.tasting_notes}</p>
           </div>
         )}
-
-        {/* Placering i køleskabet */}
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">I køleskabet</p>
           <WinePlacementView wine={wine} allWines={allWines} layout={layout} />
           {wine.placements.length > 0 && <WineFridgeLegend className="mt-2" />}
         </div>
-
-        {/* Bestil */}
-        {orderingEnabled && (
-          <div data-order-button onClick={(e) => e.stopPropagation()}>
+        <div data-order-button onClick={(e) => e.stopPropagation()}>
+          {selfServe ? (
+            <Button className="w-full" onClick={onDrink}>Drik</Button>
+          ) : orderingEnabled ? (
             <OrderButton kind="wine" wineId={wine.id} cocktailName={wine.name} />
-          </div>
-        )}
+          ) : null}
+        </div>
       </div>
     </Card>
   );
@@ -214,46 +168,35 @@ function VinePage() {
   const { wines: initialWines, layout: initialLayout } = Route.useLoaderData();
 
   const fetchWines = useServerFn(listWines);
-  const { data: winesData } = useQuery({
-    queryKey: ["wines"],
-    queryFn: () => fetchWines(),
-    initialData: initialWines,
-    staleTime: 1000 * 60,
-  });
+  const { data: winesData } = useQuery({ queryKey: ["wines"], queryFn: () => fetchWines(), initialData: initialWines, staleTime: 1000 * 60 });
 
   const fetchLayout = useServerFn(getWineFridgeLayout);
-  const { data: layoutData } = useQuery({
-    queryKey: ["wine-fridge-layout"],
-    queryFn: () => fetchLayout(),
-    initialData: initialLayout,
-    staleTime: 1000 * 60 * 5,
-  });
+  const { data: layoutData } = useQuery({ queryKey: ["wine-fridge-layout"], queryFn: () => fetchLayout(), initialData: initialLayout, staleTime: 1000 * 60 * 5 });
 
   const fetchOrdering = useServerFn(getOrderingEnabled);
-  const { data: orderingData } = useQuery({
-    queryKey: ["ordering-enabled"],
-    queryFn: () => fetchOrdering(),
-    refetchInterval: 30_000,
-    staleTime: 0,
-  });
+  const { data: orderingData } = useQuery({ queryKey: ["ordering-enabled"], queryFn: () => fetchOrdering(), refetchInterval: 30_000, staleTime: 0 });
+
+  const fetchSelfServe = useServerFn(getWineSelfServe);
+  const { data: selfServeData } = useQuery({ queryKey: ["wine-self-serve"], queryFn: () => fetchSelfServe(), refetchInterval: 60_000, staleTime: 0 });
 
   const allWines = (winesData ?? []) as WineWithDetails[];
   const layout: WineFridgeLayout = (layoutData ?? DEFAULT_WINE_FRIDGE_LAYOUT) as WineFridgeLayout;
   const orderingEnabled = !!orderingData?.enabled;
+  const selfServe = !!selfServeData?.enabled;
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [drinkWine, setDrinkWine] = useState<WineWithDetails | null>(null);
 
   const searchPool = useMemo(() => {
     if (!q.trim()) return allWines;
     const s = q.trim().toLowerCase();
-    return allWines.filter(
-      (w) =>
-        w.name.toLowerCase().includes(s) ||
-        (w.producer ?? "").toLowerCase().includes(s) ||
-        (w.region ?? "").toLowerCase().includes(s) ||
-        (w.grapes ?? "").toLowerCase().includes(s),
+    return allWines.filter((w) =>
+      w.name.toLowerCase().includes(s) ||
+      (w.producer ?? "").toLowerCase().includes(s) ||
+      (w.region ?? "").toLowerCase().includes(s) ||
+      (w.grapes ?? "").toLowerCase().includes(s),
     );
   }, [allWines, q]);
 
@@ -263,31 +206,18 @@ function VinePage() {
     return m;
   }, [searchPool]);
 
-  const chipTypes = WINE_TYPE_ORDER.filter(
-    (t) => (countByType.get(t) ?? 0) > 0 || selectedTypes.includes(t),
-  );
+  const chipTypes = WINE_TYPE_ORDER.filter((t) => (countByType.get(t) ?? 0) > 0 || selectedTypes.includes(t));
 
-  const matched = useMemo(() => {
-    if (selectedTypes.length === 0) return searchPool;
-    return searchPool.filter((w) => selectedTypes.includes(w.wine_type));
-  }, [searchPool, selectedTypes]);
+  const matched = useMemo(() =>
+    selectedTypes.length === 0 ? searchPool : searchPool.filter((w) => selectedTypes.includes(w.wine_type))
+  , [searchPool, selectedTypes]);
 
   const groups = useMemo(() => {
-    const showTypes =
-      selectedTypes.length > 0
-        ? WINE_TYPE_ORDER.filter((t) => selectedTypes.includes(t))
-        : WINE_TYPE_ORDER;
+    const showTypes = selectedTypes.length > 0 ? WINE_TYPE_ORDER.filter((t) => selectedTypes.includes(t)) : WINE_TYPE_ORDER;
     return showTypes
-      .map((type) => ({
-        type,
-        items: matched.filter((w) => w.wine_type === type).sort((a, b) => a.name.localeCompare(b.name, "da")),
-      }))
+      .map((type) => ({ type, items: matched.filter((w) => w.wine_type === type).sort((a, b) => a.name.localeCompare(b.name, "da")) }))
       .filter((g) => g.items.length > 0);
   }, [matched, selectedTypes]);
-
-  function toggleType(t: string) {
-    setSelectedTypes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
-  }
 
   const openWine = allWines.find((w) => w.id === openId) ?? null;
 
@@ -297,9 +227,8 @@ function VinePage() {
       <main className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-5 space-y-1">
           <h1 className="font-serif text-3xl tracking-tight">Vine</h1>
-          {orderingEnabled && (
-            <p className="text-sm text-muted-foreground">Vælg en vin og tryk Bestil — bartenderen finder den frem.</p>
-          )}
+          {!selfServe && orderingEnabled && <p className="text-sm text-muted-foreground">Vælg en vin og tryk Bestil — bartenderen finder den frem.</p>}
+          {selfServe && <p className="text-sm text-muted-foreground">Find din vin i køleskabet — tryk Drik for at registrere den.</p>}
         </div>
 
         <div className="mb-4">
@@ -314,7 +243,7 @@ function VinePage() {
             {chipTypes.map((t) => {
               const active = selectedTypes.includes(t);
               return (
-                <button key={t} type="button" onClick={() => toggleType(t)}>
+                <button key={t} type="button" onClick={() => setSelectedTypes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}>
                   <Badge variant={active ? "default" : "outline"} className={active ? "bg-primary text-primary-foreground" : ""}>
                     {t} <span className={active ? "opacity-75" : "text-muted-foreground"}>({countByType.get(t) ?? 0})</span>
                   </Badge>
@@ -335,7 +264,12 @@ function VinePage() {
                 <h2 className="mb-3 font-serif text-xl text-primary">{g.type}</h2>
                 <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {g.items.map((w) => (
-                    <WineCard key={w.id} wine={w} onOpen={() => setOpenId(w.id)} orderingEnabled={orderingEnabled} />
+                    <WineCard key={w.id} wine={w}
+                      onOpen={() => setOpenId(w.id)}
+                      orderingEnabled={orderingEnabled}
+                      selfServe={selfServe}
+                      onDrink={() => setDrinkWine(w)}
+                    />
                   ))}
                 </div>
               </section>
@@ -343,6 +277,7 @@ function VinePage() {
           </div>
         )}
 
+        {/* Detaljedialog */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
@@ -353,20 +288,27 @@ function VinePage() {
               {openWine && (
                 <>
                   <DialogPrimitive.Title className="sr-only">{openWine.name}</DialogPrimitive.Title>
-                  <div
-                    className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest("[data-order-button]")) return;
-                      setOpenId(null);
-                    }}
-                  >
-                    <WineDetailCard wine={openWine} layout={layout} allWines={allWines} orderingEnabled={orderingEnabled} />
+                  <div className="max-h-[90vh] overflow-y-auto rounded-lg px-4"
+                    onClick={(e) => { if ((e.target as HTMLElement).closest("[data-order-button]")) return; setOpenId(null); }}>
+                    <WineDetailCard
+                      wine={openWine} layout={layout} allWines={allWines}
+                      orderingEnabled={orderingEnabled} selfServe={selfServe}
+                      onDrink={() => { setOpenId(null); setDrinkWine(openWine); }}
+                    />
                   </div>
                 </>
               )}
             </DialogPrimitive.Content>
           </DialogPortal>
         </Dialog>
+
+        {/* Drik-dialog */}
+        <DrinkWineDialog
+          open={!!drinkWine} wine={drinkWine}
+          allWines={allWines} layout={layout}
+          requireSelfServe logAction="gæst-drukket"
+          onClose={() => setDrinkWine(null)}
+        />
       </main>
     </div>
   );
