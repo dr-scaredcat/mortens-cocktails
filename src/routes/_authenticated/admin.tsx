@@ -3,13 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { lazy, Suspense, useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
@@ -21,11 +15,8 @@ import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
 import { AdminIngredientsSection } from "@/components/app/admin-ingredients-section";
 import { AdminSpiritsSection } from "@/components/app/admin-spirits-section";
-import { AdminWines } from "@/components/app/admin-wines";
+import { AdminWinesSection } from "@/components/app/admin-wines-section";
 
-// Statistik-fanen trækker recharts ind, som er et tungt bibliotek. Vi lazy-loader
-// den, så recharts først hentes når admin faktisk åbner fanen — og aldrig ender i
-// den bundle andre sider (fx gæstesiderne) downloader.
 const AdminStatistik = lazy(() =>
   import("@/components/app/admin-statistik").then((m) => ({ default: m.AdminStatistik })),
 );
@@ -59,9 +50,7 @@ function AdminPage() {
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <h1 className="mb-1 font-serif text-3xl">Admin</h1>
-        <p className="mb-5 text-sm text-muted-foreground">
-          Administrér ingredienser, cocktails og opskrifter.
-        </p>
+        <p className="mb-5 text-sm text-muted-foreground">Administrér ingredienser, cocktails og opskrifter.</p>
         {isLoading ? (
           <p className="text-muted-foreground">Indlæser...</p>
         ) : !data?.isAdmin ? (
@@ -72,56 +61,27 @@ function AdminPage() {
           <Tabs value={tab} onValueChange={setTab}>
             <div className="mb-6">
               <Select value={tab} onValueChange={setTab}>
-                <SelectTrigger className="w-full sm:w-56">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {TABS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
+                  {TABS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            <TabsContent value="menukort">
-              <AdminMenukort />
-            </TabsContent>
-            <TabsContent value="cocktails">
-              <AdminCocktails />
-            </TabsContent>
-            <TabsContent value="opskrifter">
-              <AdminRecipes />
-            </TabsContent>
-            <TabsContent value="spiritus">
-              <AdminSpiritsSection />
-            </TabsContent>
-            <TabsContent value="vine">
-              <AdminWines />
-            </TabsContent>
-            <TabsContent value="ingredients">
-              <AdminIngredientsSection />
-            </TabsContent>
-            <TabsContent value="tags">
-              <AdminTags />
-            </TabsContent>
-            <TabsContent value="glasses">
-              <AdminGlasses />
-            </TabsContent>
-            <TabsContent value="garnishes">
-              <AdminGarnishes />
-            </TabsContent>
+            <TabsContent value="menukort"><AdminMenukort /></TabsContent>
+            <TabsContent value="cocktails"><AdminCocktails /></TabsContent>
+            <TabsContent value="opskrifter"><AdminRecipes /></TabsContent>
+            <TabsContent value="spiritus"><AdminSpiritsSection /></TabsContent>
+            <TabsContent value="vine"><AdminWinesSection /></TabsContent>
+            <TabsContent value="ingredients"><AdminIngredientsSection /></TabsContent>
+            <TabsContent value="tags"><AdminTags /></TabsContent>
+            <TabsContent value="glasses"><AdminGlasses /></TabsContent>
+            <TabsContent value="garnishes"><AdminGarnishes /></TabsContent>
             <TabsContent value="statistik">
-              <Suspense
-                fallback={<p className="text-muted-foreground">Indlæser statistik…</p>}
-              >
+              <Suspense fallback={<p className="text-muted-foreground">Indlæser statistik…</p>}>
                 <AdminStatistik />
               </Suspense>
             </TabsContent>
-            <TabsContent value="settings">
-              <AdminSettings />
-            </TabsContent>
+            <TabsContent value="settings"><AdminSettings /></TabsContent>
           </Tabs>
         )}
       </main>
