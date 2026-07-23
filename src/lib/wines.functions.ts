@@ -8,7 +8,6 @@ export const WINE_TYPE_ORDER = [
   "rosé",
   "mousserende",
   "dessertvin",
-  "hedvin",
 ] as const;
 
 export type WineType = (typeof WINE_TYPE_ORDER)[number];
@@ -31,12 +30,10 @@ export type WinePlacement = {
   layer: number; // 1 | 2
 };
 
-/** Tekstbeskrivelse af dybde */
 export function depthLabel(depth: number): string {
   return depth === 1 ? "forrest" : "bagerst";
 }
 
-/** Grupperingsnøgle: samme hylde + dybde vises samlet grafisk */
 export function shelfDepthKey(shelf: number, depth: number): string {
   return `${shelf}:${depth}`;
 }
@@ -55,7 +52,6 @@ export type WineWithDetails = {
   price: number | null;
   drink_from: number | null;
   drink_to: number | null;
-  /** Beregnet fra antal rækker i wine_placements */
   quantity: number;
   placements: WinePlacement[];
   image_url: string | null;
@@ -65,132 +61,156 @@ export type WineWithDetails = {
   serving_temp: string | null;
 };
 
-// ── Liste over vine (offentlig — kun placerede vine) ────────────────────────
+// ── Fælles hjælper til at bygge WineWithDetails fra rå DB-rækker ───────────
+function buildWineList(
+  wines: any[],
+  placements: any[],
+  onlyPlaced: boolean,
+): WineWithDetails[] {
+  const placementsByWine = new Map<string, WinePlacement[]>();
+  for (const p of placements) {
+    const pl: WinePlacement = {
+      id: p.id,
+      wine_id: p.wine_id,
+      shelf: p.shelf,
+      slot: p.slot,
+      depth: p.depth,
+      layer: p.layer,
+    };
+    if (!placementsByWine.has(p.wine_id)) placementsByWine.set(p.wine_id, []);
+    placementsByWine.get(p.wine_id)!.push(pl);
+  }
+
+  let result: WineWithDetails[] = wines.map((w) => {
+    const pls = placementsByWine.get(w.id) ?? [];
+    return {
+      id: w.id,
+      name: w.name,
+      producer: w.producer ?? null,
+      vintage: w.vintage ?? null,
+      country: w.country ?? null,
+      region: w.region ?? null,
+      grapes: w.grapes ?? null,
+      wine_type: w.wine_type,
+      abv: w.abv ?? null,
+      bottle_size_cl: w.bottle_size_cl ?? 75,
+      price: w.price ?? null,
+      drink_from: w.drink_from ?? null,
+      drink_to: w.drink_to ?? null,
+      quantity: pls.length,
+      placements: pls,
+      image_url: w.image_url ?? null,
+      description: w.description ?? null,
+      tasting_notes: w.tasting_notes ?? null,
+      food_pairing: w.food_pairing ?? null,
+      serving_temp: w.serving_temp ?? null,
+    };
+  });
+
+  if (onlyPlaced) result = result.filter((w) => w.placements.length > 0);
+
+  return result.sort((a, b) => {
+    const rankDiff = wineTypeRank(a.wine_type) - wineTypeRank(b.wine_type);
+    if (rankDiff !== 0) return rankDiff;
+    return a.name.localeCompare(b.name, "da");
+  });
+}
+
+// ── Liste over vine (offentlig — kun placerede) ─────────────────────────────
 export const listWines = createServerFn({ method: "GET" }).handler(
   async (): Promise<WineWithDetails[]> => {
     const sb = publicClient();
-
     const [winesRes, placementsRes] = await Promise.all([
       (sb.from("wines") as any).select("*"),
       (sb.from("wine_placements") as any).select("*"),
     ]);
-
     if (winesRes.error) throw new Error(winesRes.error.message);
     if (placementsRes.error) throw new Error(placementsRes.error.message);
-
-    const placementsByWine = new Map<string, WinePlacement[]>();
-    for (const p of (placementsRes.data ?? []) as any[]) {
-      const pl: WinePlacement = {
-        id: p.id,
-        wine_id: p.wine_id,
-        shelf: p.shelf,
-        slot: p.slot,
-        depth: p.depth,
-        layer: p.layer,
-      };
-      if (!placementsByWine.has(p.wine_id)) placementsByWine.set(p.wine_id, []);
-      placementsByWine.get(p.wine_id)!.push(pl);
-    }
-
-    const result: WineWithDetails[] = ((winesRes.data ?? []) as any[]).map((w) => {
-      const placements = placementsByWine.get(w.id) ?? [];
-      return {
-        id: w.id,
-        name: w.name,
-        producer: w.producer ?? null,
-        vintage: w.vintage ?? null,
-        country: w.country ?? null,
-        region: w.region ?? null,
-        grapes: w.grapes ?? null,
-        wine_type: w.wine_type,
-        abv: w.abv ?? null,
-        bottle_size_cl: w.bottle_size_cl ?? 75,
-        price: w.price ?? null,
-        drink_from: w.drink_from ?? null,
-        drink_to: w.drink_to ?? null,
-        quantity: placements.length,
-        placements,
-        image_url: w.image_url ?? null,
-        description: w.description ?? null,
-        tasting_notes: w.tasting_notes ?? null,
-        food_pairing: w.food_pairing ?? null,
-        serving_temp: w.serving_temp ?? null,
-      };
-    });
-
-    // Kun vine med mindst én placering vises for gæster
-    return result
-      .filter((w) => w.placements.length > 0)
-      .sort((a, b) => {
-        const rankDiff = wineTypeRank(a.wine_type) - wineTypeRank(b.wine_type);
-        if (rankDiff !== 0) return rankDiff;
-        return a.name.localeCompare(b.name, "da");
-      });
+    return buildWineList(winesRes.data ?? [], placementsRes.data ?? [], true);
   },
 );
 
-// ── Alle vine inkl. uplacerede (bruges i admin) ─────────────────────────────
+// ── Alle vine inkl. uplacerede (admin) ─────────────────────────────────────
 export const listAllWines = createServerFn({ method: "GET" }).handler(
   async (): Promise<WineWithDetails[]> => {
     const sb = publicClient();
-
     const [winesRes, placementsRes] = await Promise.all([
       (sb.from("wines") as any).select("*"),
       (sb.from("wine_placements") as any).select("*"),
     ]);
-
     if (winesRes.error) throw new Error(winesRes.error.message);
     if (placementsRes.error) throw new Error(placementsRes.error.message);
-
-    const placementsByWine = new Map<string, WinePlacement[]>();
-    for (const p of (placementsRes.data ?? []) as any[]) {
-      const pl: WinePlacement = {
-        id: p.id,
-        wine_id: p.wine_id,
-        shelf: p.shelf,
-        slot: p.slot,
-        depth: p.depth,
-        layer: p.layer,
-      };
-      if (!placementsByWine.has(p.wine_id)) placementsByWine.set(p.wine_id, []);
-      placementsByWine.get(p.wine_id)!.push(pl);
-    }
-
-    return ((winesRes.data ?? []) as any[])
-      .map((w) => {
-        const placements = placementsByWine.get(w.id) ?? [];
-        return {
-          id: w.id,
-          name: w.name,
-          producer: w.producer ?? null,
-          vintage: w.vintage ?? null,
-          country: w.country ?? null,
-          region: w.region ?? null,
-          grapes: w.grapes ?? null,
-          wine_type: w.wine_type,
-          abv: w.abv ?? null,
-          bottle_size_cl: w.bottle_size_cl ?? 75,
-          price: w.price ?? null,
-          drink_from: w.drink_from ?? null,
-          drink_to: w.drink_to ?? null,
-          quantity: placements.length,
-          placements,
-          image_url: w.image_url ?? null,
-          description: w.description ?? null,
-          tasting_notes: w.tasting_notes ?? null,
-          food_pairing: w.food_pairing ?? null,
-          serving_temp: w.serving_temp ?? null,
-        } as WineWithDetails;
-      })
-      .sort((a, b) => {
-        const rankDiff = wineTypeRank(a.wine_type) - wineTypeRank(b.wine_type);
-        if (rankDiff !== 0) return rankDiff;
-        return a.name.localeCompare(b.name, "da");
-      });
+    return buildWineList(winesRes.data ?? [], placementsRes.data ?? [], false);
   },
 );
 
-// ── Vinkøleskabets layout (offentlig) ──────────────────────────────────────
+// ── Hent wine_self_serve-indstilling (offentlig) ────────────────────────────
+export const getWineSelfServe = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ enabled: boolean }> => {
+    const sb = publicClient();
+    const { data, error } = await sb
+      .from("app_settings")
+      .select("value")
+      .eq("key", "wine_self_serve")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const v = data?.value;
+    return { enabled: v === true || v === "true" };
+  },
+);
+
+// ── Drik en flaske (offentlig — server tjekker self_serve hvis kaldt fra gæst) ─
+// logAction: 'drukket' | 'bestilt-og-drukket'
+export const drinkWine = createServerFn({ method: "POST" })
+  .inputValidator(
+    (d: {
+      placementId: string;
+      wineId: string;
+      wineName: string;
+      logAction?: string;
+      requireSelfServe?: boolean;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const sb = publicClient();
+
+    // Hvis kaldt fra gæstevisning, tjek at self-serve er slået til
+    if (data.requireSelfServe) {
+      const { data: setting } = await sb
+        .from("app_settings")
+        .select("value")
+        .eq("key", "wine_self_serve")
+        .maybeSingle();
+      const enabled = setting?.value === true || setting?.value === "true";
+      if (!enabled) throw new Error("Selv-betjening er ikke aktiveret");
+    }
+
+    // Slet placeringen
+    const { error: delErr } = await (sb.from("wine_placements") as any)
+      .delete()
+      .eq("id", data.placementId);
+    if (delErr) throw new Error(delErr.message);
+
+    // Log hændelsen i order_log
+    const { error: logErr } = await (sb.from("order_log") as any).insert({
+      original_order_id: data.placementId, // genbrug som reference-id
+      kind: "drukket",
+      wine_id: data.wineId,
+      cocktail_id: null,
+      spirit_id: null,
+      cocktail_name: data.wineName,
+      customer_name: data.logAction ?? "drukket",
+      note: null,
+      status: "done",
+      logged_at: new Date().toISOString(),
+      quantity: 1,
+    });
+    if (logErr) throw new Error(logErr.message);
+
+    return { ok: true };
+  });
+
+// ── Vinkøleskabets layout ───────────────────────────────────────────────────
 export type WineFridgeShelf = { slots: number };
 export type WineFridgeLayout = { shelves: WineFridgeShelf[] };
 
@@ -209,13 +229,9 @@ function isValidLayout(value: unknown): value is WineFridgeLayout {
   return (
     !!value &&
     typeof value === "object" &&
-    Array.isArray((value as { shelves?: unknown }).shelves) &&
-    (value as { shelves: unknown[] }).shelves.every(
-      (s) =>
-        !!s &&
-        typeof s === "object" &&
-        typeof (s as { slots?: unknown }).slots === "number" &&
-        (s as { slots: number }).slots >= 1,
+    Array.isArray((value as any).shelves) &&
+    (value as any).shelves.every(
+      (s: any) => !!s && typeof s === "object" && typeof s.slots === "number" && s.slots >= 1,
     )
   );
 }

@@ -7,12 +7,11 @@ import { WINE_TYPE_ORDER, depthLabel } from "@/lib/wines.functions";
 type WineTypeStyle = { fill: string; text: string };
 
 const WINE_TYPE_STYLE: Record<string, WineTypeStyle> = {
-  "rød":        { fill: "oklch(0.40 0.13 18)",  text: "oklch(0.97 0.02 80)" },
-  "hvid":       { fill: "oklch(0.85 0.12 95)",  text: "oklch(0.28 0.05 80)" },
-  "rosé":       { fill: "oklch(0.84 0.09 20)",  text: "oklch(0.30 0.06 20)" },
-  "mousserende":{ fill: "oklch(0.91 0.08 100)", text: "oklch(0.30 0.05 90)" },
-  "dessertvin": { fill: "oklch(0.71 0.13 62)",  text: "oklch(0.26 0.06 60)" },
-  "hedvin":     { fill: "oklch(0.58 0.13 48)",  text: "oklch(0.97 0.02 80)" },
+  "rød":         { fill: "oklch(0.40 0.13 18)",  text: "oklch(0.97 0.02 80)" },
+  "hvid":        { fill: "oklch(0.85 0.12 95)",  text: "oklch(0.28 0.05 80)" },
+  "rosé":        { fill: "oklch(0.84 0.09 20)",  text: "oklch(0.30 0.06 20)" },
+  "mousserende": { fill: "oklch(0.91 0.08 100)", text: "oklch(0.30 0.05 90)" },
+  "dessertvin":  { fill: "oklch(0.71 0.13 62)",  text: "oklch(0.26 0.06 60)" },
 };
 
 const FALLBACK_STYLE: WineTypeStyle = {
@@ -24,18 +23,35 @@ function styleForType(type: string): WineTypeStyle {
   return WINE_TYPE_STYLE[type] ?? FALLBACK_STYLE;
 }
 
+// ── Dimensioner ─────────────────────────────────────────────────────────────
+// Lag 1: 44px (w-11), lag 2: 36px (w-9). Gap mellem cirkler: 8px (gap-2).
+// Forskydning lag 2: centerlinjen skal ligge halvvejs mellem to lag-1-centre.
+// Lag 1 center-til-center afstand: 44 + 8 = 52px.
+// Lag 2 offset fra venstre kant af lag 1: (52 / 2) - (36 / 2) = 26 - 18 = 8px.
+// Men vi vil have LAG 2's VENSTREKANT til at starte 26px inde i lag 1's første cirkel,
+// dvs. marginLeft = 26px (halvt af lag-1-pitch).
+const LAG1_SIZE = 44; // px, svarende til w-11
+const LAG2_SIZE = 36; // px, svarende til w-9
+const GAP = 8;        // px, svarende til gap-2
+const PITCH = LAG1_SIZE + GAP; // 52px — center-til-center afstand i lag 1
+// Lag 2 cirkel 1's centrum skal ligge ved x = PITCH/2 = 26px fra lag 1 cirkel 1's centrum.
+// Lag 2 cirkel 1's venstrekant: 26 - LAG2_SIZE/2 = 26 - 18 = 8px.
+// Men vi lægger lag 2 i en container med padding-left = PITCH/2 - LAG2_SIZE/2 = 8px
+// og bruger samme gap (8px) som lag 1. Dermed:
+//   lag2[0] centrum = 8 + 18 = 26px ✓
+//   lag2[1] centrum = 8 + 18 + 52 = 78px = 26 + 52 ✓ (halvvejs mellem lag1[1] og lag1[2])
+const LAG2_OFFSET = PITCH / 2 - LAG2_SIZE / 2; // = 8px
+
 // ── Typer ───────────────────────────────────────────────────────────────────
 export type FridgePosition = {
   shelf: number;
   slot: number;
-  depth: number; // 1 | 2
-  layer: number; // 1 | 2
+  depth: number;
+  layer: number;
 };
 
 export type WineFridgeMode = "admin-vaelger" | "gæst";
 
-// ── Hjælper: opbyg lookup-map ─────────────────────────────────────────────
-// Nøgle: "shelf:slot:depth:layer"
 function buildPositionMap(wines: WineWithDetails[]): Map<string, WineWithDetails> {
   const map = new Map<string, WineWithDetails>();
   for (const w of wines) {
@@ -59,7 +75,7 @@ function Bottle({
   blocked,
   clickable,
   onClick,
-  size = "md",
+  isLag2 = false,
 }: {
   label: string;
   wine: WineWithDetails | null;
@@ -68,23 +84,22 @@ function Bottle({
   blocked: boolean;
   clickable: boolean;
   onClick?: () => void;
-  size?: "sm" | "md";
+  isLag2?: boolean;
 }) {
   const typeStyle = wine ? styleForType(wine.wine_type) : null;
   const isSparkling = wine?.wine_type === "mousserende";
-  const dim = size === "sm" ? "h-9 w-9" : "h-11 w-11";
+  // Lag 2 er lidt mindre end lag 1
+  const sizeClass = isLag2 ? "h-9 w-9" : "h-11 w-11";
 
   const cls = cn(
     "relative flex shrink-0 items-center justify-center rounded-full text-xs font-medium transition select-none",
-    dim,
-    wine
-      ? "border"
-      : "border border-dashed border-border text-muted-foreground",
-    // Ring uden offset, så den aldrig klippes
+    sizeClass,
+    wine ? "border" : "border border-dashed border-border text-muted-foreground",
+    // Ingen ring-offset — undgår at ringen klippes af overflow-hidden
     isSelected && "ring-2 ring-primary",
     isHighlighted && "ring-2 ring-primary animate-pulse",
     blocked && "cursor-not-allowed opacity-60",
-    clickable && !blocked && "cursor-pointer hover:border-primary",
+    clickable && "cursor-pointer hover:border-primary",
   );
 
   const style = typeStyle
@@ -130,17 +145,8 @@ function Bottle({
   );
 }
 
-// ── Én hylde med to dybder + to lag ─────────────────────────────────────────
-// Visuel struktur (set forfra):
-//
-//   LAG 2 BAGERST:  ● ● ● ● (forskudt halvt slot til højre)
-//   LAG 1 BAGERST:  ● ● ● ● ●
-//   LAG 2 FORREST:  ● ● ● ● (forskudt halvt slot til højre)
-//   LAG 1 FORREST:  ● ● ● ● ●
-//
-// Forskydning implementeres med en negativ margin-left på lag-2-rækken.
-
-function ShelfRow({
+// ── Én dybde-sektion (forrest ELLER bagerst) med lag 1 + lag 2 ─────────────
+function DepthSection({
   shelfNo,
   slots,
   depth,
@@ -162,44 +168,70 @@ function ShelfRow({
   onSelectSlot?: (pos: FridgePosition) => void;
 }) {
   const isPicker = mode === "admin-vaelger";
-  // Halv flaskebredde i px til forskydning af lag 2 (22px = halvt af h-11/w-11 44px)
-  const OFFSET = 22;
 
   return (
     <div className="space-y-1">
-      {/* Lag 2 (øverste) — forskudt halvt slot */}
-      <div className="flex items-center overflow-x-auto pb-0.5" style={{ paddingLeft: OFFSET }}>
-        <div className="flex gap-2">
-          {/* Lag 2 har slots-1 mulige pladser (en flaske hviler på to naboer) */}
-          {Array.from({ length: Math.max(0, slots - 1) }, (_, i) => {
+      {/* Lag 2 — øverste, forskudt præcist halvt pitch til højre */}
+      {slots > 1 && (
+        <div className="overflow-x-auto pb-0.5">
+          <div
+            className="flex"
+            style={{
+              paddingLeft: LAG2_OFFSET,
+              gap: GAP,
+            }}
+          >
+            {Array.from({ length: slots - 1 }, (_, i) => {
+              const slotNo = i + 1;
+              const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 2)) ?? null;
+              const isSelected = selectedPositions.some(
+                (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 2,
+              );
+              const isHighlighted = !!wine && wine.id === highlightWineId;
+              const isOwnWine = !!wine && wine.id === currentWineId;
+
+              // Tjek forudsætning: lag 1 slot X og X+1 begge besat (inkl. valgte pladser)
+              const leftOk =
+                !!byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ||
+                selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1);
+              const rightOk =
+                !!byPosition.get(posKey(shelfNo, slotNo + 1, depth, 1)) ||
+                selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo + 1 && s.depth === depth && s.layer === 1);
+              const prereqMet = leftOk && rightOk;
+
+              const blocked = isPicker ? (!!wine && !isOwnWine) || !prereqMet : false;
+              const clickable = isPicker && !blocked;
+
+              return (
+                <Bottle
+                  key={slotNo}
+                  label={String(slotNo)}
+                  wine={wine}
+                  isSelected={isSelected}
+                  isHighlighted={isHighlighted}
+                  blocked={blocked}
+                  clickable={clickable}
+                  isLag2
+                  onClick={clickable ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 2 }) : undefined}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Lag 1 — nederste */}
+      <div className="overflow-x-auto pb-0.5">
+        <div className="flex" style={{ gap: GAP }}>
+          {Array.from({ length: slots }, (_, i) => {
             const slotNo = i + 1;
-            const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 2)) ?? null;
+            const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ?? null;
             const isSelected = selectedPositions.some(
-              (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 2,
+              (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1,
             );
             const isHighlighted = !!wine && wine.id === highlightWineId;
             const isOwnWine = !!wine && wine.id === currentWineId;
-
-            // Lag 2 kræver at lag 1 slot X og X+1 begge er besat
-            const leftFilled = !!byPosition.get(posKey(shelfNo, slotNo, depth, 1));
-            const rightFilled = !!byPosition.get(posKey(shelfNo, slotNo + 1, depth, 1));
-            // I picker: tillad valg på tom plads, men kun hvis begge naboer i lag 1 er besat
-            // (naboerne kan være den vin vi er ved at placere — vi tjekker mod selectedPositions)
-            const leftOk =
-              leftFilled ||
-              selectedPositions.some(
-                (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1,
-              );
-            const rightOk =
-              rightFilled ||
-              selectedPositions.some(
-                (s) => s.shelf === shelfNo && s.slot === slotNo + 1 && s.depth === depth && s.layer === 1,
-              );
-            const prereqMet = leftOk && rightOk;
-
-            const blocked = isPicker
-              ? (!!wine && !isOwnWine) || !prereqMet
-              : false;
+            const blocked = isPicker && !!wine && !isOwnWine;
             const clickable = isPicker && !blocked;
 
             return (
@@ -211,48 +243,11 @@ function ShelfRow({
                 isHighlighted={isHighlighted}
                 blocked={blocked}
                 clickable={clickable}
-                size="sm"
-                onClick={
-                  clickable
-                    ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 2 })
-                    : undefined
-                }
+                onClick={clickable ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 1 }) : undefined}
               />
             );
           })}
         </div>
-      </div>
-
-      {/* Lag 1 (nederste) */}
-      <div className="flex gap-2 overflow-x-auto pb-0.5">
-        {Array.from({ length: slots }, (_, i) => {
-          const slotNo = i + 1;
-          const wine = byPosition.get(posKey(shelfNo, slotNo, depth, 1)) ?? null;
-          const isSelected = selectedPositions.some(
-            (s) => s.shelf === shelfNo && s.slot === slotNo && s.depth === depth && s.layer === 1,
-          );
-          const isHighlighted = !!wine && wine.id === highlightWineId;
-          const isOwnWine = !!wine && wine.id === currentWineId;
-          const blocked = isPicker && !!wine && !isOwnWine;
-          const clickable = isPicker && !blocked;
-
-          return (
-            <Bottle
-              key={slotNo}
-              label={String(slotNo)}
-              wine={wine}
-              isSelected={isSelected}
-              isHighlighted={isHighlighted}
-              blocked={blocked}
-              clickable={clickable}
-              onClick={
-                clickable
-                  ? () => onSelectSlot?.({ shelf: shelfNo, slot: slotNo, depth, layer: 1 })
-                  : undefined
-              }
-            />
-          );
-        })}
       </div>
     </div>
   );
@@ -272,7 +267,6 @@ export function WineFridge({
   mode: WineFridgeMode;
   wines: WineWithDetails[];
   layout: WineFridgeLayout;
-  /** Aktuelt valgte pladser (admin-vælger med quantity > 1). */
   selectedPositions?: FridgePosition[];
   highlightWineId?: string | null;
   currentWineId?: string | null;
@@ -294,41 +288,26 @@ export function WineFridge({
       {layout.shelves.map((shelf, shelfIdx) => {
         const shelfNo = shelfIdx + 1;
         return (
-          <div
-            key={shelfNo}
-            className="rounded-lg border border-border bg-card p-3"
-          >
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Hylde {shelfNo}
-            </p>
-            <div className="space-y-3">
-              {/* Bagerste række */}
+          <div key={shelfNo} className="rounded-lg border border-border bg-card p-3">
+            <p className="mb-2 text-xs font-semibold text-muted-foreground">Hylde {shelfNo}</p>
+            <div className="space-y-4">
               <div>
-                <p className="mb-1 text-[11px] text-muted-foreground/70">Bagerst</p>
-                <ShelfRow
-                  shelfNo={shelfNo}
-                  slots={shelf.slots}
-                  depth={2}
-                  byPosition={byPosition}
-                  mode={mode}
+                <p className="mb-1.5 text-[11px] text-muted-foreground/70">Bagerst</p>
+                <DepthSection
+                  shelfNo={shelfNo} slots={shelf.slots} depth={2}
+                  byPosition={byPosition} mode={mode}
                   selectedPositions={selectedPositions}
-                  highlightWineId={highlightWineId}
-                  currentWineId={currentWineId}
+                  highlightWineId={highlightWineId} currentWineId={currentWineId}
                   onSelectSlot={onSelectSlot}
                 />
               </div>
-              {/* Forreste række */}
               <div>
-                <p className="mb-1 text-[11px] text-muted-foreground/70">Forrest</p>
-                <ShelfRow
-                  shelfNo={shelfNo}
-                  slots={shelf.slots}
-                  depth={1}
-                  byPosition={byPosition}
-                  mode={mode}
+                <p className="mb-1.5 text-[11px] text-muted-foreground/70">Forrest</p>
+                <DepthSection
+                  shelfNo={shelfNo} slots={shelf.slots} depth={1}
+                  byPosition={byPosition} mode={mode}
                   selectedPositions={selectedPositions}
-                  highlightWineId={highlightWineId}
-                  currentWineId={currentWineId}
+                  highlightWineId={highlightWineId} currentWineId={currentWineId}
                   onSelectSlot={onSelectSlot}
                 />
               </div>
@@ -340,8 +319,7 @@ export function WineFridge({
   );
 }
 
-// ── Gæstevisning: kun de hylder hvor vinen faktisk ligger ───────────────────
-// Viser én sektion pr. unik (shelf, depth)-kombination med tekst + grafik.
+// ── Gæstevisning: kun relevante hylder ─────────────────────────────────────
 export function WinePlacementView({
   wine,
   allWines,
@@ -355,7 +333,6 @@ export function WinePlacementView({
 }) {
   const byPosition = useMemo(() => buildPositionMap(allWines), [allWines]);
 
-  // Grupper vinens placeringer pr. (shelf, depth)
   const groups = useMemo(() => {
     const map = new Map<string, { shelf: number; depth: number; placements: WinePlacement[] }>();
     for (const p of wine.placements) {
@@ -363,87 +340,62 @@ export function WinePlacementView({
       if (!map.has(key)) map.set(key, { shelf: p.shelf, depth: p.depth, placements: [] });
       map.get(key)!.placements.push(p);
     }
-    // Sorter: hylde stigende, depth 1 (forrest) før 2 (bagerst)
-    return Array.from(map.values()).sort(
-      (a, b) => a.shelf - b.shelf || a.depth - b.depth,
-    );
+    return Array.from(map.values()).sort((a, b) => a.shelf - b.shelf || a.depth - b.depth);
   }, [wine.placements]);
 
   if (groups.length === 0) {
-    return (
-      <p className={cn("text-sm text-muted-foreground", className)}>
-        Spørg bartenderen.
-      </p>
-    );
+    return <p className={cn("text-sm text-muted-foreground", className)}>Spørg bartenderen.</p>;
   }
-
-  const shelfDef = (shelfNo: number) =>
-    layout.shelves[shelfNo - 1] ?? { slots: 5 };
 
   return (
     <div className={cn("space-y-4", className)}>
-      {groups.map((g) => (
-        <div key={`${g.shelf}:${g.depth}`}>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Hylde {g.shelf} — {depthLabel(g.depth)}
-            {wine.placements.length > 1 && (
-              <span className="ml-1 font-normal normal-case">
-                ({g.placements.length} {g.placements.length === 1 ? "flaske" : "flasker"})
-              </span>
-            )}
-          </p>
-          {/* Grafisk hyldevisning — kun lag 1 og lag 2 for denne (shelf, depth) */}
-          <div className="space-y-1 rounded-lg border border-border bg-card p-3">
-            {/* Lag 2 */}
-            {(() => {
-              const slots = shelfDef(g.shelf).slots;
-              const OFFSET = 22;
-              return (
-                <div style={{ paddingLeft: OFFSET }}>
-                  <div className="flex gap-2">
-                    {Array.from({ length: Math.max(0, slots - 1) }, (_, i) => {
+      {groups.map((g) => {
+        const slots = layout.shelves[g.shelf - 1]?.slots ?? 5;
+        return (
+          <div key={`${g.shelf}:${g.depth}`}>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Hylde {g.shelf} — {depthLabel(g.depth)}
+              {wine.placements.length > 1 && (
+                <span className="ml-1 font-normal normal-case">
+                  ({g.placements.length} {g.placements.length === 1 ? "flaske" : "flasker"})
+                </span>
+              )}
+            </p>
+            <div className="space-y-1 rounded-lg border border-border bg-card p-3">
+              {/* Lag 2 */}
+              {slots > 1 && (
+                <div className="overflow-x-auto pb-0.5">
+                  <div className="flex" style={{ paddingLeft: LAG2_OFFSET, gap: GAP }}>
+                    {Array.from({ length: slots - 1 }, (_, i) => {
                       const slotNo = i + 1;
                       const w = byPosition.get(posKey(g.shelf, slotNo, g.depth, 2)) ?? null;
-                      const isHl = !!w && w.id === wine.id;
                       return (
-                        <Bottle
-                          key={slotNo}
-                          label={String(slotNo)}
-                          wine={w}
-                          isSelected={false}
-                          isHighlighted={isHl}
-                          blocked={false}
-                          clickable={false}
-                          size="sm"
-                        />
+                        <Bottle key={slotNo} label={String(slotNo)} wine={w}
+                          isSelected={false} isHighlighted={!!w && w.id === wine.id}
+                          blocked={false} clickable={false} isLag2 />
                       );
                     })}
                   </div>
                 </div>
-              );
-            })()}
-            {/* Lag 1 */}
-            <div className="flex gap-2">
-              {Array.from({ length: shelfDef(g.shelf).slots }, (_, i) => {
-                const slotNo = i + 1;
-                const w = byPosition.get(posKey(g.shelf, slotNo, g.depth, 1)) ?? null;
-                const isHl = !!w && w.id === wine.id;
-                return (
-                  <Bottle
-                    key={slotNo}
-                    label={String(slotNo)}
-                    wine={w}
-                    isSelected={false}
-                    isHighlighted={isHl}
-                    blocked={false}
-                    clickable={false}
-                  />
-                );
-              })}
+              )}
+              {/* Lag 1 */}
+              <div className="overflow-x-auto pb-0.5">
+                <div className="flex" style={{ gap: GAP }}>
+                  {Array.from({ length: slots }, (_, i) => {
+                    const slotNo = i + 1;
+                    const w = byPosition.get(posKey(g.shelf, slotNo, g.depth, 1)) ?? null;
+                    return (
+                      <Bottle key={slotNo} label={String(slotNo)} wine={w}
+                        isSelected={false} isHighlighted={!!w && w.id === wine.id}
+                        blocked={false} clickable={false} />
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -456,13 +408,7 @@ export function WineFridgeLegend({ className }: { className?: string }) {
         const s = styleForType(type);
         return (
           <span key={type} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span
-              className="h-3 w-3 rounded-full border"
-              style={{
-                backgroundColor: s.fill,
-                borderColor: `color-mix(in oklch, ${s.fill} 75%, var(--foreground))`,
-              }}
-            />
+            <span className="h-3 w-3 rounded-full border" style={{ backgroundColor: s.fill, borderColor: `color-mix(in oklch, ${s.fill} 75%, var(--foreground))` }} />
             {type}
           </span>
         );
