@@ -12,6 +12,7 @@ const WINE_TYPE_STYLE: Record<string, WineTypeStyle> = {
   "rosé":        { fill: "oklch(0.84 0.09 20)",  text: "oklch(0.30 0.06 20)" },
   "mousserende": { fill: "oklch(0.91 0.08 100)", text: "oklch(0.30 0.05 90)" },
   "dessertvin":  { fill: "oklch(0.71 0.13 62)",  text: "oklch(0.26 0.06 60)" },
+  "andet":       { fill: "oklch(0.72 0.04 270)",  text: "oklch(0.97 0.01 270)" },
 };
 
 const FALLBACK_STYLE: WineTypeStyle = {
