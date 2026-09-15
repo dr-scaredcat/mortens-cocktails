@@ -16,6 +16,7 @@ import { AdminGarnishes } from "@/components/app/admin-garnishes";
 import { AdminIngredientsSection } from "@/components/app/admin-ingredients-section";
 import { AdminSpiritsSection } from "@/components/app/admin-spirits-section";
 import { AdminWinesSection } from "@/components/app/admin-wines-section";
+import { AdminVinglasSection } from "@/components/app/admin-vinglas-section";
 
 const AdminStatistik = lazy(() =>
   import("@/components/app/admin-statistik").then((m) => ({ default: m.AdminStatistik })),
@@ -37,6 +38,7 @@ function AdminPage() {
     { value: "opskrifter",  label: "Opskrifter" },
     { value: "spiritus",    label: "Spiritus" },
     { value: "vine",        label: "Vine" },
+    { value: "vinglas",     label: "Vinglas" },
     { value: "ingredients", label: "Ingredienser" },
     { value: "tags",        label: "Tags" },
     { value: "glasses",     label: "Glas" },
@@ -72,6 +74,7 @@ function AdminPage() {
             <TabsContent value="opskrifter"><AdminRecipes /></TabsContent>
             <TabsContent value="spiritus"><AdminSpiritsSection /></TabsContent>
             <TabsContent value="vine"><AdminWinesSection /></TabsContent>
+            <TabsContent value="vinglas"><AdminVinglasSection /></TabsContent>
             <TabsContent value="ingredients"><AdminIngredientsSection /></TabsContent>
             <TabsContent value="tags"><AdminTags /></TabsContent>
             <TabsContent value="glasses"><AdminGlasses /></TabsContent>
