@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { GlassWater, Wine } from "lucide-react";
+import { ArrowRight, GlassWater, Wine } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
@@ -225,17 +225,26 @@ function VinePage() {
     <div className="min-h-screen bg-background">
       <GuestHeader active="vine" />
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <div className="mb-5 space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="font-serif text-3xl tracking-tight">Vine</h1>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/vinglas">
-                <GlassWater className="mr-1.5 h-4 w-4" /> Find dit glas
-              </Link>
-            </Button>
-          </div>
+        <div className="mb-5 space-y-3">
+          <h1 className="font-serif text-3xl tracking-tight">Vine</h1>
           {!selfServe && orderingEnabled && <p className="text-sm text-muted-foreground">Vælg en vin og tryk Bestil — bartenderen finder den frem.</p>}
           {selfServe && <p className="text-sm text-muted-foreground">Find din vin i køleskabet — tryk Drik for at registrere den.</p>}
+
+          <Link
+            to="/vinglas"
+            className="flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3.5 transition hover:border-primary/50 hover:bg-primary/15"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                <GlassWater className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium leading-tight">Find dit vinglas</p>
+                <p className="text-sm text-muted-foreground">Se hvilket glas der passer til din vin</p>
+              </div>
+            </div>
+            <ArrowRight className="h-5 w-5 shrink-0 text-primary" />
+          </Link>
         </div>
 
         <div className="mb-4">
