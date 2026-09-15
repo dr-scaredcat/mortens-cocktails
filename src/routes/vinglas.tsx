@@ -5,8 +5,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, GlassWater, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { GuestHeader } from "@/components/app/guest-header";
-import { CardImage } from "@/components/app/card-image";
 import {
   listGlassTypes,
   listGrapeGlassMapping,
@@ -34,24 +37,29 @@ function normalize(s: string): string {
   return s.trim().toLowerCase();
 }
 
-// ── Resultatkort ─────────────────────────────────────────────────────────
-function ResultRow({ item }: { item: GrapeGlassMapping }) {
+// ── Stort resultatkort — billedet er det vigtigste, så gæsten kan
+// sammenligne direkte med glassene i skabet (ingen mærkater på glassene) ──
+function ResultCard({ item }: { item: GrapeGlassMapping }) {
   return (
-    <Card className="flex items-center gap-4 p-4">
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded bg-muted">
+    <Card className="overflow-hidden p-0">
+      <div className="flex aspect-square w-full items-center justify-center bg-muted p-4 sm:aspect-[4/3]">
         {item.glass?.image_url ? (
-          <CardImage src={item.glass.image_url} alt={item.glass.name} />
+          // Bevidst almindeligt <img> med object-contain (ikke CardImage,
+          // som beskærer til udfyldning) — hele glassets facon skal være synlig.
+          <img
+            src={item.glass.image_url}
+            alt={item.glass.name}
+            className="h-full w-full object-contain"
+          />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <GlassWater className="h-7 w-7 opacity-30" />
-          </div>
+          <GlassWater className="h-20 w-20 text-muted-foreground opacity-25" />
         )}
       </div>
-      <div className="min-w-0">
+      <div className="p-4 text-center">
         <p className="text-sm text-muted-foreground">{item.wine_name}</p>
-        <p className="font-serif text-lg leading-tight">{item.glass?.name ?? "Ukendt glas"}</p>
+        <p className="font-serif text-2xl leading-tight">{item.glass?.name ?? "Ukendt glas"}</p>
         {typeof item.glass?.quantity_owned === "number" && (
-          <p className="text-xs text-muted-foreground">{item.glass.quantity_owned} i samlingen</p>
+          <p className="mt-1 text-xs text-muted-foreground">{item.glass.quantity_owned} i samlingen</p>
         )}
       </div>
     </Card>
@@ -71,9 +79,21 @@ function VinglasPage() {
   });
 
   const mapping = (mappingData ?? []) as GrapeGlassMapping[];
-  const [q, setQ] = useState("");
 
-  const results = useMemo(() => {
+  const [q, setQ] = useState("");
+  const [selectedId, setSelectedId] = useState<string>("");
+
+  const sortedOptions = useMemo(
+    () => [...mapping].sort((a, b) => a.wine_name.localeCompare(b.wine_name, "da")),
+    [mapping],
+  );
+
+  const selectedItem = useMemo(
+    () => mapping.find((m) => m.id === selectedId) ?? null,
+    [mapping, selectedId],
+  );
+
+  const searchResults = useMemo(() => {
     const s = normalize(q);
     if (!s) return [];
     const starts: GrapeGlassMapping[] = [];
@@ -85,8 +105,18 @@ function VinglasPage() {
     }
     const byName = (a: GrapeGlassMapping, b: GrapeGlassMapping) =>
       a.wine_name.localeCompare(b.wine_name, "da");
-    return [...starts.sort(byName), ...contains.sort(byName)].slice(0, 30);
+    return [...starts.sort(byName), ...contains.sort(byName)].slice(0, 20);
   }, [mapping, q]);
+
+  function onSearchChange(value: string) {
+    setQ(value);
+    if (value.trim()) setSelectedId("");
+  }
+
+  function onDropdownChange(id: string) {
+    setSelectedId(id);
+    setQ("");
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -102,29 +132,48 @@ function VinglasPage() {
         <div className="mb-5 space-y-1">
           <h1 className="font-serif text-3xl tracking-tight">Find dit vinglas</h1>
           <p className="text-sm text-muted-foreground">
-            Skriv en drue eller et vinnavn — fx "Rioja" eller "Sauvignon Blanc".
+            Søg efter en drue eller et vinnavn, eller vælg fra listen — og sammenlign billedet med glassene i skabet.
           </p>
         </div>
 
-        <div className="relative mb-5">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Søg efter drue eller vin..."
-            className="pl-9"
-            autoFocus
-          />
+        <div className="mb-4 space-y-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Søg efter drue eller vin..."
+              className="pl-9"
+            />
+          </div>
+
+          <div>
+            <Label className="mb-1.5 block text-xs uppercase tracking-wide text-muted-foreground">
+              ...eller vælg fra listen
+            </Label>
+            <Select value={selectedId} onValueChange={onDropdownChange}>
+              <SelectTrigger>
+                <SelectValue placeholder="Vælg en drue eller vin..." />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {sortedOptions.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.wine_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {q.trim() === "" ? (
-          <p className="text-sm text-muted-foreground">Begynd at skrive for at se forslag.</p>
-        ) : results.length === 0 ? (
+        {selectedItem ? (
+          <ResultCard item={selectedItem} />
+        ) : q.trim() === "" ? (
+          <p className="text-sm text-muted-foreground">Begynd at skrive eller vælg fra listen for at se forslag.</p>
+        ) : searchResults.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ingen match. Prøv en anden stavning eller druesort.</p>
         ) : (
-          <div className="space-y-3">
-            {results.map((item) => (
-              <ResultRow key={item.id} item={item} />
+          <div className="space-y-4">
+            {searchResults.map((item) => (
+              <ResultCard key={item.id} item={item} />
             ))}
           </div>
         )}
