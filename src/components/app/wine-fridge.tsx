@@ -166,12 +166,16 @@ function DepthSection({
 }) {
   const isPicker = mode === "admin-vaelger";
   // Lag 2 har slots-1 mulige pladser (øverste)
-  // Lag 2 vises kun hvis mindst én plads i lag 2 er besat
-  // (enten af den fremhævede vin eller af en anden vin).
-  const lag2HasWines = Array.from({ length: Math.max(0, slots - 1) }, (_, i) => i + 1).some(
+  // I admin-vælgeren skal lag 2 ALTID vises, ellers kan man aldrig placere
+  // den første flaske der (pladsen er jo netop tom indtil man vælger den).
+  // I gæstevisningen ("gæst") skal lag 2 kun vises hvis mindst én plads
+  // i lag 2 rent faktisk er besat — ellers virker visningen rodet for
+  // hylder hvor ingen bruger det øverste lag.
+  const maxLag2Count = Math.max(0, slots - 1);
+  const lag2HasWines = Array.from({ length: maxLag2Count }, (_, i) => i + 1).some(
     (slotNo) => byPosition.has(posKey(shelfNo, slotNo, depth, 2)),
   );
-  const lag2Count = lag2HasWines ? Math.max(0, slots - 1) : 0;
+  const lag2Count = isPicker ? maxLag2Count : (lag2HasWines ? maxLag2Count : 0);
   // Grid skal have 2*slots kolonner for lag 1, og lag 2 starter ved kolonne 2
   const gridCols = slots * 2;
 
