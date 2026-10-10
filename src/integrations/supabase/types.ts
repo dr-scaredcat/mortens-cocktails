@@ -293,6 +293,87 @@ export type Database = {
         }
         Relationships: []
       }
+      wines: {
+        Row: {
+          abv: number | null
+          bottle_size_cl: number
+          country: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          drink_from: number | null
+          drink_to: number | null
+          food_pairing: string | null
+          grapes: string | null
+          id: string
+          image_url: string | null
+          name: string
+          price: number | null
+          producer: string | null
+          quantity: number
+          region: string | null
+          serving_temp: string | null
+          shelf: number | null
+          slot: number | null
+          tasting_notes: string | null
+          updated_at: string
+          vintage: number | null
+          wine_type: string
+        }
+        Insert: {
+          abv?: number | null
+          bottle_size_cl?: number
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          drink_from?: number | null
+          drink_to?: number | null
+          food_pairing?: string | null
+          grapes?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          price?: number | null
+          producer?: string | null
+          quantity?: number
+          region?: string | null
+          serving_temp?: string | null
+          shelf?: number | null
+          slot?: number | null
+          tasting_notes?: string | null
+          updated_at?: string
+          vintage?: number | null
+          wine_type: string
+        }
+        Update: {
+          abv?: number | null
+          bottle_size_cl?: number
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          drink_from?: number | null
+          drink_to?: number | null
+          food_pairing?: string | null
+          grapes?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          price?: number | null
+          producer?: string | null
+          quantity?: number
+          region?: string | null
+          serving_temp?: string | null
+          shelf?: number | null
+          slot?: number | null
+          tasting_notes?: string | null
+          updated_at?: string
+          vintage?: number | null
+          wine_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

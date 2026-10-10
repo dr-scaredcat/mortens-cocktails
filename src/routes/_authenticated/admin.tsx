@@ -3,16 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { SiteHeader } from "@/components/app/site-header";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { lazy, Suspense, useState } from "react";
 import { isAdmin } from "@/lib/admin.functions";
-import { AdminIngredients } from "@/components/app/admin-ingredients";
 import { AdminCocktails } from "@/components/app/admin-cocktails";
 import { AdminRecipes } from "@/components/app/admin-recipes";
 import { AdminTags } from "@/components/app/admin-tags";
@@ -20,9 +13,14 @@ import { AdminSettings } from "@/components/app/admin-settings";
 import { AdminMenukort } from "@/components/app/admin-menukort";
 import { AdminGlasses } from "@/components/app/admin-glasses";
 import { AdminGarnishes } from "@/components/app/admin-garnishes";
-import { AdminStatistik } from "@/components/app/admin-statistik";
-import { AdminSpirits } from "@/components/app/admin-spirits";
-import { AdminSpiritTypes } from "@/components/app/admin-spirit-types";
+import { AdminIngredientsSection } from "@/components/app/admin-ingredients-section";
+import { AdminSpiritsSection } from "@/components/app/admin-spirits-section";
+import { AdminWinesSection } from "@/components/app/admin-wines-section";
+import { AdminVinglasSection } from "@/components/app/admin-vinglas-section";
+
+const AdminStatistik = lazy(() =>
+  import("@/components/app/admin-statistik").then((m) => ({ default: m.AdminStatistik })),
+);
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Aston's Bar" }] }),
@@ -35,16 +33,18 @@ function AdminPage() {
   const [tab, setTab] = useState("menukort");
 
   const TABS = [
-    { value: "menukort",      label: "Menukort" },
-    { value: "cocktails",     label: "Cocktails" },
-    { value: "opskrifter",    label: "Opskrifter" },
-    { value: "spiritus",      label: "Spiritus" },
-    { value: "ingredients",   label: "Ingredienser" },
-    { value: "tags",          label: "Tags" },
-    { value: "spiritustyper", label: "Spiritus typer" },
-    { value: "glasses",       label: "Glas" },
-    { value: "garnishes",     label: "Pynt" },
-    { value: "settings",      label: "Indstillinger" },
+    { value: "menukort",    label: "Menukort" },
+    { value: "cocktails",   label: "Cocktails" },
+    { value: "opskrifter",  label: "Opskrifter" },
+    { value: "spiritus",    label: "Spiritus" },
+    { value: "vine",        label: "Vine" },
+    { value: "vinglas",     label: "Vinglas" },
+    { value: "ingredients", label: "Ingredienser" },
+    { value: "tags",        label: "Tags" },
+    { value: "glasses",     label: "Glas" },
+    { value: "garnishes",   label: "Pynt" },
+    { value: "statistik",   label: "Statistik" },
+    { value: "settings",    label: "Indstillinger" },
   ];
 
   return (
@@ -52,9 +52,7 @@ function AdminPage() {
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-4 py-6">
         <h1 className="mb-1 font-serif text-3xl">Admin</h1>
-        <p className="mb-5 text-sm text-muted-foreground">
-          Administrér ingredienser, cocktails og opskrifter.
-        </p>
+        <p className="mb-5 text-sm text-muted-foreground">Administrér ingredienser, cocktails og opskrifter.</p>
         {isLoading ? (
           <p className="text-muted-foreground">Indlæser...</p>
         ) : !data?.isAdmin ? (
@@ -65,49 +63,28 @@ function AdminPage() {
           <Tabs value={tab} onValueChange={setTab}>
             <div className="mb-6">
               <Select value={tab} onValueChange={setTab}>
-                <SelectTrigger className="w-full sm:w-56">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {TABS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
+                  {TABS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
-            <TabsContent value="menukort">
-              <AdminMenukort />
+            <TabsContent value="menukort"><AdminMenukort /></TabsContent>
+            <TabsContent value="cocktails"><AdminCocktails /></TabsContent>
+            <TabsContent value="opskrifter"><AdminRecipes /></TabsContent>
+            <TabsContent value="spiritus"><AdminSpiritsSection /></TabsContent>
+            <TabsContent value="vine"><AdminWinesSection /></TabsContent>
+            <TabsContent value="vinglas"><AdminVinglasSection /></TabsContent>
+            <TabsContent value="ingredients"><AdminIngredientsSection /></TabsContent>
+            <TabsContent value="tags"><AdminTags /></TabsContent>
+            <TabsContent value="glasses"><AdminGlasses /></TabsContent>
+            <TabsContent value="garnishes"><AdminGarnishes /></TabsContent>
+            <TabsContent value="statistik">
+              <Suspense fallback={<p className="text-muted-foreground">Indlæser statistik…</p>}>
+                <AdminStatistik />
+              </Suspense>
             </TabsContent>
-            <TabsContent value="cocktails">
-              <AdminCocktails />
-            </TabsContent>
-            <TabsContent value="opskrifter">
-              <AdminRecipes />
-            </TabsContent>
-            <TabsContent value="spiritus">
-              <AdminSpirits />
-            </TabsContent>
-            <TabsContent value="ingredients">
-              <AdminIngredients />
-            </TabsContent>
-            <TabsContent value="tags">
-              <AdminTags />
-            </TabsContent>
-            <TabsContent value="spiritustyper">
-              <AdminSpiritTypes />
-            </TabsContent>
-            <TabsContent value="glasses">
-              <AdminGlasses />
-            </TabsContent>
-            <TabsContent value="garnishes">
-              <AdminGarnishes />
-            </TabsContent>
-            <TabsContent value="settings">
-              <AdminSettings />
-            </TabsContent>
+            <TabsContent value="settings"><AdminSettings /></TabsContent>
           </Tabs>
         )}
       </main>

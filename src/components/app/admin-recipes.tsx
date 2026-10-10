@@ -25,8 +25,9 @@ import {
 } from "@/components/ui/select";
 import { UNITS } from "@/lib/constants";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronLeft, ChevronRight, Upload, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/image-utils";
 
 type IngItem = { _id: string; name: string; amount: string; unit: string };
 type ImgItem = { _id: string; url: string };
@@ -142,6 +143,7 @@ export function AdminRecipes() {
   const [saving, setSaving] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function patch<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
@@ -190,11 +192,11 @@ export function AdminRecipes() {
     if (file.size > 10 * 1024 * 1024) { toast.error("Filen er for stor — maks 10 MB"); return; }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const fileName = `recipe_${Date.now()}.${ext}`;
+      const compressed = await compressImage(file);
+      const fileName = `recipe_${Date.now()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from("cocktail-images")
-        .upload(fileName, file, { upsert: false, contentType: file.type });
+        .upload(fileName, compressed, { upsert: false, contentType: "image/jpeg" });
       if (uploadError) throw new Error(uploadError.message);
       const { data: urlData } = supabase.storage.from("cocktail-images").getPublicUrl(fileName);
       patch("images", [...form.images, { _id: newId(), url: urlData.publicUrl }]);
@@ -268,6 +270,12 @@ export function AdminRecipes() {
     delMut.mutate(r.id);
   }
 
+  const recipeQuery = search.trim().toLowerCase();
+  const visibleRecipes = ((recipes ?? []) as RecipeWithDetails[])
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "da"))
+    .filter((r) => (recipeQuery ? r.name.toLowerCase().includes(recipeQuery) : true));
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -276,14 +284,23 @@ export function AdminRecipes() {
         </Button>
       </div>
 
-      {(recipes ?? []).length === 0 ? (
-        <p className="text-sm text-muted-foreground">Ingen opskrifter endnu.</p>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Søg efter opskrift..."
+          className="pl-9"
+        />
+      </div>
+
+      {visibleRecipes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {recipeQuery ? "Ingen opskrifter matcher søgningen." : "Ingen opskrifter endnu."}
+        </p>
       ) : (
         <div className="space-y-2">
-          {((recipes ?? []) as RecipeWithDetails[])
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name, "da"))
-            .map((r) => (
+          {visibleRecipes.map((r) => (
               <Card key={r.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3">
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded bg-muted">
                   {r.images[0] && (
@@ -310,7 +327,10 @@ export function AdminRecipes() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogContent
+          className="max-h-[90vh] max-w-2xl overflow-y-auto"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>{form.id ? "Rediger opskrift" : "Ny opskrift"}</DialogTitle>
           </DialogHeader>

@@ -5,10 +5,11 @@ import { z } from "zod";
 
 export type OrderRow = {
   id: string;
-  kind: string;                 // NY: 'cocktail' | 'spirit'
+  kind: string;                 // 'cocktail' | 'spirit' | 'wine'
   cocktail_id: string | null;
-  spirit_id: string | null;     // NY
-  cocktail_name: string;        // bruges som vare-navn for begge typer
+  spirit_id: string | null;
+  wine_id: string | null;       // NY
+  cocktail_name: string;        // bruges som vare-navn for alle typer
   customer_name: string;
   note: string | null;
   status: string;
@@ -17,9 +18,10 @@ export type OrderRow = {
 };
 
 const orderInput = z.object({
-  kind: z.enum(["cocktail", "spirit"]).optional().default("cocktail"),
+  kind: z.enum(["cocktail", "spirit", "wine"]).optional().default("cocktail"),
   cocktailId: z.string().uuid().nullable().optional(),
   spiritId: z.string().uuid().nullable().optional(),
+  wineId: z.string().uuid().nullable().optional(),
   cocktailName: z.string().min(1).max(120),
   customerName: z.string().trim().min(1, "Skriv dit navn").max(60),
   note: z.string().trim().max(300).optional().nullable(),
@@ -34,6 +36,7 @@ export const createOrder = createServerFn({ method: "POST" })
       kind: data.kind,
       cocktail_id: data.kind === "cocktail" ? data.cocktailId ?? null : null,
       spirit_id: data.kind === "spirit" ? data.spiritId ?? null : null,
+      wine_id: data.kind === "wine" ? data.wineId ?? null : null,
       cocktail_name: data.cocktailName,
       customer_name: data.customerName,
       note: data.note && data.note.length > 0 ? data.note : null,
@@ -47,9 +50,8 @@ export const listOrders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertAdmin(context);
-    // Cast indtil Supabase-typerne regenereres med quantity-kolonnen.
     const { data, error } = await (context.supabase.from("cocktail_orders") as any)
-      .select("id, kind, cocktail_id, spirit_id, cocktail_name, customer_name, note, status, created_at, quantity")
+      .select("id, kind, cocktail_id, spirit_id, wine_id, cocktail_name, customer_name, note, status, created_at, quantity")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []) as OrderRow[];
@@ -193,6 +195,56 @@ export const DEFAULT_LOGO_GAP = 10;
 export const DEFAULT_LOGO_ALIGN: LogoAlign = "center";
 export const DEFAULT_LOGO_TYPE: LogoType = "barskab";
 export const DEFAULT_TEXT_OFFSET_Y = 0;
+export const DEFAULT_LOGO_OFFSET_Y = 0;
+
+// =================== Skrifttyper (fonts) ===================
+// Kurateret sæt Google Fonts. "default" = ingen override (tema-standard).
+// `google` er familie-delen til Google Fonts css2-URL'en; tom = intet at indlæse.
+// `stack` er CSS font-family; tom = arv tema-standard.
+
+export type FontKey =
+  | "default"
+  | "custom"
+  | "permanentmarker"
+  | "caveat"
+  | "bebas"
+  | "cinzel";
+
+export type FontOption = {
+  key: FontKey;
+  label: string;
+  google: string; // familie-del til Google Fonts css2-URL'en; tom = indlæses ikke
+  stack: string;  // CSS font-family; tom = arv tema-standard
+};
+
+// Custom-font konvention: læg en fil i public/ som `custom-font.woff2`.
+// FontApplier registrerer den automatisk under familienavnet 'CustomFont'.
+export const CUSTOM_FONT_FAMILY = "CustomFont";
+export const CUSTOM_FONT_URL = "/custom-font.woff2";
+
+export const FONT_OPTIONS: FontOption[] = [
+  { key: "default",         label: "Tema-standard",      google: "",                        stack: "" },
+  { key: "custom",          label: "Egen font (public)", google: "",                        stack: "'CustomFont', serif" },
+  { key: "permanentmarker", label: "Permanent Marker",   google: "Permanent+Marker",        stack: "'Permanent Marker', cursive" },
+  { key: "caveat",          label: "Caveat",             google: "Caveat:wght@400;600;700", stack: "'Caveat', cursive" },
+  { key: "bebas",           label: "Bebas Neue",         google: "Bebas+Neue",              stack: "'Bebas Neue', sans-serif" },
+  { key: "cinzel",          label: "Cinzel",             google: "Cinzel:wght@400;600;700", stack: "'Cinzel', serif" },
+];
+
+const FONT_KEYS = FONT_OPTIONS.map((f) => f.key) as [FontKey, ...FontKey[]];
+
+export const DEFAULT_HEADING_FONT: FontKey = "default";
+export const DEFAULT_LOGO_FONT: FontKey = "default";
+
+export function fontStack(key: FontKey | undefined): string {
+  return FONT_OPTIONS.find((f) => f.key === key)?.stack ?? "";
+}
+
+// Samlet Google Fonts css2-URL for hele sættet — bruges i __root.tsx's <head>.
+export const GOOGLE_FONTS_HREF = `https://fonts.googleapis.com/css2?${FONT_OPTIONS
+  .filter((f) => f.google)
+  .map((f) => `family=${f.google}`)
+  .join("&")}&display=swap`;
 
 export const setLogoSize = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -278,9 +330,51 @@ export const setTextOffsetY = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setLogoOffsetY = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { offset: number }) =>
+    z.object({ offset: z.number().int().min(-60).max(60) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_offset_y", value: data.offset as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setHeadingFont = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { font: FontKey }) =>
+    z.object({ font: z.enum(["default", "custom", "permanentmarker", "caveat", "bebas", "cinzel"]) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "heading_font", value: data.font as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const setLogoFont = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { font: FontKey }) =>
+    z.object({ font: z.enum(["default", "custom", "permanentmarker", "caveat", "bebas", "cinzel"]) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { error } = await context.supabase
+      .from("app_settings")
+      .upsert({ key: "logo_font", value: data.font as unknown as never });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 // =================== Samlet header-konfiguration ===================
 // Ét DB-kald der henter alle header-/logo-indstillinger på én gang, så
-// headeren ikke laver seks separate round-trips pr. sideindlæsning.
+// headeren ikke laver mange separate round-trips pr. sideindlæsning.
 
 export type SiteSettings = {
   name: string;
@@ -290,6 +384,9 @@ export type SiteSettings = {
   logoAlign: LogoAlign;
   logoType: LogoType;
   textOffsetY: number;
+  logoOffsetY: number;
+  headingFont: FontKey;
+  logoFont: FontKey;
 };
 
 export const getSiteSettings = createServerFn({ method: "GET" }).handler(
@@ -298,7 +395,7 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const { data, error } = await sb
       .from("app_settings")
       .select("key, value")
-      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y"]);
+      .in("key", ["site_name", "logo_size", "text_size", "logo_gap", "logo_align", "logo_type", "text_offset_y", "logo_offset_y", "heading_font", "logo_font"]);
     if (error) throw new Error(error.message);
 
     const map = new Map((data ?? []).map((r) => [r.key, r.value]));
@@ -310,8 +407,11 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
     const nameVal = map.get("site_name");
     const alignVal = map.get("logo_align");
     const typeVal = map.get("logo_type");
+    const headingFontVal = map.get("heading_font");
+    const logoFontVal = map.get("logo_font");
     const validAlign: LogoAlign[] = ["top", "center", "bottom"];
     const validType: LogoType[] = ["barskab", "martini", "wine", "custom"];
+    const validFont = FONT_OPTIONS.map((f) => f.key) as FontKey[];
 
     return {
       name: typeof nameVal === "string" && nameVal.length > 0 ? nameVal : DEFAULT_SITE_NAME,
@@ -321,6 +421,9 @@ export const getSiteSettings = createServerFn({ method: "GET" }).handler(
       logoAlign: validAlign.includes(alignVal as LogoAlign) ? (alignVal as LogoAlign) : DEFAULT_LOGO_ALIGN,
       logoType: validType.includes(typeVal as LogoType) ? (typeVal as LogoType) : DEFAULT_LOGO_TYPE,
       textOffsetY: num(map.get("text_offset_y"), DEFAULT_TEXT_OFFSET_Y),
+      logoOffsetY: num(map.get("logo_offset_y"), DEFAULT_LOGO_OFFSET_Y),
+      headingFont: validFont.includes(headingFontVal as FontKey) ? (headingFontVal as FontKey) : DEFAULT_HEADING_FONT,
+      logoFont: validFont.includes(logoFontVal as FontKey) ? (logoFontVal as FontKey) : DEFAULT_LOGO_FONT,
     };
   },
 );

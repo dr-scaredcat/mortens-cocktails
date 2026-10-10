@@ -17,6 +17,8 @@ import { listCocktails, type CocktailWithDetails } from "@/lib/cocktails.functio
 import { OrderButton } from "@/components/app/order-button";
 import { getPopularCocktails, type PopularBadge } from "@/lib/stats.functions";
 import { getOrderingEnabled } from "@/lib/orders.functions";
+import { thumbUrl } from "@/lib/image-utils";
+import { CardImage } from "@/components/app/card-image";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -27,6 +29,17 @@ export const Route = createFileRoute("/menukort")({
       { name: "description", content: "Cocktails du kan lave lige nu." },
     ],
   }),
+  // SSR-prefetch: hent cocktails på serveren og læg dem i query-cachen, så det
+  // fulde svar allerede indeholder dataen. Returværdien serialiseres af routeren
+  // og bruges som initialData i komponenten → ingen "Indlæser..."-blink og ingen
+  // hydration-mismatch (uden behov for ekstra afhængigheder).
+  loader: async ({ context }) => {
+    const cocktails = await context.queryClient.ensureQueryData({
+      queryKey: ["cocktails"],
+      queryFn: () => listCocktails(),
+    });
+    return { cocktails };
+  },
   component: MenukortPage,
 });
 
@@ -72,11 +85,9 @@ function MenukortCocktailCard({
             </div>
           )}
           {cocktail.image_url ? (
-            <img
-              src={cocktail.image_url}
+            <CardImage
+              src={thumbUrl(cocktail.image_url, 480) ?? cocktail.image_url}
               alt={cocktail.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1">
@@ -152,16 +163,22 @@ function ShareButton({ cocktail }: { cocktail: CocktailWithDetails }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function MenukortPage() {
+  const { cocktails: initialCocktails } = Route.useLoaderData();
+
   const fetchCocktails = useServerFn(listCocktails);
   const { data, isLoading } = useQuery({
     queryKey: ["cocktails"],
     queryFn: () => fetchCocktails(),
+    // Fra SSR-loaderen — undgår "Indlæser..." ved første render.
+    initialData: initialCocktails,
   });
   const fetchOrdering = useServerFn(getOrderingEnabled);
   const { data: orderingData } = useQuery({
     queryKey: ["ordering-enabled"],
     queryFn: () => fetchOrdering(),
     refetchInterval: 30_000,
+    // Skal altid være frisk — overstyrer det globale staleTime på 60 s.
+    staleTime: 0,
   });
   const orderingEnabled = !!orderingData?.enabled;
 
@@ -201,34 +218,6 @@ function MenukortPage() {
     return [...f].sort((a, b) => a.name.localeCompare(b.name, "da"));
   }, [data, tags, q, sortMode]);
 
-  // Beregn tag-counts dynamisk fra den filtrerede base (med søgning, uden tag-filter)
-  // — så hvert tag viser antal cocktails der matcher det, givet de aktive tags + søgning.
-  const tagCounts = useMemo(() => {
-    const list = (data ?? []) as CocktailWithDetails[];
-    let base = list.filter((c) => c.missing.length === 0 && c.on_menu !== false);
-    if (q.trim()) {
-      const s = q.trim().toLowerCase();
-      base = base.filter(
-        (c) =>
-          c.name.toLowerCase().includes(s) ||
-          c.ingredients.some((i) => i.name.toLowerCase().includes(s)) ||
-          c.tags.some((t) => t.toLowerCase().includes(s)),
-      );
-    }
-    // Tæl fra den aktive filtrerede liste (dvs. med valgte tags inkluderet)
-    const activeBase = tags.length > 0
-      ? base.filter((c) => tags.every((t) => c.tags.includes(t)))
-      : base;
-
-    const counts = new Map<string, number>();
-    for (const c of activeBase) {
-      for (const tag of c.tags) {
-        counts.set(tag, (counts.get(tag) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [data, tags, q]);
-
   return (
     <div className="min-h-screen bg-background">
       <GuestHeader active="cocktails" />
@@ -267,7 +256,6 @@ function MenukortPage() {
               setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
             }
             onClear={() => setTags([])}
-            tagCounts={tagCounts}
           />
           <div className="flex gap-2">
             <Button
@@ -309,7 +297,7 @@ function MenukortPage() {
           </div>
         )}
 
-        {/* Detalje-dialog — viser det fulde CocktailCard med alt info */}
+        {/* Detalje-dialog — viser det fulde CocktailCard med alt info + fremgangsmåde */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
           <DialogPortal>
             <DialogOverlay />
@@ -334,6 +322,7 @@ function MenukortPage() {
                       <CocktailCard
                         cocktail={c}
                         showAvailabilityBadge={false}
+                        showInstructions
                         footerSlot={
                           <div
                             className="flex flex-wrap gap-2"

@@ -25,11 +25,13 @@ export function OrderButton({
   cocktailName,
   kind = "cocktail",
   spiritId,
+  wineId,
 }: {
   cocktailId?: string;
   cocktailName: string;
-  kind?: "cocktail" | "spirit";
+  kind?: "cocktail" | "spirit" | "wine";
   spiritId?: string;
+  wineId?: string;
 }) {
   const submit = useServerFn(createOrder);
   const [open, setOpen] = useState(false);
@@ -49,6 +51,7 @@ export function OrderButton({
           kind,
           cocktailId: kind === "cocktail" ? cocktailId ?? null : null,
           spiritId: kind === "spirit" ? spiritId ?? null : null,
+          wineId: kind === "wine" ? wineId ?? null : null,
           cocktailName,
           customerName: name.trim(),
           note: note.trim() || null,
@@ -79,7 +82,6 @@ export function OrderButton({
       return;
     }
     if (quantity > 1) {
-      // Åbn bekræftelsesdialog
       setConfirmOpen(true);
     } else {
       doSubmit();
@@ -101,19 +103,29 @@ export function OrderButton({
               Skriv dit navn, så bartenderen ved hvem den er til.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="order-name">Navn</Label>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="customer-name">Dit navn</Label>
               <Input
-                id="order-name"
+                id="customer-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                maxLength={60}
-                autoFocus
-                required
+                placeholder="Skriv dit navn..."
+                autoComplete="name"
               />
             </div>
-            <div className="space-y-1.5">
+            <div>
+              <Label htmlFor="order-note">Besked til bartenderen (valgfrit)</Label>
+              <Textarea
+                id="order-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Fx allergi, ønsker, kommentar..."
+                rows={2}
+              />
+            </div>
+            {/* Antal */}
+            <div>
               <Label>Antal</Label>
               <div className="flex items-center gap-3">
                 <Button
@@ -123,11 +135,10 @@ export function OrderButton({
                   className="h-9 w-9"
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   disabled={quantity <= 1}
-                  aria-label="Færre"
                 >
                   <Minus className="h-4 w-4" />
                 </Button>
-                <span className="w-8 text-center text-lg font-medium tabular-nums">{quantity}</span>
+                <span className="w-8 text-center tabular-nums">{quantity}</span>
                 <Button
                   type="button"
                   variant="outline"
@@ -135,25 +146,13 @@ export function OrderButton({
                   className="h-9 w-9"
                   onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
                   disabled={quantity >= MAX_QUANTITY}
-                  aria-label="Flere"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="order-note">Note (valgfri)</Label>
-              <Textarea
-                id="order-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={300}
-                placeholder="Fx mindre lime, ekstra is..."
-                rows={3}
-              />
-            </div>
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
                 Annullér
               </Button>
               <Button type="submit" disabled={busy}>

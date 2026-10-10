@@ -6,6 +6,9 @@ import type { CocktailWithDetails } from "@/lib/cocktails.functions";
 import { RatingStars } from "@/components/app/rating-stars";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { ShoppingListButton } from "@/components/app/shopping-list-button";
+import { thumbUrl } from "@/lib/image-utils";
+import { CardImage } from "@/components/app/card-image";
 
 const PRESETS = [1, 2, 3, 4];
 const MAX_MULTIPLIER = 99;
@@ -27,16 +30,26 @@ export function CocktailCard({
   onClick,
   showMultiplier = false,
   initialMultiplier = 1,
+  shoppingListIds,
+  onAddToShoppingList,
+  showInstructions = false,
+  thumb = false,
 }: {
   cocktail: CocktailWithDetails;
   showAvailabilityBadge?: boolean;
   compact?: boolean;
   footerSlot?: ReactNode;
   onClick?: () => void;
-  /** Vis 1×/2×/3×/4×-vælger der skalerer ingrediensmængderne (kun bartender-visning) */
   showMultiplier?: boolean;
-  /** Startværdi for multiplieren (fx antallet fra en bestilling) */
   initialMultiplier?: number;
+  /** ID'er der allerede er på indkøbslisten — vises kun hvis prop er givet */
+  shoppingListIds?: Set<string>;
+  /** Callback til at tilføje manglende ingredienser */
+  onAddToShoppingList?: (ingredientIds: string[]) => void;
+  /** Vis fremgangsmåde (instructions) under ingredienslisten */
+  showInstructions?: boolean;
+  /** Brug et mindre thumbnail-billede (til kort-gitre). Detalje-visning bruger fuldt billede. */
+  thumb?: boolean;
 }) {
   const safeInitial = Number.isFinite(initialMultiplier) && initialMultiplier >= 1 ? initialMultiplier : 1;
   const [multiplier, setMultiplier] = useState(safeInitial);
@@ -58,11 +71,9 @@ export function CocktailCard({
         role={clickable ? "button" : undefined}
       >
         {cocktail.image_url ? (
-          <img
-            src={cocktail.image_url}
+          <CardImage
+            src={thumb ? (thumbUrl(cocktail.image_url, 480) ?? cocktail.image_url) : cocktail.image_url}
             alt={cocktail.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1">
@@ -178,12 +189,45 @@ export function CocktailCard({
             </ul>
           )}
 
+          {/* Fremgangsmåde — vises kun når showInstructions er sat og der findes tekst */}
+          {showInstructions && cocktail.instructions && (
+            <div
+              className={cn("space-y-1 pt-1 text-sm", clickable && "cursor-pointer")}
+              onClick={onClick}
+            >
+              <p className="font-medium text-foreground">Fremgangsmåde</p>
+              <p className="whitespace-pre-line text-muted-foreground">
+                {cocktail.instructions}
+              </p>
+            </div>
+          )}
+
           {!compact && (
             <RatingStars
               cocktailId={cocktail.id}
               avg={cocktail.avg_rating}
               count={cocktail.rating_count}
             />
+          )}
+
+          {/* Indkøbsliste-knap — vises kun hvis prop er givet */}
+          {shoppingListIds !== undefined && onAddToShoppingList && (
+            <div className="flex justify-end">
+              <ShoppingListButton
+                ingredientIds={cocktail.ingredients
+                  .filter((i) => !i.available)
+                  .map((i) => i.ingredient_id)}
+                shoppingListIds={shoppingListIds}
+                onAdd={() =>
+                  onAddToShoppingList(
+                    cocktail.ingredients
+                      .filter((i) => !i.available)
+                      .map((i) => i.ingredient_id),
+                  )
+                }
+                size="sm"
+              />
+            </div>
           )}
 
           {footerSlot}

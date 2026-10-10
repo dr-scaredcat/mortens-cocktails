@@ -16,6 +16,8 @@ import { OrderButton } from "@/components/app/order-button";
 import { listSpirits, listSpiritTypes, type SpiritWithDetails } from "@/lib/spirits.functions";
 import { getPopularSpirits, type PopularBadge } from "@/lib/stats.functions";
 import { getOrderingEnabled } from "@/lib/orders.functions";
+import { thumbUrl } from "@/lib/image-utils";
+import { CardImage } from "@/components/app/card-image";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/spiritus")({
@@ -25,6 +27,15 @@ export const Route = createFileRoute("/spiritus")({
       { name: "description", content: "Vores udvalg af spiritus." },
     ],
   }),
+  // SSR-prefetch: hent spiritus på serveren og læg dem i query-cachen. Returværdien
+  // serialiseres af routeren og bruges som initialData → ingen "Indlæser..."-blink.
+  loader: async ({ context }) => {
+    const spirits = await context.queryClient.ensureQueryData({
+      queryKey: ["spirits"],
+      queryFn: () => listSpirits(),
+    });
+    return { spirits };
+  },
   component: SpiritusPage,
 });
 
@@ -71,11 +82,9 @@ function MenukortSpiritCard({
             </div>
           )}
           {spirit.image_url ? (
-            <img
-              src={spirit.image_url}
+            <CardImage
+              src={thumbUrl(spirit.image_url, 480) ?? spirit.image_url}
               alt={spirit.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1">
@@ -124,8 +133,15 @@ function MenukortSpiritCard({
 // ────────────────────────────────────────────────────────────────────────────
 
 function SpiritusPage() {
+  const { spirits: initialSpirits } = Route.useLoaderData();
+
   const fetchSpirits = useServerFn(listSpirits);
-  const { data, isLoading } = useQuery({ queryKey: ["spirits"], queryFn: () => fetchSpirits() });
+  const { data, isLoading } = useQuery({
+    queryKey: ["spirits"],
+    queryFn: () => fetchSpirits(),
+    // Fra SSR-loaderen — undgår "Indlæser..." ved første render.
+    initialData: initialSpirits,
+  });
 
   const fetchTypes = useServerFn(listSpiritTypes);
   const { data: typeRows } = useQuery({
@@ -138,6 +154,8 @@ function SpiritusPage() {
     queryKey: ["ordering-enabled"],
     queryFn: () => fetchOrdering(),
     refetchInterval: 30_000,
+    // Skal altid være frisk — overstyrer det globale staleTime på 60 s.
+    staleTime: 0,
   });
   const orderingEnabled = !!orderingData?.enabled;
 

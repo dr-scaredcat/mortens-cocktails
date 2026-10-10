@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Pencil, Check, X } from "lucide-react";
+import { Trash2, Pencil, Check, X, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -195,6 +195,7 @@ export function AdminIngredients() {
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [deleteUnusedOpen, setDeleteUnusedOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!category && catNames.length > 0) setCategory(catNames[0]);
@@ -280,6 +281,20 @@ export function AdminIngredients() {
     return (data ?? []).filter((i) => !usedIds.has(i.id));
   }, [data, usedIdsData]);
 
+  // Filtrér den grupperede liste på ingrediensnavn (tomme kategorier skjules).
+  const ingQuery = search.trim().toLowerCase();
+  const filteredGrouped = ingQuery
+    ? grouped
+        .map(
+          ([cat, items]) =>
+            [cat, items.filter((i) => i.name.toLowerCase().includes(ingQuery))] as [
+              string,
+              IngredientRow[],
+            ],
+        )
+        .filter(([, items]) => items.length > 0)
+    : grouped;
+
   return (
     <div className="space-y-6">
       <Card className="p-4">
@@ -323,7 +338,21 @@ export function AdminIngredients() {
         </Button>
       </div>
 
-      {grouped.map(([cat, items]) =>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Søg efter ingrediens..."
+          className="pl-9"
+        />
+      </div>
+
+      {ingQuery && filteredGrouped.length === 0 && (
+        <p className="text-sm text-muted-foreground">Ingen ingredienser matcher søgningen.</p>
+      )}
+
+      {filteredGrouped.map(([cat, items]) =>
         items.length === 0 ? null : (
           <section key={cat}>
             <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-primary">

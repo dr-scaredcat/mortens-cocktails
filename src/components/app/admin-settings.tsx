@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Wine, Martini, AlignStartVertical, AlignCenterVertical, AlignEndVertical, ImagePlus } from "lucide-react";
+import { AlignStartVertical, AlignCenterVertical, AlignEndVertical, ImagePlus } from "lucide-react";
 import {
   getOrderingEnabled,
   setOrderingEnabled,
@@ -20,26 +20,34 @@ import {
   setLogoAlign,
   setLogoType,
   setTextOffsetY,
+  setLogoOffsetY,
+  setHeadingFont,
+  setLogoFont,
+  FONT_OPTIONS,
+  fontStack,
   DEFAULT_LOGO_SIZE,
   DEFAULT_TEXT_SIZE,
   DEFAULT_LOGO_GAP,
   DEFAULT_LOGO_ALIGN,
   DEFAULT_LOGO_TYPE,
   DEFAULT_TEXT_OFFSET_Y,
+  DEFAULT_LOGO_OFFSET_Y,
+  DEFAULT_HEADING_FONT,
+  DEFAULT_LOGO_FONT,
   type LogoType,
   type LogoAlign,
+  type FontKey,
 } from "@/lib/orders.functions";
-import { AdminCategories } from "@/components/app/admin-categories";
 import { AdminUsers } from "@/components/app/admin-users";
 import { AdminThemes } from "@/components/app/admin-themes";
 import { BarskabLogo } from "@/components/app/barskab-logo";
 import { SiteLogo } from "@/components/app/site-logo";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/image-utils";
 
 const LOGO_OPTIONS: { type: LogoType; label: string }[] = [
   { type: "barskab", label: "Aston" },
-  { type: "martini", label: "Martini" },
-  { type: "wine", label: "Vinglas" },
   { type: "custom", label: "PNG-fil" },
 ];
 
@@ -99,6 +107,45 @@ function SliderRow({
   );
 }
 
+function FontPicker({
+  label,
+  value,
+  onSelect,
+  busy,
+}: {
+  label: string;
+  value: FontKey;
+  onSelect: (key: FontKey) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium">{label}</Label>
+      <div className="flex flex-wrap gap-2">
+        {FONT_OPTIONS.map((f) => {
+          const isActive = value === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => onSelect(f.key)}
+              disabled={busy}
+              style={{ fontFamily: f.stack || undefined }}
+              className={cn(
+                "rounded-lg border-2 px-3 py-2 text-sm transition-colors",
+                isActive
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+              )}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AdminSettings() {
   const fetchSetting = useServerFn(getOrderingEnabled);
   const updateSetting = useServerFn(setOrderingEnabled);
@@ -110,6 +157,9 @@ export function AdminSettings() {
   const updateLogoAlign = useServerFn(setLogoAlign);
   const updateLogoType = useServerFn(setLogoType);
   const updateTextOffsetY = useServerFn(setTextOffsetY);
+  const updateLogoOffsetY = useServerFn(setLogoOffsetY);
+  const updateHeadingFont = useServerFn(setHeadingFont);
+  const updateLogoFont = useServerFn(setLogoFont);
   const qc = useQueryClient();
 
   const { data: orderingData, isLoading: orderingLoading } = useQuery({
@@ -137,6 +187,75 @@ export function AdminSettings() {
   const [logoTypeBusy, setLogoTypeBusy] = useState(false);
   const [textOffsetY, setTextOffsetYLocal] = useState(DEFAULT_TEXT_OFFSET_Y);
   const [textOffsetYBusy, setTextOffsetYBusy] = useState(false);
+  const [logoOffsetY, setLogoOffsetYLocal] = useState(DEFAULT_LOGO_OFFSET_Y);
+  const [logoOffsetYBusy, setLogoOffsetYBusy] = useState(false);
+  const [headingFont, setHeadingFontLocal] = useState<FontKey>(DEFAULT_HEADING_FONT);
+  const [headingFontBusy, setHeadingFontBusy] = useState(false);
+  const [logoFont, setLogoFontLocal] = useState<FontKey>(DEFAULT_LOGO_FONT);
+  const [logoFontBusy, setLogoFontBusy] = useState(false);
+
+  // ── Billedkomprimering ──────────────────────────────────────────────────
+  const [compressing, setCompressing] = useState(false);
+  const [compressProgress, setCompressProgress] = useState<string | null>(null);
+
+  async function compressAllImages() {
+    setCompressing(true);
+    setCompressProgress("Henter billedeliste...");
+    try {
+      const { data: files, error: listErr } = await supabase.storage
+        .from("cocktail-images")
+        .list("", { limit: 1000 });
+      if (listErr) throw new Error(listErr.message);
+
+      const imageFiles = (files ?? []).filter((f) =>
+        /\.(jpe?g|png|webp|gif|heic|avif)$/i.test(f.name),
+      );
+
+      if (imageFiles.length === 0) {
+        toast.success("Ingen billeder fundet i bucketet");
+        return;
+      }
+
+      let done = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const file of imageFiles) {
+        setCompressProgress(`Komprimerer ${done + skipped + failed + 1} / ${imageFiles.length}: ${file.name}`);
+        try {
+          const { data: dlData, error: dlErr } = await supabase.storage
+            .from("cocktail-images")
+            .download(file.name);
+          if (dlErr || !dlData) { failed++; continue; }
+
+          const originalSize = dlData.size;
+          const originalFile = new File([dlData], file.name, { type: dlData.type || "image/jpeg" });
+          const compressed = await compressImage(originalFile);
+
+          if (compressed.size >= originalSize * 0.9) { skipped++; continue; }
+
+          const { error: upErr } = await supabase.storage
+            .from("cocktail-images")
+            .upload(file.name, compressed, { upsert: true, contentType: "image/jpeg" });
+          if (upErr) { failed++; continue; }
+
+          done++;
+        } catch {
+          failed++;
+        }
+      }
+
+      const parts = [`${done} billeder komprimeret`];
+      if (skipped > 0) parts.push(`${skipped} allerede optimerede`);
+      if (failed > 0) parts.push(`${failed} fejlede`);
+      toast.success(parts.join(" · "));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Komprimering fejlede");
+    } finally {
+      setCompressing(false);
+      setCompressProgress(null);
+    }
+  }
 
   useEffect(() => {
     if (!settings) return;
@@ -147,6 +266,9 @@ export function AdminSettings() {
     setLogoAlignLocal(settings.logoAlign);
     setLogoTypeLocal(settings.logoType);
     setTextOffsetYLocal(settings.textOffsetY ?? DEFAULT_TEXT_OFFSET_Y);
+    setLogoOffsetYLocal(settings.logoOffsetY ?? DEFAULT_LOGO_OFFSET_Y);
+    setHeadingFontLocal(settings.headingFont ?? DEFAULT_HEADING_FONT);
+    setLogoFontLocal(settings.logoFont ?? DEFAULT_LOGO_FONT);
   }, [settings]);
 
   async function toggle(enabled: boolean) {
@@ -218,11 +340,24 @@ export function AdminSettings() {
     try {
       await updateTextOffsetY({ data: { offset: textOffsetY } });
       qc.invalidateQueries({ queryKey: ["site-settings"] });
-      toast.success("Vertikal afstand gemt");
+      toast.success("Tekstens placering gemt");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
     } finally {
       setTextOffsetYBusy(false);
+    }
+  }
+
+  async function saveLogoOffsetY() {
+    setLogoOffsetYBusy(true);
+    try {
+      await updateLogoOffsetY({ data: { offset: logoOffsetY } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Logoets placering gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setLogoOffsetYBusy(false);
     }
   }
 
@@ -254,8 +389,66 @@ export function AdminSettings() {
     }
   }
 
+  async function selectHeadingFont(font: FontKey) {
+    setHeadingFontLocal(font);
+    setHeadingFontBusy(true);
+    try {
+      await updateHeadingFont({ data: { font } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Overskrift-skrifttype gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setHeadingFontBusy(false);
+    }
+  }
+
+  async function selectLogoFont(font: FontKey) {
+    setLogoFontLocal(font);
+    setLogoFontBusy(true);
+    try {
+      await updateLogoFont({ data: { font } });
+      qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Logo-skrifttype gemt");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Kunne ikke gemme");
+    } finally {
+      setLogoFontBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-10">
+      {/* Bestillinger */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Bestillinger
+        </h2>
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label className="text-base">Tillad bestillinger</Label>
+              <p className="text-sm text-muted-foreground">
+                Når slået til kan gæster bestille cocktails fra menukortet.
+              </p>
+            </div>
+            <Switch
+              checked={orderingData?.enabled ?? true}
+              onCheckedChange={toggle}
+              disabled={orderingLoading}
+            />
+          </div>
+        </Card>
+      </section>
+
+      {/* Temaer */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
+          Tema
+        </h2>
+        <AdminThemes />
+      </section>
+
       {/* Sidenavn + logo-indstillinger */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
@@ -309,8 +502,6 @@ export function AdminSettings() {
                         : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
                     )}
                   >
-                    {type === "martini" && <Martini className="h-6 w-6" />}
-                    {type === "wine" && <Wine className="h-6 w-6" />}
                     {type === "barskab" && <BarskabLogo className="h-6 w-6" />}
                     {type === "custom" && <ImagePlus className="h-6 w-6" />}
                     <span className="text-xs font-medium">{label}</span>
@@ -358,6 +549,30 @@ export function AdminSettings() {
             </div>
           </div>
 
+          {/* Skrifttyper */}
+          <div className="space-y-4 p-4">
+            <div>
+              <Label className="text-base">Skrifttyper</Label>
+              <p className="text-sm text-muted-foreground">
+                Gælder overskrifter og logo. Logoet kan have sin egen skrifttype.
+              </p>
+            </div>
+
+            <FontPicker
+              label="Overskrifter"
+              value={headingFont}
+              onSelect={selectHeadingFont}
+              busy={headingFontBusy}
+            />
+
+            <FontPicker
+              label="Logo"
+              value={logoFont}
+              onSelect={selectLogoFont}
+              busy={logoFontBusy}
+            />
+          </div>
+
           {/* Sliders */}
           <div className="space-y-5 p-4">
             <SliderRow
@@ -388,7 +603,16 @@ export function AdminSettings() {
               busy={logoGapBusy}
             />
             <SliderRow
-              label="Afstand vertikalt"
+              label="Logo lodret placering"
+              value={logoOffsetY}
+              min={-60}
+              max={60}
+              onChange={setLogoOffsetYLocal}
+              onSave={saveLogoOffsetY}
+              busy={logoOffsetYBusy}
+            />
+            <SliderRow
+              label="Tekst lodret placering"
               value={textOffsetY}
               min={-60}
               max={60}
@@ -406,59 +630,61 @@ export function AdminSettings() {
                 className={cn("flex", alignClass[logoAlign])}
                 style={{ gap: `${logoGap}px` }}
               >
-                <SiteLogo type={logoType} size={logoSize} className="shrink-0 text-primary" />
+                <span
+                  className="shrink-0"
+                  style={{ position: "relative", top: `${logoOffsetY}px` }}
+                >
+                  <SiteLogo type={logoType} size={logoSize} className="text-primary" />
+                </span>
                 <span
                   className="font-serif leading-none"
                   style={{
                     fontSize: `${textSize}px`,
                     position: "relative",
                     top: `${textOffsetY}px`,
+                    fontFamily: fontStack(logoFont) || undefined,
                   }}
                 >
                   {siteName || "Barskab"}
                 </span>
               </div>
             </div>
+            <p
+              className="mt-2 text-lg"
+              style={{ fontFamily: fontStack(headingFont) || undefined }}
+            >
+              Eksempel på en overskrift
+            </p>
           </div>
         </Card>
       </section>
 
-      {/* Bestillinger */}
+      {/* Billeder */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Bestillinger
+          Billeder
         </h2>
         <Card className="p-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="space-y-3">
             <div>
-              <Label className="text-base">Tillad bestillinger</Label>
+              <Label className="text-base">Komprimer eksisterende billeder</Label>
               <p className="text-sm text-muted-foreground">
-                Når slået til kan gæster bestille cocktails fra menukortet.
+                Henter alle billeder fra Supabase, komprimerer dem til maks 1200×1200px og uploader dem tilbage.
+                Billeder der allerede er optimerede springes over automatisk.
               </p>
             </div>
-            <Switch
-              checked={orderingData?.enabled ?? true}
-              onCheckedChange={toggle}
-              disabled={orderingLoading}
-            />
+            {compressProgress && (
+              <p className="text-sm text-muted-foreground">{compressProgress}</p>
+            )}
+            <Button
+              variant="outline"
+              onClick={compressAllImages}
+              disabled={compressing}
+            >
+              {compressing ? "Komprimerer…" : "Komprimer alle billeder"}
+            </Button>
           </div>
         </Card>
-      </section>
-
-      {/* Temaer */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Tema
-        </h2>
-        <AdminThemes />
-      </section>
-
-      {/* Kategorier */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-primary">
-          Kategorier
-        </h2>
-        <AdminCategories />
       </section>
 
       {/* Brugere */}
