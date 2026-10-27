@@ -7,12 +7,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   listAllWines,
+  listWineStyles,
   getWineFridgeLayout,
   WINE_TYPE_ORDER,
   DEFAULT_WINE_FRIDGE_LAYOUT,
   depthLabel,
   type WineWithDetails,
   type WineFridgeLayout,
+  type WineStyle,
 } from "@/lib/wines.functions";
 import { upsertWine, deleteWine, deletePlacement } from "@/lib/wines-admin.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +54,7 @@ function emptyForm() {
   return {
     id: undefined as string | undefined,
     name: "", producer: "", vintage: "", country: "", region: "", grapes: "",
-    wineType: "" as string, abv: "", bottleSizeCl: "75", price: "",
+    wineType: "" as string, styleId: "", abv: "", bottleSizeCl: "75", price: "",
     drinkFrom: "", drinkTo: "", imageUrl: "", description: "",
     tastingNotes: "", foodPairing: "", servingTemp: "",
     placements: [] as FridgePosition[],
@@ -61,15 +63,20 @@ function emptyForm() {
 }
 type WineForm = ReturnType<typeof emptyForm>;
 
+// Vælg-værdi for "ingen kategori" (Radix Select tillader ikke tom streng)
+const NO_STYLE = "__none__";
+
 function placementSummary(p: FridgePosition): string {
   return `H${p.shelf} · ${depthLabel(p.depth)} · plads ${p.slot} · lag ${p.layer}`;
 }
 
 // ── Vinrække ────────────────────────────────────────────────────────────────
 function WineRow({
-  wine, onEdit, onDelete, onDeletePlacement, onDrink,
+  wine, style, onEdit, onDelete, onDeletePlacement, onDrink,
 }: {
   wine: WineWithDetails;
+  /** Vinens kategori, hvis den har en */
+  style?: WineStyle;
   onEdit: () => void;
   onDelete: () => void;
   onDeletePlacement: (id: string) => void;
@@ -85,6 +92,11 @@ function WineRow({
           <span className="truncate font-medium">{wine.name}</span>
           {wine.vintage && <span className="shrink-0 text-sm text-muted-foreground">{wine.vintage}</span>}
           <Badge variant="outline" className="shrink-0 text-xs">{wine.wine_type}</Badge>
+          {style ? (
+            <Badge variant="outline" className="shrink-0 text-xs">{style.style}</Badge>
+          ) : (
+            <span className="shrink-0 text-xs italic text-muted-foreground">uden kategori</span>
+          )}
           <Badge variant="secondary" className="shrink-0 text-xs">
             {wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"}
           </Badge>
@@ -175,20 +187,25 @@ export function AdminWines() {
   const qc = useQueryClient();
   const fetchWines = useServerFn(listAllWines);
   const fetchLayout = useServerFn(getWineFridgeLayout);
+  const fetchStyles = useServerFn(listWineStyles);
   const save = useServerFn(upsertWine);
   const del = useServerFn(deleteWine);
   const delPlacement = useServerFn(deletePlacement);
 
   const { data: wines } = useQuery({ queryKey: ["wines-all"], queryFn: () => fetchWines() });
   const { data: layout } = useQuery({ queryKey: ["wine-fridge-layout"], queryFn: () => fetchLayout() });
+  const { data: styles } = useQuery({ queryKey: ["wine-styles"], queryFn: () => fetchStyles(), staleTime: 60 * 60_000 });
 
   const wineList = (wines ?? []) as WineWithDetails[];
+  const styleList = (styles ?? []) as WineStyle[];
+  const styleById = useMemo(() => new Map(styleList.map((s) => [s.id, s])), [styleList]);
   const activeLayout: WineFridgeLayout = layout ?? DEFAULT_WINE_FRIDGE_LAYOUT;
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<WineForm>(emptyForm());
   const [search, setSearch] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [onlyMissingStyle, setOnlyMissingStyle] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WineWithDetails | null>(null);
   const [drinkTarget, setDrinkTarget] = useState<WineWithDetails | null>(null);
   const [uploadingImg, setUploadingImg] = useState(false);
@@ -211,9 +228,21 @@ export function AdminWines() {
     return m;
   }, [searchPool]);
 
-  const visibleList = useMemo(() =>
-    selectedTypes.length === 0 ? searchPool : searchPool.filter((w) => selectedTypes.includes(w.wine_type))
-  , [searchPool, selectedTypes]);
+  // Vintyper, der har kategorier (fx "andet" har ingen)
+  const typesWithStyles = useMemo(() => new Set(styleList.map((s) => s.bar_type).filter(Boolean) as string[]), [styleList]);
+  const missingStyleCount = useMemo(
+    () => searchPool.filter((w) => !w.style_id && typesWithStyles.has(w.wine_type)).length,
+    [searchPool, typesWithStyles],
+  );
+
+  const visibleList = useMemo(() => {
+    let list = selectedTypes.length === 0 ? searchPool : searchPool.filter((w) => selectedTypes.includes(w.wine_type));
+    if (onlyMissingStyle) list = list.filter((w) => !w.style_id && typesWithStyles.has(w.wine_type));
+    return list;
+  }, [searchPool, selectedTypes, onlyMissingStyle, typesWithStyles]);
+
+  // Kategorier, der passer til den valgte vintype i formularen
+  const formStyles = useMemo(() => styleList.filter((s) => s.bar_type === form.wineType), [styleList, form.wineType]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wines-all"] });
@@ -230,6 +259,7 @@ export function AdminWines() {
       region: f.region.trim() || null,
       grapes: f.grapes.trim() || null,
       wineType: f.wineType as any,
+      styleId: f.styleId || null,
       abv: numOrNull(f.abv),
       bottleSizeCl: intOrNull(f.bottleSizeCl) ?? 75,
       price: numOrNull(f.price),
@@ -264,6 +294,7 @@ export function AdminWines() {
     setForm({
       id: w.id, name: w.name, producer: w.producer ?? "", vintage: w.vintage !== null ? String(w.vintage) : "",
       country: w.country ?? "", region: w.region ?? "", grapes: w.grapes ?? "", wineType: w.wine_type,
+      styleId: w.style_id ?? "",
       abv: toInput(w.abv), bottleSizeCl: String(w.bottle_size_cl ?? 75), price: toInput(w.price),
       drinkFrom: w.drink_from !== null ? String(w.drink_from) : "", drinkTo: w.drink_to !== null ? String(w.drink_to) : "",
       imageUrl: w.image_url ?? "", description: w.description ?? "", tastingNotes: w.tasting_notes ?? "",
@@ -340,12 +371,41 @@ export function AdminWines() {
                 <div><Label>Område</Label><Input value={form.region} onChange={(e) => patch("region", e.target.value)} placeholder="fx Rioja" /></div>
               </div>
               <div><Label>Druesort(er)</Label><Input value={form.grapes} onChange={(e) => patch("grapes", e.target.value)} placeholder="fx Tempranillo, Garnacha" /></div>
-              <div>
-                <Label>Vintype *</Label>
-                <Select value={form.wineType} onValueChange={(v) => patch("wineType", v)}>
-                  <SelectTrigger><SelectValue placeholder="Vælg vintype" /></SelectTrigger>
-                  <SelectContent>{WINE_TYPE_ORDER.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <Label>Vintype *</Label>
+                  <Select
+                    value={form.wineType}
+                    onValueChange={(v) =>
+                      // Skift af vintype nulstiller en kategori, der ikke passer til den nye type
+                      setForm((f) => ({
+                        ...f,
+                        wineType: v,
+                        styleId: styleById.get(f.styleId)?.bar_type === v ? f.styleId : "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger><SelectValue placeholder="Vælg vintype" /></SelectTrigger>
+                    <SelectContent>{WINE_TYPE_ORDER.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Kategori</Label>
+                  <Select
+                    value={form.styleId || NO_STYLE}
+                    onValueChange={(v) => patch("styleId", v === NO_STYLE ? "" : v)}
+                    disabled={formStyles.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={form.wineType ? "Ingen kategorier" : "Vælg vintype først"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_STYLE}>Ingen kategori</SelectItem>
+                      {formStyles.map((s) => <SelectItem key={s.id} value={s.id}>{s.style}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">Bruges af Astons Køkken til at foreslå vin til retterne.</p>
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div><Label>Alkohol (%)</Label><Input value={form.abv} onChange={(e) => patch("abv", e.target.value)} inputMode="decimal" placeholder="fx 13,5" /></div>
@@ -426,17 +486,24 @@ export function AdminWines() {
               </button>
             );
           })}
+          {(missingStyleCount > 0 || onlyMissingStyle) && (
+            <button type="button" onClick={() => setOnlyMissingStyle((v) => !v)}
+              className={`rounded-full border border-dashed px-3 py-1 text-xs font-medium transition-colors ${onlyMissingStyle ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+              uden kategori ({missingStyleCount})
+            </button>
+          )}
         </div>
       </div>
 
       {visibleList.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-          {query || selectedTypes.length > 0 ? "Ingen vine matcher søgningen." : 'Ingen vine endnu — opret den første med "Ny vin".'}
+          {query || selectedTypes.length > 0 || onlyMissingStyle ? "Ingen vine matcher søgningen." : 'Ingen vine endnu — opret den første med "Ny vin".'}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {visibleList.map((w) => (
             <WineRow key={w.id} wine={w}
+              style={w.style_id ? styleById.get(w.style_id) : undefined}
               onEdit={() => openEdit(w)}
               onDelete={() => setDeleteTarget(w)}
               onDeletePlacement={(id) => delPlacementM.mutate(id)}
