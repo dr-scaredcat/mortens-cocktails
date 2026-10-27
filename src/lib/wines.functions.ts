@@ -49,6 +49,8 @@ export type WineWithDetails = {
   region: string | null;
   grapes: string | null;
   wine_type: string;
+  /** Vinkategori (public.wine_styles.id) — deles med Astons Køkken */
+  style_id: string | null;
   abv: number | null;
   bottle_size_cl: number;
   price: number | null;
@@ -94,6 +96,7 @@ function buildWineList(
       region: w.region ?? null,
       grapes: w.grapes ?? null,
       wine_type: w.wine_type,
+      style_id: w.style_id ?? null,
       abv: w.abv ?? null,
       bottle_size_cl: w.bottle_size_cl ?? 75,
       price: w.price ?? null,
@@ -143,6 +146,27 @@ export const listAllWines = createServerFn({ method: "GET" }).handler(
     if (winesRes.error) throw new Error(winesRes.error.message);
     if (placementsRes.error) throw new Error(placementsRes.error.message);
     return buildWineList(winesRes.data ?? [], placementsRes.data ?? [], false);
+  },
+);
+
+// ── Vinkategorier (offentlig) ───────────────────────────────────────────────
+// Fælles liste i public.wine_styles, som også bruges af Astons Køkken til
+// "Vin til retten". bar_type matcher wine_type her (rød, hvid …); null = øl.
+export type WineStyle = {
+  id: string;
+  wine_label: string;
+  style: string;
+  bar_type: string | null;
+  neighbors: string[];
+  sort_order: number;
+};
+
+export const listWineStyles = createServerFn({ method: "GET" }).handler(
+  async (): Promise<WineStyle[]> => {
+    const sb = publicClient() as any;
+    const { data, error } = await sb.from("wine_styles").select("*").order("sort_order");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as WineStyle[];
   },
 );
 
