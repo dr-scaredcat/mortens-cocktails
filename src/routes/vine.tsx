@@ -80,7 +80,12 @@ function WineCard({ wine, onOpen, orderingEnabled, selfServe, onDrink }: {
             </h3>
             {wine.producer && <p className="text-sm text-muted-foreground">{wine.producer}</p>}
           </div>
-          <Badge variant="outline" className="shrink-0 text-xs">{wine.wine_type}</Badge>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant="outline" className="text-xs">{wine.wine_type}</Badge>
+            {wine.style_name && (
+              <Badge variant="secondary" className="text-xs font-normal">{wine.style_name}</Badge>
+            )}
+          </div>
         </div>
         {(wine.country || wine.region) && (
           <p className="cursor-pointer text-sm text-muted-foreground" onClick={onOpen}>{[wine.region, wine.country].filter(Boolean).join(", ")}</p>
@@ -124,7 +129,12 @@ function WineDetailCard({ wine, layout, allWines, orderingEnabled, selfServe, on
               {wine.name}
               {wine.vintage && <span className="ml-2 text-xl font-normal text-muted-foreground">{wine.vintage}</span>}
             </h2>
-            <Badge variant="outline">{wine.wine_type}</Badge>
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="outline">{wine.wine_type}</Badge>
+              {wine.style_name && (
+                <Badge variant="secondary" className="font-normal">{wine.style_name}</Badge>
+              )}
+            </div>
           </div>
           {wine.producer && <p className="mt-1 text-base text-muted-foreground">{wine.producer}</p>}
           <p className="mt-0.5 text-sm text-muted-foreground">{wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"} på køl</p>
