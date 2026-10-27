@@ -51,6 +51,8 @@ export type WineWithDetails = {
   wine_type: string;
   /** Vinkategori (public.wine_styles.id) — deles med Astons Køkken */
   style_id: string | null;
+  /** Kategoriens navn, fx "Let og frugtig" — vises for gæster */
+  style_name: string | null;
   abv: number | null;
   bottle_size_cl: number;
   price: number | null;
@@ -97,6 +99,7 @@ function buildWineList(
       grapes: w.grapes ?? null,
       wine_type: w.wine_type,
       style_id: w.style_id ?? null,
+      style_name: w.wine_style?.style ?? null,
       abv: w.abv ?? null,
       bottle_size_cl: w.bottle_size_cl ?? 75,
       price: w.price ?? null,
@@ -126,7 +129,7 @@ export const listWines = createServerFn({ method: "GET" }).handler(
   async (): Promise<WineWithDetails[]> => {
     const sb = publicClient();
     const [winesRes, placementsRes] = await Promise.all([
-      (sb.from("wines") as any).select("*"),
+      (sb.from("wines") as any).select("*, wine_style:wine_styles(style)"),
       (sb.from("wine_placements") as any).select("*"),
     ]);
     if (winesRes.error) throw new Error(winesRes.error.message);
@@ -140,7 +143,7 @@ export const listAllWines = createServerFn({ method: "GET" }).handler(
   async (): Promise<WineWithDetails[]> => {
     const sb = publicClient();
     const [winesRes, placementsRes] = await Promise.all([
-      (sb.from("wines") as any).select("*"),
+      (sb.from("wines") as any).select("*, wine_style:wine_styles(style)"),
       (sb.from("wine_placements") as any).select("*"),
     ]);
     if (winesRes.error) throw new Error(winesRes.error.message);
