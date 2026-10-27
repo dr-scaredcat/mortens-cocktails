@@ -8,8 +8,11 @@ import type { Database } from "@/integrations/supabase/types";
  * NB: Denne fil må IKKE omdøbes til *.server.ts. Funktionsfilerne
  * (*.functions.ts) bundles delvist til klienten, og .server.ts-filer
  * strippes fra klient-bundlen — hvilket ville bryde importen.
+ *
+ * `accessToken` (valgfri): sendes med som Bearer-token, så databasen kender
+ * den indloggede bruger (auth.uid()). Uden token kører clienten som anon.
  */
-export function publicClient() {
+export function publicClient(accessToken?: string | null) {
   const url =
     (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
     process.env.SUPABASE_URL ||
@@ -20,6 +23,9 @@ export function publicClient() {
     "sb_publishable_NsAPFaHuYb2mQbejaLy9WQ_BtLxx8ri";
   return createClient<Database>(url, key, {
     auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+    ...(accessToken
+      ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
+      : {}),
   });
 }
 

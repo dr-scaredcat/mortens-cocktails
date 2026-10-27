@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { publicClient } from "@/lib/supabase-shared";
 
 // ── Vintyper ────────────────────────────────────────────────────────────────
@@ -160,7 +161,7 @@ export const getWineSelfServe = createServerFn({ method: "GET" }).handler(
   },
 );
 
-// ── Drik en flaske (offentlig — server tjekker self_serve hvis kaldt fra gæst) ─
+// ── Drik en flaske (offentlig — databasen tjekker admin eller self_serve) ──
 // logAction: 'drukket' | 'bestilt-og-drukket'
 export const drinkWine = createServerFn({ method: "POST" })
   .inputValidator(
@@ -173,40 +174,22 @@ export const drinkWine = createServerFn({ method: "POST" })
     }) => d,
   )
   .handler(async ({ data }) => {
-    const sb = publicClient();
+    // Send brugerens token med, hvis der er et (admin), så databasen kender
+    // auth.uid(). Gæster uden login kører som anon.
+    const authHeader = getRequest()?.headers.get("authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const sb = publicClient(token);
 
-    // Hvis kaldt fra gæstevisning, tjek at self-serve er slået til
-    if (data.requireSelfServe) {
-      const { data: setting } = await sb
-        .from("app_settings")
-        .select("value")
-        .eq("key", "wine_self_serve")
-        .maybeSingle();
-      const enabled = setting?.value === true || setting?.value === "true";
-      if (!enabled) throw new Error("Selv-betjening er ikke aktiveret");
-    }
-
-    // Slet placeringen
-    const { error: delErr } = await (sb.from("wine_placements") as any)
-      .delete()
-      .eq("id", data.placementId);
-    if (delErr) throw new Error(delErr.message);
-
-    // Log hændelsen i order_log
-    const { error: logErr } = await (sb.from("order_log") as any).insert({
-      original_order_id: data.placementId, // genbrug som reference-id
-      kind: "drukket",
-      wine_id: data.wineId,
-      cocktail_id: null,
-      spirit_id: null,
-      cocktail_name: data.wineName,
-      customer_name: data.logAction ?? "drukket",
-      note: null,
-      status: "done",
-      logged_at: new Date().toISOString(),
-      quantity: 1,
+    // Al validering og skrivning sker atomisk i drink_wine-RPC'en
+    // (SECURITY DEFINER): admin-tjek / self-serve-tjek, sletning af
+    // placeringen og logning i order_log. Vinens id og navn slås op i
+    // databasen; wineId/wineName/requireSelfServe bevares i inputtet af
+    // hensyn til eksisterende kaldere.
+    const { error } = await (sb as any).rpc("drink_wine", {
+      _placement_id: data.placementId,
+      _log_action: data.logAction ?? "drukket",
     });
-    if (logErr) throw new Error(logErr.message);
+    if (error) throw new Error(error.message);
 
     return { ok: true };
   });
