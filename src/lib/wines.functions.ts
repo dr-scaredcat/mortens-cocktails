@@ -40,6 +40,54 @@ export function shelfDepthKey(shelf: number, depth: number): string {
   return `${shelf}:${depth}`;
 }
 
+// ── Tøm-funktioner (omrokering) ─────────────────────────────────────────────
+// Hvilke flasker skal gøres "uden plads"? Bruges både i admin-forhåndsvisningen
+// og på serveren, så tallene i bekræftelsesdialogen altid passer.
+export type UnplaceScope =
+  | { scope: "shelf"; shelf: number }
+  | { scope: "type"; wineType: string }
+  | { scope: "style"; styleId: string | null } // null = vine uden kategori
+  | { scope: "all" };
+
+export type ScopedPlacement = WinePlacement & {
+  wine_type: string;
+  style_id: string | null;
+};
+
+/**
+ * Finder de placeringer, der skal tømmes. Øverste lag (lag 2) hviler på to
+ * flasker i lag 1 — fjernes en af dem, følger den øverste flaske med, ellers
+ * ville den ligge uden støtte. Dem tæller vi som `extraCount`.
+ */
+export function computeUnplaceTargets(
+  placements: ScopedPlacement[],
+  scope: UnplaceScope,
+): { ids: string[]; directCount: number; extraCount: number } {
+  const matches = (p: ScopedPlacement): boolean => {
+    switch (scope.scope) {
+      case "all": return true;
+      case "shelf": return p.shelf === scope.shelf;
+      case "type": return p.wine_type === scope.wineType;
+      case "style": return (p.style_id ?? null) === scope.styleId;
+    }
+  };
+
+  const direct = placements.filter(matches);
+  const chosen = new Set(direct.map((p) => p.id));
+  const supports = direct.filter((p) => p.layer === 1);
+
+  let extraCount = 0;
+  for (const q of placements) {
+    if (q.layer !== 2 || chosen.has(q.id)) continue;
+    const loses = supports.some(
+      (s) => s.shelf === q.shelf && s.depth === q.depth && (s.slot === q.slot || s.slot === q.slot + 1),
+    );
+    if (loses) { chosen.add(q.id); extraCount++; }
+  }
+
+  return { ids: Array.from(chosen), directCount: direct.length, extraCount };
+}
+
 export type WineWithDetails = {
   id: string;
   name: string;
@@ -58,7 +106,10 @@ export type WineWithDetails = {
   price: number | null;
   drink_from: number | null;
   drink_to: number | null;
+  /** Samlet antal flasker på lager. I admin: placerede + uden plads. For gæster: kun placerede. */
   quantity: number;
+  /** Flasker der ligger på lager, men endnu ikke har en plads i køleskabet (kun admin) */
+  unplaced_count: number;
   placements: WinePlacement[];
   image_url: string | null;
   description: string | null;
@@ -89,6 +140,8 @@ function buildWineList(
 
   let result: WineWithDetails[] = wines.map((w) => {
     const pls = placementsByWine.get(w.id) ?? [];
+    // Uplacerede flasker er kun synlige for admin — gæster ser kun det, der står i skabet
+    const unplaced = onlyPlaced ? 0 : Math.max(0, Number(w.unplaced_count ?? 0));
     return {
       id: w.id,
       name: w.name,
@@ -105,7 +158,8 @@ function buildWineList(
       price: w.price ?? null,
       drink_from: w.drink_from ?? null,
       drink_to: w.drink_to ?? null,
-      quantity: pls.length,
+      quantity: pls.length + unplaced,
+      unplaced_count: unplaced,
       placements: pls,
       image_url: w.image_url ?? null,
       description: w.description ?? null,
@@ -236,7 +290,7 @@ export const DEFAULT_WINE_FRIDGE_LAYOUT: WineFridgeLayout = {
   ],
 };
 
-function isValidLayout(value: unknown): value is WineFridgeLayout {
+export function isValidLayout(value: unknown): value is WineFridgeLayout {
   return (
     !!value &&
     typeof value === "object" &&
