@@ -139,6 +139,8 @@ const upsertWineSchema = z.object({
   grapes: z.string().trim().max(200).nullable().optional(),
   wineType: wineTypeSchema,
   styleId: z.string().trim().max(60).nullable().optional(),
+  /** Anbefalet vinglas (public.glass_types.id) */
+  glassId: z.string().uuid().nullable().optional(),
   abv: z.number().min(0).max(100).nullable().optional(),
   bottleSizeCl: z.number().int().min(1).max(3000).optional().default(75),
   price: z.number().min(0).nullable().optional(),
@@ -226,6 +228,7 @@ export const upsertWine = createServerFn({ method: "POST" })
       grapes: data.grapes ?? null,
       wine_type: data.wineType,
       style_id: data.styleId || null,
+      glass_id: data.glassId ?? null,
       abv: data.abv ?? null,
       bottle_size_cl: data.bottleSizeCl ?? 75,
       price: data.price ?? null,
