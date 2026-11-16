@@ -36,6 +36,7 @@ export function DrinkWineDialog({
   layout,
   requireSelfServe = false,
   logAction = "drukket",
+  placementId,
   onClose,
   onSuccess,
 }: {
@@ -47,6 +48,8 @@ export function DrinkWineDialog({
   requireSelfServe?: boolean;
   /** Logges i order_log.customer_name som kontekst */
   logAction?: string;
+  /** Hvis angivet, er flasken allerede valgt (fx ved tryk i skabsoversigten) — ingen valgliste */
+  placementId?: string;
   onClose: () => void;
   /** Kaldes efter vellykket sletning */
   onSuccess?: () => void;
@@ -59,10 +62,13 @@ export function DrinkWineDialog({
   if (!wine) return null;
 
   const placements = wine.placements;
+  // Flasken kan være valgt på forhånd (tryk i skabsoversigten)
+  const fixed = placementId ? placements.find((p) => p.id === placementId) ?? null : null;
+  const needsChoice = !fixed && placements.length > 1;
 
   async function confirm() {
     if (!wine) return;
-    const pl = placements.length === 1 ? placements[0] : selected;
+    const pl = fixed ?? (placements.length === 1 ? placements[0] : selected);
     if (!pl) { toast.error("Vælg hvilken flaske du tager"); return; }
 
     setBusy(true);
@@ -104,7 +110,7 @@ export function DrinkWineDialog({
             {wine.vintage ? ` ${wine.vintage}` : ""}
           </DialogTitle>
           <DialogDescription>
-            {placements.length === 1
+            {!needsChoice
               ? "Bekræft at du tager flasken fra den viste placering."
               : `Vælg hvilken af de ${placements.length} flasker du tager.`}
           </DialogDescription>
@@ -115,8 +121,16 @@ export function DrinkWineDialog({
           <WinePlacementView wine={wine} allWines={allWines} layout={layout} />
           <WineFridgeLegend />
 
+          {/* Flasken er valgt på forhånd */}
+          {fixed && placements.length > 1 && (
+            <p className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2.5 text-sm text-primary">
+              Hylde {fixed.shelf} — {depthLabel(fixed.depth)}, plads {fixed.slot}
+              {fixed.layer === 2 ? ", øverste lag" : ""}
+            </p>
+          )}
+
           {/* Vælg specifik placering hvis der er flere */}
-          {placements.length > 1 && (
+          {needsChoice && (
             <div className="space-y-2">
               <p className="text-sm font-medium">Hvilken flaske tager du?</p>
               <div className="flex flex-col gap-2">
@@ -149,7 +163,7 @@ export function DrinkWineDialog({
           </Button>
           <Button
             onClick={confirm}
-            disabled={busy || (placements.length > 1 && !selected)}
+            disabled={busy || (needsChoice && !selected)}
           >
             {busy ? "Registrerer…" : "Bekræft"}
           </Button>
