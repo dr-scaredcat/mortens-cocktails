@@ -17,6 +17,10 @@ import {
   type WineStyle,
 } from "@/lib/wines.functions";
 import { upsertWine, deleteWine, deletePlacement } from "@/lib/wines-admin.functions";
+import {
+  listGlassTypes, listGrapeGlassMapping,
+  type GlassType, type GrapeGlassMapping,
+} from "@/lib/vinglas.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,7 +58,7 @@ function emptyForm() {
   return {
     id: undefined as string | undefined,
     name: "", producer: "", vintage: "", country: "", region: "", grapes: "",
-    wineType: "" as string, styleId: "", abv: "", bottleSizeCl: "75", price: "",
+    wineType: "" as string, styleId: "", glassId: "", abv: "", bottleSizeCl: "75", price: "",
     drinkFrom: "", drinkTo: "", imageUrl: "", description: "",
     tastingNotes: "", foodPairing: "", servingTemp: "",
     placements: [] as FridgePosition[],
@@ -65,6 +69,31 @@ type WineForm = ReturnType<typeof emptyForm>;
 
 // Vælg-værdi for "ingen kategori" (Radix Select tillader ikke tom streng)
 const NO_STYLE = "__none__";
+const NO_GLASS = "__none__";
+
+function normText(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+/** Glasforslag ud fra drue, navn og område — slået op i drue → glas-listen */
+function suggestGlasses(
+  form: { name: string; grapes: string; region: string },
+  mapping: GrapeGlassMapping[],
+): GrapeGlassMapping[] {
+  const tokens = [
+    ...form.grapes.split(/[,;/+&]|\bog\b|\band\b/i).map((t) => t.replace(/\d+\s*%/g, "")),
+    form.name,
+    form.region,
+  ].map(normText).filter((t) => t.length >= 3);
+  if (tokens.length === 0) return [];
+
+  const hits = mapping.filter((m) => {
+    if (!m.glass) return false;
+    const n = normText(m.wine_name);
+    return tokens.some((t) => t === n || (t.length >= 4 && n.includes(t)) || (n.length >= 5 && t.includes(n)));
+  });
+  return hits.sort((a, b) => a.wine_name.localeCompare(b.wine_name, "da")).slice(0, 6);
+}
 
 function placementSummary(p: FridgePosition): string {
   return `H${p.shelf} · ${depthLabel(p.depth)} · plads ${p.slot} · lag ${p.layer}`;
@@ -203,6 +232,14 @@ export function AdminWines() {
   const { data: layout } = useQuery({ queryKey: ["wine-fridge-layout"], queryFn: () => fetchLayout() });
   const { data: styles } = useQuery({ queryKey: ["wine-styles"], queryFn: () => fetchStyles(), staleTime: 60 * 60_000 });
 
+  // Vinglas: glastyper + drue → glas-opslag (bruges til forslag)
+  const fetchGlassTypes = useServerFn(listGlassTypes);
+  const fetchGlassMapping = useServerFn(listGrapeGlassMapping);
+  const { data: glassTypesData } = useQuery({ queryKey: ["glass-types"], queryFn: () => fetchGlassTypes() });
+  const { data: glassMappingData } = useQuery({ queryKey: ["grape-glass-mapping"], queryFn: () => fetchGlassMapping() });
+  const glassTypes = (glassTypesData ?? []) as GlassType[];
+  const glassMapping = (glassMappingData ?? []) as GrapeGlassMapping[];
+
   const wineList = (wines ?? []) as WineWithDetails[];
   const styleList = (styles ?? []) as WineStyle[];
   const styleById = useMemo(() => new Map(styleList.map((s) => [s.id, s])), [styleList]);
@@ -251,6 +288,12 @@ export function AdminWines() {
   // Kategorier, der passer til den valgte vintype i formularen
   const formStyles = useMemo(() => styleList.filter((s) => s.bar_type === form.wineType), [styleList, form.wineType]);
 
+  // Glasforslag til den vin, der redigeres
+  const glassSuggestions = useMemo(
+    () => suggestGlasses({ name: form.name, grapes: form.grapes, region: form.region }, glassMapping),
+    [form.name, form.grapes, form.region, glassMapping],
+  );
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wines-all"] });
     qc.invalidateQueries({ queryKey: ["wines"] });
@@ -267,6 +310,7 @@ export function AdminWines() {
       grapes: f.grapes.trim() || null,
       wineType: f.wineType as any,
       styleId: f.styleId || null,
+      glassId: f.glassId || null,
       abv: numOrNull(f.abv),
       bottleSizeCl: intOrNull(f.bottleSizeCl) ?? 75,
       price: numOrNull(f.price),
@@ -303,6 +347,7 @@ export function AdminWines() {
       id: w.id, name: w.name, producer: w.producer ?? "", vintage: w.vintage !== null ? String(w.vintage) : "",
       country: w.country ?? "", region: w.region ?? "", grapes: w.grapes ?? "", wineType: w.wine_type,
       styleId: w.style_id ?? "",
+      glassId: w.glass_id ?? "",
       abv: toInput(w.abv), bottleSizeCl: String(w.bottle_size_cl ?? 75), price: toInput(w.price),
       drinkFrom: w.drink_from !== null ? String(w.drink_from) : "", drinkTo: w.drink_to !== null ? String(w.drink_to) : "",
       imageUrl: w.image_url ?? "", description: w.description ?? "", tastingNotes: w.tasting_notes ?? "",
@@ -414,6 +459,33 @@ export function AdminWines() {
                   </Select>
                   <p className="mt-1 text-xs text-muted-foreground">Bruges af Astons Køkken til at foreslå vin til retterne.</p>
                 </div>
+              </div>
+              <div>
+                <Label>Vinglas</Label>
+                <Select
+                  value={form.glassId || NO_GLASS}
+                  onValueChange={(v) => patch("glassId", v === NO_GLASS ? "" : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Vælg glas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_GLASS}>Intet glas valgt</SelectItem>
+                    {glassTypes.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {glassSuggestions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">Forslag:</span>
+                    {glassSuggestions.map((m) => (
+                      <button key={m.id} type="button" onClick={() => patch("glassId", m.glass_id)}
+                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                          form.glassId === m.glass_id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}>
+                        {m.wine_name} → {m.glass?.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">Vises for gæsterne under vinens placering i skabet.</p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div><Label>Alkohol (%)</Label><Input value={form.abv} onChange={(e) => patch("abv", e.target.value)} inputMode="decimal" placeholder="fx 13,5" /></div>
