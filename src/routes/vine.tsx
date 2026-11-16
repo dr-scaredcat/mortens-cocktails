@@ -161,6 +161,22 @@ function WineDetailCard({ wine, layout, allWines, orderingEnabled, selfServe, on
           <WinePlacementView wine={wine} allWines={allWines} layout={layout} />
           {wine.placements.length > 0 && <WineFridgeLegend className="mt-2" />}
         </div>
+        {wine.glass && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Passende vinglas</p>
+            <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-3">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded bg-muted p-1">
+                {wine.glass.image_url ? (
+                  // object-contain: hele glassets facon skal kunne ses og sammenlignes med glassene i skabet
+                  <img src={wine.glass.image_url} alt={wine.glass.name} className="h-full w-full object-contain" />
+                ) : (
+                  <GlassWater className="h-10 w-10 text-muted-foreground opacity-30" />
+                )}
+              </div>
+              <p className="font-serif text-lg leading-tight">{wine.glass.name}</p>
+            </div>
+          </div>
+        )}
         <div data-order-button onClick={(e) => e.stopPropagation()}>
           {selfServe ? (
             <Button className="w-full" onClick={onDrink}>Drik</Button>
