@@ -88,6 +88,12 @@ export function computeUnplaceTargets(
   return { ids: Array.from(chosen), directCount: direct.length, extraCount };
 }
 
+export type WineGlass = {
+  id: string;
+  name: string;
+  image_url: string | null;
+};
+
 export type WineWithDetails = {
   id: string;
   name: string;
@@ -101,6 +107,9 @@ export type WineWithDetails = {
   style_id: string | null;
   /** Kategoriens navn, fx "Let og frugtig" — vises for gæster */
   style_name: string | null;
+  /** Anbefalet vinglas til netop denne vin (public.glass_types.id) */
+  glass_id: string | null;
+  glass: WineGlass | null;
   abv: number | null;
   bottle_size_cl: number;
   price: number | null;
@@ -153,6 +162,10 @@ function buildWineList(
       wine_type: w.wine_type,
       style_id: w.style_id ?? null,
       style_name: w.wine_style?.style ?? null,
+      glass_id: w.glass_id ?? null,
+      glass: w.glass
+        ? { id: w.glass.id, name: w.glass.name, image_url: w.glass.image_url ?? null }
+        : null,
       abv: w.abv ?? null,
       bottle_size_cl: w.bottle_size_cl ?? 75,
       price: w.price ?? null,
@@ -183,7 +196,7 @@ export const listWines = createServerFn({ method: "GET" }).handler(
   async (): Promise<WineWithDetails[]> => {
     const sb = publicClient();
     const [winesRes, placementsRes] = await Promise.all([
-      (sb.from("wines") as any).select("*, wine_style:wine_styles(style)"),
+      (sb.from("wines") as any).select("*, wine_style:wine_styles(style), glass:glass_types(id, name, image_url)"),
       (sb.from("wine_placements") as any).select("*"),
     ]);
     if (winesRes.error) throw new Error(winesRes.error.message);
@@ -197,7 +210,7 @@ export const listAllWines = createServerFn({ method: "GET" }).handler(
   async (): Promise<WineWithDetails[]> => {
     const sb = publicClient();
     const [winesRes, placementsRes] = await Promise.all([
-      (sb.from("wines") as any).select("*, wine_style:wine_styles(style)"),
+      (sb.from("wines") as any).select("*, wine_style:wine_styles(style), glass:glass_types(id, name, image_url)"),
       (sb.from("wine_placements") as any).select("*"),
     ]);
     if (winesRes.error) throw new Error(winesRes.error.message);
