@@ -20,7 +20,7 @@ const FALLBACK_STYLE: WineTypeStyle = {
   text: "var(--background)",
 };
 
-function styleForType(type: string): WineTypeStyle {
+export function styleForType(type: string): WineTypeStyle {
   return WINE_TYPE_STYLE[type] ?? FALLBACK_STYLE;
 }
 
@@ -32,7 +32,11 @@ export type FridgePosition = {
   layer: number; // 1 = nederste, 2 = øverste
 };
 
-export type WineFridgeMode = "admin-vaelger" | "gæst";
+// admin-vaelger: vælg pladser i vin-formularen
+// gæst:          kun visning (fremhæver én vin)
+// admin-flyt:    omrokering — alle pladser kan trykkes (admin)
+// oversigt:      hele skabet — optagne pladser kan trykkes (åbner flasken)
+export type WineFridgeMode = "admin-vaelger" | "gæst" | "admin-flyt" | "oversigt";
 
 function buildPositionMap(wines: WineWithDetails[]): Map<string, WineWithDetails> {
   const map = new Map<string, WineWithDetails>();
@@ -46,6 +50,21 @@ function buildPositionMap(wines: WineWithDetails[]): Map<string, WineWithDetails
 
 function posKey(shelf: number, slot: number, depth: number, layer: number): string {
   return `${shelf}:${slot}:${depth}:${layer}`;
+}
+
+/** Finder vinen og den konkrete placering (flaske) på en given plads */
+export function findPlacementAt(
+  wines: WineWithDetails[],
+  pos: FridgePosition,
+): { wine: WineWithDetails; placement: WinePlacement } | null {
+  for (const w of wines) {
+    for (const p of w.placements) {
+      if (p.shelf === pos.shelf && p.slot === pos.slot && p.depth === pos.depth && p.layer === pos.layer) {
+        return { wine: w, placement: p };
+      }
+    }
+  }
+  return null;
 }
 
 // ── Enkelt pladselement ───────────────────────────────────────────────────
@@ -165,6 +184,8 @@ function DepthSection({
   onSelectSlot?: (pos: FridgePosition) => void;
 }) {
   const isPicker = mode === "admin-vaelger";
+  const isMover = mode === "admin-flyt";
+  const isOverview = mode === "oversigt";
   // Lag 2 har slots-1 mulige pladser (øverste)
   // I admin-vælgeren skal lag 2 ALTID vises, ellers kan man aldrig placere
   // den første flaske der (pladsen er jo netop tom indtil man vælger den).
@@ -175,7 +196,8 @@ function DepthSection({
   const lag2HasWines = Array.from({ length: maxLag2Count }, (_, i) => i + 1).some(
     (slotNo) => byPosition.has(posKey(shelfNo, slotNo, depth, 2)),
   );
-  const lag2Count = isPicker ? maxLag2Count : (lag2HasWines ? maxLag2Count : 0);
+  // Ved omrokering skal tomme øverste pladser også kunne vælges som mål
+  const lag2Count = (isPicker || isMover) ? maxLag2Count : (lag2HasWines ? maxLag2Count : 0);
   // Grid skal have 2*slots kolonner for lag 1, og lag 2 starter ved kolonne 2
   const gridCols = slots * 2;
 
@@ -213,8 +235,12 @@ function DepthSection({
             selectedPositions.some((s) => s.shelf === shelfNo && s.slot === slotNo + 1 && s.depth === depth && s.layer === 1);
           const prereqMet = leftOk && rightOk;
 
-          const blocked = isPicker ? (!!wine && !isOwnWine) || !prereqMet : false;
-          const clickable = isPicker && !blocked;
+          const blocked = isPicker
+            ? (!!wine && !isOwnWine) || !prereqMet
+            : isMover
+              ? !wine && !prereqMet // tom øverste plads uden støtte kan ikke bruges
+              : false;
+          const clickable = isOverview ? !!wine : ((isPicker || isMover) && !blocked);
 
           // Lag 2 slot X → grid-column: 2X / span 2
           const colStart = slotNo * 2;
@@ -252,7 +278,7 @@ function DepthSection({
           const isHighlighted = !!wine && wine.id === highlightWineId;
           const isOwnWine = !!wine && wine.id === currentWineId;
           const blocked = isPicker && !!wine && !isOwnWine;
-          const clickable = isPicker && !blocked;
+          const clickable = isOverview ? !!wine : ((isPicker || isMover) && !blocked);
 
           // Lag 1 slot X → grid-column: 2X-1 / span 2
           const colStart = slotNo * 2 - 1;

@@ -2,7 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertAdmin } from "@/lib/supabase-shared";
 import { z } from "zod";
-import { WINE_TYPE_ORDER, type WineFridgeLayout } from "@/lib/wines.functions";
+import {
+  WINE_TYPE_ORDER,
+  DEFAULT_WINE_FRIDGE_LAYOUT,
+  isValidLayout,
+  computeUnplaceTargets,
+  type WineFridgeLayout,
+  type ScopedPlacement,
+} from "@/lib/wines.functions";
 
 const wineTypeSchema = z.enum(WINE_TYPE_ORDER);
 
@@ -12,6 +19,99 @@ const placementSchema = z.object({
   depth: z.number().int().min(1).max(2),
   layer: z.number().int().min(1).max(2),
 });
+
+// ── Fælles hjælpere til placeringer ─────────────────────────────────────────
+type Pos = { shelf: number; slot: number; depth: number; layer: number };
+
+function posKey(p: Pos): string {
+  return `${p.shelf}:${p.slot}:${p.depth}:${p.layer}`;
+}
+
+/** Øverste lag-flasker (lag 2) uden to støtteflasker i lag 1 */
+function layer2Violations(ps: Pos[]): Set<string> {
+  const layer1 = new Set(
+    ps.filter((p) => p.layer === 1).map((p) => `${p.shelf}:${p.slot}:${p.depth}`),
+  );
+  const out = new Set<string>();
+  for (const p of ps) {
+    if (p.layer !== 2) continue;
+    if (!layer1.has(`${p.shelf}:${p.slot}:${p.depth}`) || !layer1.has(`${p.shelf}:${p.slot + 1}:${p.depth}`)) {
+      out.add(posKey(p));
+    }
+  }
+  return out;
+}
+
+/** Fejler kun hvis en handling EFTERLADER nye øverste flasker uden støtte */
+function assertNoNewLayer2Violations(before: Pos[], after: Pos[]) {
+  const existing = layer2Violations(before);
+  for (const k of layer2Violations(after)) {
+    if (!existing.has(k)) {
+      throw new Error("Øverste lag kræver flasker på begge nabopladser i nederste lag — flytningen ville efterlade en flaske uden støtte");
+    }
+  }
+}
+
+async function loadLayout(sb: any): Promise<WineFridgeLayout> {
+  const { data, error } = await sb.from("app_settings").select("value").eq("key", "wine_fridge_layout").maybeSingle();
+  if (error) throw new Error(error.message);
+  return data && isValidLayout(data.value) ? data.value : DEFAULT_WINE_FRIDGE_LAYOUT;
+}
+
+function assertInBounds(layout: WineFridgeLayout, p: Pos) {
+  const shelfDef = layout.shelves[p.shelf - 1];
+  if (!shelfDef) throw new Error("Hylden findes ikke i køleskabets layout");
+  const slots = p.depth === 1 ? shelfDef.slotsForrest : shelfDef.slotsBagerst;
+  const maxSlot = p.layer === 2 ? slots - 1 : slots;
+  if (p.slot > maxSlot) throw new Error("Pladsen findes ikke i køleskabets layout");
+}
+
+async function loadPlacements(sb: any): Promise<(Pos & { id: string; wine_id: string })[]> {
+  const { data, error } = await sb.from("wine_placements").select("id, wine_id, shelf, slot, depth, layer");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as (Pos & { id: string; wine_id: string })[];
+}
+
+/**
+ * Gør flasker "uden plads": placeringsrækkerne slettes, og vinens
+ * unplaced_count stiger tilsvarende — flaskerne forbliver på lager.
+ * Tæller opdateres FØR sletning, så en fejl aldrig får flasker til at forsvinde.
+ */
+async function unplaceByIds(sb: any, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+
+  const { data: rows, error } = await sb.from("wine_placements").select("id, wine_id").in("id", ids);
+  if (error) throw new Error(error.message);
+  const found = (rows ?? []) as { id: string; wine_id: string }[];
+  if (found.length === 0) return 0;
+
+  const perWine = new Map<string, number>();
+  for (const r of found) perWine.set(r.wine_id, (perWine.get(r.wine_id) ?? 0) + 1);
+
+  const { data: wines, error: wErr } = await sb
+    .from("wines").select("id, unplaced_count").in("id", Array.from(perWine.keys()));
+  if (wErr) throw new Error(wErr.message);
+  const before = new Map<string, number>(((wines ?? []) as any[]).map((w) => [w.id, w.unplaced_count ?? 0]));
+
+  const done: string[] = [];
+  const revert = async () => {
+    for (const id of done) {
+      await sb.from("wines").update({ unplaced_count: before.get(id) ?? 0 }).eq("id", id);
+    }
+  };
+
+  for (const [wineId, n] of perWine) {
+    const { error: uErr } = await sb
+      .from("wines").update({ unplaced_count: (before.get(wineId) ?? 0) + n }).eq("id", wineId);
+    if (uErr) { await revert(); throw new Error(uErr.message); }
+    done.push(wineId);
+  }
+
+  const { error: dErr } = await sb.from("wine_placements").delete().in("id", found.map((r) => r.id));
+  if (dErr) { await revert(); throw new Error(dErr.message); }
+
+  return found.length;
+}
 
 // ── Gem wine_self_serve (admin) ─────────────────────────────────────────────
 export const setWineSelfServe = createServerFn({ method: "POST" })
@@ -49,6 +149,8 @@ const upsertWineSchema = z.object({
   tastingNotes: z.string().trim().max(1000).nullable().optional(),
   foodPairing: z.string().trim().max(500).nullable().optional(),
   servingTemp: z.string().trim().max(60).nullable().optional(),
+  /** Samlet antal flasker. Flasker uden valgt plads bliver "uden plads". */
+  bottleCount: z.number().int().min(1).max(99).optional(),
   placements: z.array(placementSchema).max(99),
 });
 
@@ -58,6 +160,13 @@ export const upsertWine = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const sb = context.supabase;
+
+    // Samlet antal flasker — de, der ikke har en plads, havner i "uden plads"
+    const totalBottles = data.bottleCount ?? data.placements.length;
+    if (data.placements.length > totalBottles) {
+      throw new Error("Der er valgt flere pladser end flasker");
+    }
+    const unplacedCount = totalBottles - data.placements.length;
 
     // Ingen interne duplikater
     const posKeys = data.placements.map((p) => `${p.shelf}:${p.slot}:${p.depth}:${p.layer}`);
@@ -127,6 +236,7 @@ export const upsertWine = createServerFn({ method: "POST" })
       tasting_notes: data.tastingNotes?.trim() || null,
       food_pairing: data.foodPairing?.trim() || null,
       serving_temp: data.servingTemp?.trim() || null,
+      unplaced_count: unplacedCount,
     };
 
     let wineId: string;
@@ -153,14 +263,13 @@ export const upsertWine = createServerFn({ method: "POST" })
     return { id: wineId };
   });
 
-// ── Slet én placering ───────────────────────────────────────────────────────
+// ── Gør én flaske "uden plads" (flasken forbliver på lager) ────────────────
 export const deletePlacement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { error } = await (context.supabase.from("wine_placements") as any).delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    await unplaceByIds(context.supabase, [data.id]);
     return { ok: true };
   });
 
@@ -173,6 +282,120 @@ export const deleteWine = createServerFn({ method: "POST" })
     const { error } = await (context.supabase.from("wines") as any).delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// ── Tøm hylde / vintype / kategori / hele skabet ───────────────────────────
+// Flaskerne forbliver på lager og havner under "Uden plads".
+const unplaceScopeSchema = z.discriminatedUnion("scope", [
+  z.object({ scope: z.literal("shelf"), shelf: z.number().int().min(1).max(15) }),
+  z.object({ scope: z.literal("type"), wineType: wineTypeSchema }),
+  z.object({ scope: z.literal("style"), styleId: z.string().trim().max(60).nullable() }),
+  z.object({ scope: z.literal("all") }),
+]);
+
+export const unplaceBottles = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => unplaceScopeSchema.parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; moved: number }> => {
+    await assertAdmin(context);
+    const sb = context.supabase as any;
+
+    const { data: rows, error } = await sb
+      .from("wine_placements")
+      .select("id, wine_id, shelf, slot, depth, layer, wines(wine_type, style_id)");
+    if (error) throw new Error(error.message);
+
+    const scoped: ScopedPlacement[] = ((rows ?? []) as any[]).map((r) => ({
+      id: r.id, wine_id: r.wine_id, shelf: r.shelf, slot: r.slot, depth: r.depth, layer: r.layer,
+      wine_type: r.wines?.wine_type ?? "",
+      style_id: r.wines?.style_id ?? null,
+    }));
+
+    const { ids } = computeUnplaceTargets(scoped, data);
+    const moved = await unplaceByIds(sb, ids);
+    return { ok: true, moved };
+  });
+
+// ── Placér en uplaceret flaske på en ledig plads ───────────────────────────
+const placeUnplacedSchema = placementSchema.extend({ wineId: z.string().uuid() });
+
+export const placeUnplacedBottle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => placeUnplacedSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const sb = context.supabase as any;
+    const target: Pos = { shelf: data.shelf, slot: data.slot, depth: data.depth, layer: data.layer };
+
+    const { data: wine, error: wErr } = await sb
+      .from("wines").select("id, unplaced_count").eq("id", data.wineId).maybeSingle();
+    if (wErr) throw new Error(wErr.message);
+    if (!wine) throw new Error("Vinen findes ikke");
+    if ((wine.unplaced_count ?? 0) <= 0) throw new Error("Vinen har ingen flasker uden plads");
+
+    assertInBounds(await loadLayout(sb), target);
+
+    const existing = await loadPlacements(sb);
+    if (existing.some((p) => posKey(p) === posKey(target))) throw new Error("Pladsen er optaget");
+    assertNoNewLayer2Violations(existing, [...existing, target]);
+
+    const { data: inserted, error: insErr } = await sb
+      .from("wine_placements")
+      .insert({ wine_id: data.wineId, ...target })
+      .select("id").single();
+    if (insErr) throw new Error(insErr.message);
+
+    const { error: uErr } = await sb
+      .from("wines").update({ unplaced_count: wine.unplaced_count - 1 }).eq("id", data.wineId);
+    if (uErr) {
+      await sb.from("wine_placements").delete().eq("id", inserted.id);
+      throw new Error(uErr.message);
+    }
+
+    return { ok: true };
+  });
+
+// ── Flyt en placeret flaske — eller byt plads hvis målet er optaget ────────
+const moveSchema = placementSchema.extend({ placementId: z.string().uuid() });
+
+export const moveOrSwapBottle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => moveSchema.parse(d))
+  .handler(async ({ data, context }): Promise<{ ok: true; swapped: boolean }> => {
+    await assertAdmin(context);
+    const sb = context.supabase as any;
+    const target: Pos = { shelf: data.shelf, slot: data.slot, depth: data.depth, layer: data.layer };
+
+    assertInBounds(await loadLayout(sb), target);
+
+    const all = await loadPlacements(sb);
+    const source = all.find((p) => p.id === data.placementId);
+    if (!source) throw new Error("Flasken findes ikke længere — opdatér siden");
+    if (posKey(source) === posKey(target)) throw new Error("Flasken ligger allerede der");
+
+    const occupant = all.find((p) => posKey(p) === posKey(target)) ?? null;
+    const sourcePos: Pos = { shelf: source.shelf, slot: source.slot, depth: source.depth, layer: source.layer };
+
+    const after: Pos[] = all.map((p) => {
+      if (p.id === source.id) return target;
+      if (occupant && p.id === occupant.id) return sourcePos;
+      return p;
+    });
+    assertNoNewLayer2Violations(all, after);
+
+    const { error: aErr } = await sb.from("wine_placements").update(target).eq("id", source.id);
+    if (aErr) throw new Error(aErr.message);
+
+    if (occupant) {
+      const { error: bErr } = await sb.from("wine_placements").update(sourcePos).eq("id", occupant.id);
+      if (bErr) {
+        // Rul første flytning tilbage, så ingen flasker ender på samme plads
+        await sb.from("wine_placements").update(sourcePos).eq("id", source.id);
+        throw new Error(bErr.message);
+      }
+    }
+
+    return { ok: true, swapped: !!occupant };
   });
 
 // ── Gem køleskabslayout ─────────────────────────────────────────────────────
@@ -192,29 +415,29 @@ export const saveWineFridgeLayout = createServerFn({ method: "POST" })
     const layout = data as WineFridgeLayout;
 
     const { data: placed, error: fetchErr } = await (sb.from("wine_placements") as any)
-      .select("id, shelf, slot, wine_id, wines(name)");
+      .select("id, shelf, slot, depth, layer, wine_id, wines(name)");
     if (fetchErr) throw new Error(fetchErr.message);
 
     const affectedIds: string[] = [];
     const affectedNames = new Set<string>();
     for (const p of (placed ?? []) as any[]) {
       const shelfDef = layout.shelves[p.shelf - 1];
-      if (!shelfDef) {
-        affectedIds.push(p.id);
-        if (p.wines?.name) affectedNames.add(p.wines.name);
-        continue;
+      let outside = !shelfDef;
+      if (shelfDef) {
+        // depth 1 = forrest, depth 2 = bagerst. Øverste lag har én plads mindre.
+        const slots = p.depth === 1 ? shelfDef.slotsForrest : shelfDef.slotsBagerst;
+        const maxSlot = p.layer === 2 ? slots - 1 : slots;
+        outside = p.slot > maxSlot;
       }
-      // depth 1 = forrest, depth 2 = bagerst
-      const maxSlot = p.depth === 1 ? shelfDef.slotsForrest : shelfDef.slotsBagerst;
-      if (p.slot > maxSlot) {
+      if (outside) {
         affectedIds.push(p.id);
         if (p.wines?.name) affectedNames.add(p.wines.name);
       }
     }
 
+    // Flasker uden for det nye layout bliver "uden plads" i stedet for at forsvinde fra lageret
     if (affectedIds.length > 0) {
-      const { error: delErr } = await (sb.from("wine_placements") as any).delete().in("id", affectedIds);
-      if (delErr) throw new Error(delErr.message);
+      await unplaceByIds(sb, affectedIds);
     }
 
     const { error } = await sb.from("app_settings")

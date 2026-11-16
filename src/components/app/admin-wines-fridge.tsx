@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, Minus } from "lucide-react";
 import { WineFridge, WineFridgeLegend } from "@/components/app/wine-fridge";
+import { WineFridgeManager } from "@/components/app/wine-fridge-manager";
 
 const MAX_SHELVES = 15;
 const MAX_SLOTS = 20;
@@ -83,7 +84,7 @@ export function AdminWinesFridge() {
       qc.invalidateQueries({ queryKey: ["wines-all"] });
       qc.invalidateQueries({ queryKey: ["wines"] });
       if (result.affectedWines.length > 0) {
-        toast.warning(`Layout gemt. Disse vine mistede placeringer: ${result.affectedWines.join(", ")}`);
+        toast.warning(`Layout gemt. Flasker uden for layoutet er nu uden plads: ${result.affectedWines.join(", ")}`);
       } else {
         toast.success("Køleskabets layout er gemt");
       }
@@ -125,12 +126,24 @@ export function AdminWinesFridge() {
         </div>
       </Card>
 
+      {/* Omrokering + drik fra skabet */}
+      <Card className="space-y-4 p-4">
+        <div>
+          <p className="font-medium">Omrokering og drik fra skabet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tryk på en flaske i skabet for at flytte, bytte plads eller markere den som drukket.
+            Tøm en hylde, vintype eller kategori for at rokere rundt — flaskerne forbliver på lager under "Uden plads".
+          </p>
+        </div>
+        <WineFridgeManager wines={allWines} layout={serverLayout} />
+      </Card>
+
       {/* Layout-editor */}
       <Card className="space-y-4 p-4">
         <div>
           <p className="font-medium">Køleskabslayout</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Justér antal hylder og pladser pr. hylde. Vine der falder udenfor det nye layout mister deres placering.
+            Justér antal hylder og pladser pr. hylde. Flasker der falder udenfor det nye layout bliver uden plads, men forbliver på lager.
           </p>
         </div>
 

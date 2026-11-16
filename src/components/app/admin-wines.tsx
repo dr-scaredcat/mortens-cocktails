@@ -100,6 +100,11 @@ function WineRow({
           <Badge variant="secondary" className="shrink-0 text-xs">
             {wine.quantity} {wine.quantity === 1 ? "flaske" : "flasker"}
           </Badge>
+          {wine.unplaced_count > 0 && (
+            <Badge variant="outline" className="shrink-0 border-dashed text-xs">
+              {wine.unplaced_count} uden plads
+            </Badge>
+          )}
         </div>
         {wine.producer && <p className="mt-0.5 text-xs text-muted-foreground">{wine.producer}</p>}
         {wine.placements.length === 0 ? (
@@ -110,7 +115,7 @@ function WineRow({
               <span key={p.id} className="flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 H{p.shelf} · {depthLabel(p.depth)} · {p.slot} · lag {p.layer}
                 <button type="button" onClick={() => onDeletePlacement(p.id)}
-                  className="ml-0.5 rounded-full p-0.5 hover:text-destructive" aria-label="Fjern placering">
+                  className="ml-0.5 rounded-full p-0.5 hover:text-destructive" aria-label="Gør flasken uden plads" title="Gør flasken uden plads">
                   <X className="h-3 w-3" />
                 </button>
               </span>
@@ -166,7 +171,9 @@ function PlacementPicker({ placements, bottleCount, allWines, layout, currentWin
         </div>
       )}
       {remaining > 0 && (
-        <p className="text-xs text-muted-foreground">Vælg {remaining} {remaining === 1 ? "mere plads" : "pladser mere"}.</p>
+        <p className="text-xs text-muted-foreground">
+          Vælg op til {remaining} {remaining === 1 ? "mere plads" : "pladser mere"} — flasker uden plads kan placeres senere under Køleskab.
+        </p>
       )}
       <WineFridge
         mode="admin-vaelger" wines={allWines} layout={layout}
@@ -270,6 +277,7 @@ export function AdminWines() {
       tastingNotes: f.tastingNotes.trim() || null,
       foodPairing: f.foodPairing.trim() || null,
       servingTemp: f.servingTemp.trim() || null,
+      bottleCount: intOrNull(f.bottleCount) ?? 1,
       placements: f.placements,
     }}),
     onSuccess: () => { setOpen(false); invalidate(); toast.success(form.id ? "Vinen er gemt" : "Vinen er oprettet"); },
@@ -284,7 +292,7 @@ export function AdminWines() {
 
   const delPlacementM = useMutation({
     mutationFn: (id: string) => delPlacement({ data: { id } }),
-    onSuccess: () => { invalidate(); toast.success("Placeringen er fjernet"); },
+    onSuccess: () => { invalidate(); toast.success("Flasken er gjort uden plads"); },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Fejl"),
   });
 
@@ -300,7 +308,7 @@ export function AdminWines() {
       imageUrl: w.image_url ?? "", description: w.description ?? "", tastingNotes: w.tasting_notes ?? "",
       foodPairing: w.food_pairing ?? "", servingTemp: w.serving_temp ?? "",
       placements: w.placements.map((p) => ({ shelf: p.shelf, slot: p.slot, depth: p.depth, layer: p.layer })),
-      bottleCount: String(w.placements.length || 1),
+      bottleCount: String(w.quantity || 1),
     });
     setOpen(true);
   }
@@ -309,7 +317,7 @@ export function AdminWines() {
     if (!form.name.trim()) return toast.error("Navn mangler");
     if (!form.wineType) return toast.error("Vælg en vintype");
     const count = intOrNull(form.bottleCount) ?? 1;
-    if (form.placements.length !== count) return toast.error(`Vælg præcis ${count} ${count === 1 ? "plads" : "pladser"} (${form.placements.length} valgt)`);
+    if (form.placements.length > count) return toast.error(`Du har valgt ${form.placements.length} pladser, men vinen har kun ${count} ${count === 1 ? "flaske" : "flasker"}`);
     saveM.mutate(form);
   }
 
@@ -424,7 +432,7 @@ export function AdminWines() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Du skal vælge {form.bottleCount} {bottleCountInt === 1 ? "plads" : "pladser"}.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Du kan vælge op til {form.bottleCount} {bottleCountInt === 1 ? "plads" : "pladser"}. Resten bliver uden plads.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

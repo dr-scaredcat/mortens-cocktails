@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { GuestHeader } from "@/components/app/guest-header";
 import { OrderButton } from "@/components/app/order-button";
 import { CardImage } from "@/components/app/card-image";
-import { WinePlacementView, WineFridgeLegend } from "@/components/app/wine-fridge";
+import { WinePlacementView, WineFridgeLegend, WineFridge, findPlacementAt } from "@/components/app/wine-fridge";
 import { DrinkWineDialog } from "@/components/app/drink-wine-dialog";
 import {
   listWines, getWineFridgeLayout, getWineSelfServe,
@@ -198,6 +198,12 @@ function VinePage() {
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [drinkWine, setDrinkWine] = useState<WineWithDetails | null>(null);
+  // Visning: liste eller skabsoversigt (skab kræver at self-serve er slået til)
+  const [view, setView] = useState<"liste" | "skab">("liste");
+  const showFridge = selfServe && view === "skab";
+  // Konkret flaske valgt via skabet (så Drik-dialogen ikke spørger igen)
+  const [openPlacementId, setOpenPlacementId] = useState<string | null>(null);
+  const [drinkPlacementId, setDrinkPlacementId] = useState<string | null>(null);
 
   const searchPool = useMemo(() => {
     if (!q.trim()) return allWines;
@@ -257,6 +263,32 @@ function VinePage() {
           </Link>
         </div>
 
+        {selfServe && (
+          <div className="mb-4 flex gap-2">
+            <Button type="button" size="sm" variant={view === "liste" ? "default" : "outline"} onClick={() => setView("liste")}>
+              Liste
+            </Button>
+            <Button type="button" size="sm" variant={view === "skab" ? "default" : "outline"} onClick={() => setView("skab")}>
+              Skab
+            </Button>
+          </div>
+        )}
+
+        {showFridge ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Tryk på en flaske for at se den — og drik den derfra.</p>
+            <WineFridge
+              mode="oversigt" wines={allWines} layout={layout}
+              onSelectSlot={(pos) => {
+                const hit = findPlacementAt(allWines, pos);
+                if (!hit) return;
+                setOpenPlacementId(hit.placement.id);
+                setOpenId(hit.wine.id);
+              }}
+            />
+            <WineFridgeLegend />
+          </div>
+        ) : (<>
         <div className="mb-4">
           <Input placeholder="Søg efter navn, producent, område eller drue..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
@@ -291,10 +323,10 @@ function VinePage() {
                 <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {g.items.map((w) => (
                     <WineCard key={w.id} wine={w}
-                      onOpen={() => setOpenId(w.id)}
+                      onOpen={() => { setOpenPlacementId(null); setOpenId(w.id); }}
                       orderingEnabled={orderingEnabled}
                       selfServe={selfServe}
-                      onDrink={() => setDrinkWine(w)}
+                      onDrink={() => { setDrinkPlacementId(null); setDrinkWine(w); }}
                     />
                   ))}
                 </div>
@@ -302,6 +334,7 @@ function VinePage() {
             ))}
           </div>
         )}
+        </>)}
 
         {/* Detaljedialog */}
         <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
@@ -319,7 +352,7 @@ function VinePage() {
                     <WineDetailCard
                       wine={openWine} layout={layout} allWines={allWines}
                       orderingEnabled={orderingEnabled} selfServe={selfServe}
-                      onDrink={() => { setOpenId(null); setDrinkWine(openWine); }}
+                      onDrink={() => { setOpenId(null); setDrinkPlacementId(openPlacementId); setDrinkWine(openWine); }}
                     />
                   </div>
                 </>
@@ -333,7 +366,8 @@ function VinePage() {
           open={!!drinkWine} wine={drinkWine}
           allWines={allWines} layout={layout}
           requireSelfServe logAction="gæst-drukket"
-          onClose={() => setDrinkWine(null)}
+          placementId={drinkPlacementId ?? undefined}
+          onClose={() => { setDrinkWine(null); setDrinkPlacementId(null); }}
         />
       </main>
     </div>
